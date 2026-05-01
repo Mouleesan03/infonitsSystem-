@@ -1,0 +1,1302 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Infonits Invoice Manager</title>
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-mark">IN</div>
+          <div>
+            <p>Infonits</p>
+            <span>Invoice Manager</span>
+          </div>
+        </div>
+
+        <nav class="nav-tabs" aria-label="Main views">
+          <button class="nav-tab active" data-view="dashboard" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-4H4v4Z" /></svg></span>Dashboard</button>
+          <button class="nav-tab" data-view="create" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></span>Create Invoice</button>
+          <button class="nav-tab" data-view="clients" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0M4 20a8 8 0 0 1 16 0M19 8a3 3 0 0 1 0 6M21 20a6 6 0 0 0-3-5" /></svg></span>Customers</button>
+          <button class="nav-tab" data-view="employees" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21a8 8 0 0 1 16 0M16 13l2 2 4-4" /></svg></span>Employees</button>
+          <button class="nav-tab" data-view="services" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10M6 5v14" /></svg></span>Service Catalog</button>
+          <button class="nav-tab" data-view="invoices" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7V3Zm7 1v4h4M9 12h6M9 16h6M9 8h3" /></svg></span>Invoices</button>
+          <button class="nav-tab" data-view="quotations" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M6 4h12v16H6V4Zm3 5h6M9 13h4M9 17h6" /></svg></span>Quotations</button>
+          <button class="nav-tab" data-view="projects" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v10H4V7Zm0 4h16" /></svg></span>Projects</button>
+          <button class="nav-tab" data-view="renewals" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7V3Zm-2 8h14M6 7h12v14H6V7Zm3 8h6" /></svg></span>Subscriptions</button>
+          <button class="nav-tab" data-view="logins" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5V11Zm7 4v2" /></svg></span>Portal Access</button>
+          <button class="nav-tab" data-view="finance" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 16v-5M12 16V8M16 16v-9M20 16v-3" /></svg></span>Finance</button>
+          <button class="nav-tab" data-view="settings" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12a7 7 0 0 0-.1-1.1l2-1.5-2-3.4-2.4 1a7 7 0 0 0-1.9-1.1L14.2 3h-4.4l-.4 2.9A7 7 0 0 0 7.5 7l-2.4-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.1l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 1.9 1.1l.4 2.9h4.4l.4-2.9a7 7 0 0 0 1.9-1.1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1.1Z" /></svg></span>Settings</button>
+        </nav>
+
+        <section class="ai-panel sidebar-ai-panel">
+          <h2>AI Assistant</h2>
+          <div class="ai-chat-log is-compact" id="aiChatLog"></div>
+          <div class="ai-chat-controls">
+            <textarea id="aiPromptInput" rows="2" placeholder="Invoice for client, service, amount"></textarea>
+            <button class="primary-action" id="aiCreateDraftButton" type="button">Create draft</button>
+          </div>
+        </section>
+      </aside>
+
+      <main class="workspace">
+        <header class="topbar">
+          <div class="topbar-title">
+            <p class="eyebrow">Workspace dashboard</p>
+            <h1>Infonits Management System</h1>
+          </div>
+          <div class="topbar-actions">
+            <input class="topbar-search" id="dashboardSearchInput" placeholder="Search invoices and quotations" />
+            <button class="secondary-action" id="togglePreviewButton" type="button">Hide preview</button>
+            <button class="secondary-action" id="newProjectButton" type="button">+ Add project</button>
+            <button class="secondary-action" id="newQuotationButton" type="button">+ New quotation</button>
+            <button class="primary-action" id="newInvoiceButton" type="button">+ New invoice</button>
+          </div>
+        </header>
+
+        <section class="view active" id="dashboardView">
+          <section class="panel dashboard-search-panel is-hidden">
+            <div class="table-wrap dashboard-search-results">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Document</th>
+                    <th>Type</th>
+                    <th>Customer</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="dashboardSearchTable"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <div class="metric-grid">
+            <article class="metric metric-blue">
+              <div class="metric-icon" aria-hidden="true">#</div>
+              <div class="metric-label">
+                <span>Total invoices</span>
+              </div>
+              <strong id="totalInvoices">0</strong>
+            </article>
+            <article class="metric metric-orange">
+              <div class="metric-icon" aria-hidden="true">LKR</div>
+              <div class="metric-label">
+                <span>Total billed</span>
+              </div>
+              <strong id="totalBilled">Rs. 0</strong>
+            </article>
+            <article class="metric metric-teal">
+              <div class="metric-icon" aria-hidden="true">OK</div>
+              <div class="metric-label">
+                <span>Paid</span>
+              </div>
+              <strong id="totalPaid">Rs. 0</strong>
+            </article>
+            <article class="metric metric-red">
+              <div class="metric-icon" aria-hidden="true">!</div>
+              <div class="metric-label">
+                <span>Pending</span>
+              </div>
+              <strong id="totalPending">Rs. 0</strong>
+            </article>
+          </div>
+
+          <div class="dashboard-layout">
+            <div class="dashboard-main">
+              <section class="panel">
+                <div class="panel-heading">
+                  <h2>Recent invoices</h2>
+                  <button class="text-action" data-view-target="invoices" type="button">View all</button>
+                </div>
+                <div class="table-wrap">
+                  <table>
+                    <thead>
+                      <tr>
+                        <th>No.</th>
+                        <th>Invoice</th>
+                        <th>Customer</th>
+                        <th>Status</th>
+                        <th>Total</th>
+                        <th>Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody id="recentInvoicesTable"></tbody>
+                  </table>
+                </div>
+                <div class="pagination-controls">
+                  <button class="secondary-action" id="recentInvoicesPrevPage" type="button">Prev</button>
+                  <span id="recentInvoicesPageLabel">Page 1 of 1</span>
+                  <button class="secondary-action" id="recentInvoicesNextPage" type="button">Next</button>
+                </div>
+              </section>
+            </div>
+
+            <section class="panel invoice-preview dashboard-preview" id="previewPanel">
+              <div class="panel-heading preview-heading">
+                <h2>Customer invoice</h2>
+                <div class="preview-tools">
+                  <button class="secondary-action" id="zoomOutButton" type="button">-</button>
+                  <span id="previewZoomLabel">80%</span>
+                  <button class="secondary-action" id="zoomInButton" type="button">+</button>
+                  <button class="text-action" id="printInvoiceButton" type="button">Download PDF</button>
+                </div>
+              </div>
+              <div class="preview-viewport">
+                <div class="preview-scale" id="previewScale">
+                  <div id="invoicePreview" class="invoice-paper"></div>
+                </div>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="createView">
+          <div class="create-hero">
+            <div>
+              <p class="eyebrow">Fast billing</p>
+              <h2>Create invoice</h2>
+            </div>
+            <button class="secondary-action" id="resetFormButton" type="button">Clear form</button>
+          </div>
+          <form class="invoice-form" id="invoiceForm">
+            <div class="invoice-form-top">
+              <section class="panel invoice-card compact-card">
+                <div class="panel-heading">
+                  <h2>Invoice details</h2>
+                </div>
+                <div class="form-grid">
+                  <label>
+                    Document type
+                    <select id="documentType" name="documentType">
+                      <option value="Invoice">Invoice</option>
+                      <option value="Quotation">Quotation</option>
+                    </select>
+                  </label>
+                  <label>
+                    Document number
+                    <input id="invoiceNumber" name="invoiceNumber" readonly required />
+                  </label>
+                  <label>
+                    Invoice date
+                    <input id="invoiceDate" name="invoiceDate" type="date" required />
+                  </label>
+                  <label>
+                    Due date
+                    <input id="dueDate" name="dueDate" type="date" required />
+                  </label>
+                  <label>
+                    Status
+                    <select id="status" name="status">
+                      <option value="Draft">Draft</option>
+                      <option value="Sent">Sent</option>
+                      <option value="Unpaid">Unpaid</option>
+                      <option value="Paid">Paid</option>
+                      <option value="Overdue">Overdue</option>
+                    </select>
+                  </label>
+                  <label>
+                    Currency
+                    <select id="invoiceCurrency" name="invoiceCurrency">
+                      <option value="LKR">LKR</option>
+                      <option value="USD">USD</option>
+                      <option value="AUD">AUD</option>
+                      <option value="GBP">GBP</option>
+                      <option value="CAD">CAD</option>
+                    </select>
+                  </label>
+                  <label>
+                    Repeat
+                    <select id="repeatFrequency" name="repeatFrequency">
+                      <option value="none">One time</option>
+                      <option value="monthly">Every month</option>
+                    </select>
+                  </label>
+                  <label>
+                    Payment method
+                    <select id="paymentMethod" name="paymentMethod">
+                      <option value="">Not selected</option>
+                      <option value="Bank transfer">Bank transfer</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Wise">Wise</option>
+                      <option value="PayPal">PayPal</option>
+                      <option value="Stripe">Stripe</option>
+                    </select>
+                  </label>
+                </div>
+              </section>
+
+            <section class="panel invoice-card customer-card">
+              <div class="panel-heading">
+                <h2>Customer</h2>
+              </div>
+              <div class="form-grid">
+                <label class="wide">
+                  Select saved client
+                  <select id="clientSelect">
+                    <option value="">Manual customer</option>
+                  </select>
+                </label>
+                <label>
+                  Customer name
+                  <input id="customerName" name="customerName" required />
+                </label>
+                <label>
+                  Email
+                  <input id="customerEmail" name="customerEmail" type="email" />
+                </label>
+                <label>
+                  Country
+                  <select id="customerCountry" name="customerCountry"></select>
+                </label>
+                <label class="wide">
+                  Billing address
+                  <textarea id="customerAddress" name="customerAddress" rows="3"></textarea>
+                </label>
+              </div>
+            </section>
+            </div>
+
+            <section class="panel invoice-card item-card">
+              <div class="panel-heading">
+                <h2>Line items</h2>
+                <button class="secondary-action" id="addItemButton" type="button">+ Add item</button>
+              </div>
+              <div class="items" id="itemsContainer"></div>
+            </section>
+
+            <section class="panel invoice-card totals-card">
+              <div class="panel-heading">
+                <h2>Totals</h2>
+              </div>
+              <div class="form-grid totals-grid">
+                <label>
+                  Tax (%)
+                  <input id="taxRate" name="taxRate" min="0" step="0.01" type="number" value="0" />
+                </label>
+                <label>
+                  Discount
+                  <input id="discount" name="discount" min="0" step="0.01" type="number" value="0" />
+                </label>
+                <label>
+                  Advance paid
+                  <input id="advancePaid" name="advancePaid" min="0" step="0.01" type="number" value="0" />
+                </label>
+                <label class="wide">
+                  Notes
+                  <textarea id="notes" name="notes" rows="3" placeholder="Payment terms, bank details, or thank-you note"></textarea>
+                </label>
+                <label class="wide">
+                  Terms & conditions
+                  <textarea id="terms" name="terms" rows="3"></textarea>
+                </label>
+                <label>
+                  Authorized by
+                  <input id="authorizedBy" name="authorizedBy" />
+                </label>
+              </div>
+              <div class="summary-box">
+                <div><span>Subtotal</span><strong id="formSubtotal">Rs. 0</strong></div>
+                <div><span>Tax</span><strong id="formTax">Rs. 0</strong></div>
+                <div><span>Discount</span><strong id="formDiscount">Rs. 0</strong></div>
+                <div><span>Advance paid</span><strong id="formAdvancePaid">Rs. 0</strong></div>
+                <div class="grand-total"><span>Total</span><strong id="formTotal">Rs. 0</strong></div>
+              </div>
+              <button class="primary-action save-button" type="submit">Save invoice</button>
+            </section>
+          </form>
+        </section>
+
+        <section class="view" id="invoicesView">
+          <section class="panel">
+            <div class="panel-heading invoice-list-heading">
+                <h2>Invoices</h2>
+              <div class="filters">
+                <input id="searchInput" placeholder="Search invoices" />
+                <input id="invoiceMonthFilter" type="month" />
+                <select id="statusFilter">
+                  <option value="All">All statuses</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Sent">Sent</option>
+                  <option value="Unpaid">Unpaid</option>
+                  <option value="Paid">Paid</option>
+                  <option value="Overdue">Overdue</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Invoice</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th>Due</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="invoiceTable"></tbody>
+              </table>
+            </div>
+            <div class="pagination-controls">
+              <button class="secondary-action" id="invoicePrevPage" type="button">Prev</button>
+              <span id="invoicePageLabel">Page 1 of 1</span>
+              <button class="secondary-action" id="invoiceNextPage" type="button">Next</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="quotationsView">
+          <section class="panel">
+            <div class="panel-heading invoice-list-heading">
+              <h2>Quotations</h2>
+              <div class="filters">
+                <input id="quotationSearchInput" placeholder="Search quotations" />
+                <input id="quotationMonthFilter" type="month" />
+                <select id="quotationStatusFilter">
+                  <option value="All">All statuses</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Sent">Sent</option>
+                  <option value="Unpaid">Unpaid</option>
+                  <option value="Paid">Paid</option>
+                  <option value="Overdue">Overdue</option>
+                </select>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Quotation</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th>Due</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="quotationTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="projectsView">
+          <section class="panel projects-panel">
+            <div class="project-month-bar">
+              <div class="project-summary-cards">
+                <article class="project-summary-card">
+                  <span>Total value</span>
+                  <strong id="projectTotalValueSummary">Rs. 0</strong>
+                  <small>Active work in this month</small>
+                </article>
+                <article class="project-summary-card profit">
+                  <span>Profit</span>
+                  <strong id="projectProfitSummary">Rs. 0</strong>
+                  <small>After project work cost</small>
+                </article>
+              </div>
+              <div class="project-month-settings">
+                <div class="project-filter-strip">
+                  <input id="projectSearchInput" placeholder="Search projects" />
+                  <input id="projectMonthFilter" type="month" />
+                  <select id="projectStatusFilter">
+                    <option value="All">All statuses</option>
+                    <option value="Waiting">Waiting</option>
+                    <option value="Partial">Partial</option>
+                    <option value="Paid">Paid</option>
+                    <option value="Completed">Completed</option>
+                  </select>
+                </div>
+                <div class="project-action-strip">
+                  <input id="projectUsdRate" min="0" step="0.01" type="number" placeholder="Example: 300.00" aria-label="USD rate" />
+                  <button class="secondary-action" id="saveProjectTargetButton" type="button">Save rate</button>
+                  <button class="secondary-action report-download-button" id="downloadProjectSheetButton" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" /></svg>
+                    <span>Sheet</span>
+                  </button>
+                  <button class="secondary-action report-download-button" id="downloadProjectPdfButton" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7V3Zm7 1v4h4M9 13h6M9 17h6" /></svg>
+                    <span>PDF</span>
+                  </button>
+                  <button class="primary-action" id="toggleProjectFormButton" type="button">+ Add project</button>
+                </div>
+              </div>
+            </div>
+
+            <form class="form-grid project-form is-hidden" id="projectForm">
+              <label>
+                Month
+                <input id="projectMonth" type="month" required />
+              </label>
+              <label>
+                Project
+                <input id="projectName" required />
+              </label>
+              <label>
+                Client name
+                <select id="projectClientName"></select>
+              </label>
+              <label>
+                Value (LKR)
+                <input id="projectValueLkr" min="0" step="0.01" type="number" />
+              </label>
+              <label>
+                Value (USD)
+                <input id="projectValueUsd" min="0" step="0.01" type="number" />
+              </label>
+              <label>
+                Advance received
+                <input id="projectAdvance" min="0" step="0.01" type="number" />
+              </label>
+              <label>
+                Pay for work
+                <input id="projectPayForWork" min="0" step="0.01" type="number" />
+              </label>
+              <label>
+                Paid for work
+                <input id="projectPaidForWork" min="0" step="0.01" type="number" />
+              </label>
+              <label>
+                Payment status
+                <select id="projectPaymentStatus">
+                  <option value="Waiting">Waiting</option>
+                  <option value="Partial">Partial</option>
+                  <option value="Paid">Paid</option>
+                  <option value="Completed">Completed</option>
+                </select>
+              </label>
+              <label>
+                Repeat
+                <select id="projectRepeat">
+                  <option value="no">One time project</option>
+                  <option value="monthly">Monthly project</option>
+                </select>
+              </label>
+              <label>
+                Who worked
+                <input id="projectWorker" placeholder="Name or team" />
+              </label>
+              <label class="wide">
+                Note
+                <textarea id="projectNote" rows="2"></textarea>
+              </label>
+              <button class="primary-action save-button" type="submit">Save project</button>
+              <button class="secondary-action" id="resetProjectButton" type="button">Clear</button>
+            </form>
+
+            <div class="table-wrap project-table-wrap">
+              <table class="project-table">
+                <thead>
+                  <tr>
+                    <th>No.</th>
+                    <th>Client</th>
+                    <th>Project</th>
+                    <th>Value (LKR)</th>
+                    <th>Value (USD)</th>
+                    <th>Advance</th>
+                    <th>Work cost</th>
+                    <th>Paid work</th>
+                    <th>Status</th>
+                    <th>Worker</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="projectTable"></tbody>
+                <tfoot>
+                  <tr>
+                    <th>Total</th>
+                    <th></th>
+                    <th></th>
+                    <th id="projectTotalLkr">Rs. 0</th>
+                    <th id="projectTotalUsd">$ 0</th>
+                    <th id="projectTotalAdvance">Rs. 0</th>
+                    <th id="projectTotalPayForWork">Rs. 0</th>
+                    <th id="projectTotalPaidForWork">Rs. 0</th>
+                    <th></th>
+                    <th></th>
+                    <th></th>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="renewalsView">
+          <div class="content-grid admin-workspace">
+            <section class="panel admin-form-panel">
+              <div class="panel-heading">
+                <h2>Domain & hosting tracker</h2>
+                <button class="secondary-action" id="resetRenewalButton" type="button">Clear</button>
+              </div>
+              <form class="form-grid admin-form" id="renewalForm">
+                <label>
+                  Client
+                  <select id="renewalClient"></select>
+                </label>
+                <label>
+                  Name
+                  <input id="renewalName" placeholder="domain.com / hosting plan" required />
+                </label>
+                <label>
+                  Type
+                  <select id="renewalType">
+                    <option>Domain</option>
+                    <option>Hosting</option>
+                    <option>SSL</option>
+                    <option>Email</option>
+                    <option>Software</option>
+                  </select>
+                </label>
+                <label>
+                  Expiry date
+                  <input id="renewalExpiry" type="date" required />
+                </label>
+                <label>
+                  Renewal amount (LKR)
+                  <input id="renewalAmount" min="0" step="0.01" type="number" />
+                </label>
+                <label>
+                  Status
+                  <select id="renewalStatus">
+                    <option>Active</option>
+                    <option>Due soon</option>
+                    <option>Renewed</option>
+                    <option>Expired</option>
+                  </select>
+                </label>
+                <label class="wide">
+                  Note
+                  <textarea id="renewalNote" rows="2"></textarea>
+                </label>
+                <button class="primary-action save-button" type="submit">Save renewal</button>
+              </form>
+            </section>
+            <section class="panel admin-list-panel">
+              <div class="panel-heading invoice-list-heading">
+                <h2>Renewal records</h2>
+                <div class="filters">
+                  <input id="renewalSearchInput" placeholder="Search renewals" />
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="admin-table renewal-table">
+                  <thead>
+                    <tr>
+                      <th>Client</th>
+                      <th>Name</th>
+                      <th>Type</th>
+                      <th>Expiry</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="renewalTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="loginsView">
+          <div class="content-grid admin-workspace website-logins-grid">
+            <section class="panel admin-form-panel">
+              <div class="panel-heading">
+                <h2>Website login details</h2>
+                <button class="secondary-action" id="resetWebsiteLoginButton" type="button">Clear</button>
+              </div>
+              <form class="form-grid admin-form" id="websiteLoginForm">
+                <label>
+                  Website name
+                  <input id="websiteName" required />
+                </label>
+                <label>
+                  Website login URL
+                  <input id="websiteLoginUrl" placeholder="https://example.com/wp-admin" />
+                </label>
+                <label>
+                  Username
+                  <input id="websiteUsername" autocomplete="off" />
+                </label>
+                <label>
+                  Password
+                  <input id="websitePassword" autocomplete="off" type="password" />
+                </label>
+                <label>
+                  Domain source
+                  <input id="domainSource" placeholder="Namecheap, GoDaddy, etc." />
+                </label>
+                <label>
+                  Domain login URL
+                  <input id="domainLoginUrl" placeholder="https://..." />
+                </label>
+                <label>
+                  Hosting
+                  <input id="hostingProvider" placeholder="Hostinger, cPanel, etc." />
+                </label>
+                <label>
+                  Hosting login URL
+                  <input id="hostingLoginUrl" placeholder="https://..." />
+                </label>
+                <label>
+                  Domain renewal date
+                  <input id="domainRenewalDate" type="date" />
+                </label>
+                <label>
+                  Hosting renewal date
+                  <input id="hostingRenewalDate" type="date" />
+                </label>
+                <label class="wide">
+                  Note
+                  <textarea id="websiteLoginNote" rows="2"></textarea>
+                </label>
+                <button class="primary-action save-button" type="submit">Save login details</button>
+              </form>
+            </section>
+            <section class="panel admin-list-panel">
+              <div class="panel-heading invoice-list-heading">
+                <h2>Saved website logins</h2>
+                <div class="filters">
+                  <input id="websiteLoginSearchInput" placeholder="Search websites" />
+                </div>
+              </div>
+              <div class="portal-calendar-card">
+                <div class="portal-calendar-heading">
+                  <div>
+                    <h3>Renewal calendar</h3>
+                    <p>Reminder shows 20 days before domain or hosting expiry.</p>
+                  </div>
+                  <div class="portal-calendar-controls">
+                    <button class="secondary-action" id="portalCalendarPrev" type="button" aria-label="Previous month" data-portal-calendar="-1">‹</button>
+                    <span id="portalCalendarLabel">Month</span>
+                    <button class="secondary-action" id="portalCalendarNext" type="button" aria-label="Next month" data-portal-calendar="1">›</button>
+                  </div>
+                </div>
+                <div class="portal-calendar-weekdays">
+                  <span>Sun</span>
+                  <span>Mon</span>
+                  <span>Tue</span>
+                  <span>Wed</span>
+                  <span>Thu</span>
+                  <span>Fri</span>
+                  <span>Sat</span>
+                </div>
+                <div class="portal-calendar-grid" id="portalCalendarGrid"></div>
+                <div class="portal-calendar-list" id="portalCalendarEvents"></div>
+              </div>
+              <div class="table-wrap">
+                <table class="admin-table website-login-table">
+                  <thead>
+                    <tr>
+                      <th>Website</th>
+                      <th>Username</th>
+                      <th>Password</th>
+                      <th>Domain</th>
+                      <th>Hosting</th>
+                      <th>Renewals</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="websiteLoginTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="financeView">
+          <section class="panel finance-panel">
+            <div class="panel-heading invoice-list-heading">
+              <h2>Monthly Finance</h2>
+              <div class="filters">
+                <input id="financeMonthFilter" type="month" />
+                <select id="financeTypeFilter">
+                  <option value="All">All types</option>
+                  <option value="income">Income</option>
+                  <option value="expense">Expense</option>
+                  <option value="saving">Saving</option>
+                  <option value="gold">Gold</option>
+                  <option value="loan">Loan</option>
+                </select>
+                <select id="financeCategoryFilter">
+                  <option value="All">All categories</option>
+                </select>
+                <button class="primary-action report-download-button" id="downloadFinanceReportButton" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" /></svg>
+                  <span>Download report</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="finance-grid">
+              <article class="finance-card income-card">
+                <span>Project profit</span>
+                <strong id="financeProjectIncome">Rs. 0</strong>
+              </article>
+              <article class="finance-card income-card">
+                <span>Income</span>
+                <strong id="financeOtherIncome">Rs. 0</strong>
+              </article>
+              <article class="finance-card expense-card">
+                <span>Unpaid expenses</span>
+                <strong id="financeExpenses">Rs. 0</strong>
+              </article>
+              <article class="finance-card balance-card">
+                <span>Balance</span>
+                <strong id="financeBalance">Rs. 0</strong>
+              </article>
+              <article class="finance-card saving-card">
+                <span>Savings</span>
+                <strong id="financeSavings">Rs. 0</strong>
+              </article>
+              <article class="finance-card gold-card">
+                <span>Gold assets</span>
+                <strong id="financeGoldAssets">Rs. 0</strong>
+              </article>
+            </div>
+
+            <div class="finance-monitor">
+              <div>
+                <h3>Monthly monitor</h3>
+              </div>
+              <div class="finance-bar">
+                <span id="financeIncomeBar" data-monitor-label="Income"></span>
+                <span id="financeExpenseBar" data-monitor-label="Unpaid expenses"></span>
+                <span id="financeSavingBar" data-monitor-label="Savings"></span>
+                <span id="financeGoldBar" data-monitor-label="Gold assets"></span>
+              </div>
+            </div>
+
+            <form class="form-grid finance-form" id="financeForm">
+              <div class="finance-form-heading">
+                <h3>Add record</h3>
+                <span>Income, expenses, loans, savings, and assets</span>
+              </div>
+              <label>
+                Type
+                <select id="financeType">
+                  <option value="income">Income</option>
+                  <option value="expense">Expense</option>
+                  <option value="saving">Saving</option>
+                  <option value="gold">Gold asset</option>
+                  <option value="loan">Loan</option>
+                </select>
+              </label>
+              <label>
+                Date
+                <input id="financeDate" type="date" required />
+              </label>
+              <label>
+                Category
+                <select id="financeCategory" required></select>
+              </label>
+              <label>
+                Amount (LKR)
+                <input id="financeAmount" min="0" step="0.01" type="number" required />
+              </label>
+              <label>
+                Repeat
+                <select id="financeRepeat">
+                  <option value="none">One time</option>
+                  <option value="monthly">Every month</option>
+                </select>
+              </label>
+              <label>
+                Status
+                <select id="financeStatus">
+                  <option value="unpaid">Unpaid / pending</option>
+                  <option value="paid">Paid / done</option>
+                </select>
+              </label>
+              <label class="wide">
+                Note
+                <textarea id="financeNote" rows="2"></textarea>
+              </label>
+              <button class="primary-action save-button" type="submit">Save finance record</button>
+            </form>
+
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Type</th>
+                    <th>Category</th>
+                    <th>Note</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="financeTable"></tbody>
+              </table>
+            </div>
+            <div class="pagination-controls">
+              <button class="secondary-action" id="financePrevPage" type="button">Prev</button>
+              <span id="financePageLabel">Page 1 of 1</span>
+              <button class="secondary-action" id="financeNextPage" type="button">Next</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="view" id="clientsView">
+          <div class="content-grid clients-grid admin-workspace">
+            <section class="panel admin-form-panel">
+              <div class="panel-heading">
+                <h2>Manage clients</h2>
+                <button class="secondary-action" id="resetClientButton" type="button">Clear</button>
+              </div>
+              <form class="form-grid admin-form" id="clientForm">
+                <label>
+                  Client name
+                  <input id="clientName" required />
+                </label>
+                <label>
+                  Email
+                  <input id="clientEmail" type="email" />
+                </label>
+                <label>
+                  Phone
+                  <input id="clientPhone" />
+                </label>
+                <label>
+                  Country
+                  <select id="clientCountry"></select>
+                </label>
+                <label class="wide">
+                  Billing address
+                  <textarea id="clientAddress" rows="3"></textarea>
+                </label>
+                <button class="primary-action save-button" type="submit">Save client</button>
+              </form>
+            </section>
+
+            <section class="panel admin-list-panel">
+              <div class="panel-heading">
+                <h2>Client list</h2>
+                <div class="filters">
+                  <select id="statementClientSelect"></select>
+                  <button class="secondary-action" id="downloadClientStatementButton" type="button">Client statement</button>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="admin-table client-table">
+                  <thead>
+                    <tr>
+                      <th>Client ID</th>
+                      <th>Client</th>
+                      <th>Contact</th>
+                      <th>Country</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="clientTable"></tbody>
+                </table>
+              </div>
+              <div class="pagination-controls">
+                <button class="secondary-action" id="clientPrevPage" type="button">Prev</button>
+                <span id="clientPageLabel">Page 1 of 1</span>
+                <button class="secondary-action" id="clientNextPage" type="button">Next</button>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="employeesView">
+          <div class="content-grid employees-grid">
+            <section class="panel">
+              <div class="panel-heading employee-form-heading">
+                <h2>Create employee</h2>
+                <button class="secondary-action" id="resetEmployeeButton" type="button">Clear</button>
+              </div>
+              <form class="employee-form" id="employeeForm">
+                <div class="employee-photo-field">
+                  <div class="employee-photo-preview">
+                    <img id="employeePhotoPreview" alt="" />
+                    <span>Photo</span>
+                  </div>
+                  <label class="employee-upload-control">
+                    <span>Profile photo</span>
+                    <small>PNG or JPG</small>
+                    <span class="file-button">Choose photo</span>
+                    <input id="employeeProfilePhoto" accept="image/*" type="file" />
+                  </label>
+                </div>
+
+                <div class="employee-section">
+                  <h3>Core details</h3>
+                  <div class="employee-section-grid">
+                    <label>
+                      Employee ID
+                      <input id="employeeCode" required />
+                    </label>
+                    <label>
+                      Status
+                      <select id="employeeStatus">
+                        <option value="Active">Active</option>
+                        <option value="Inactive">Inactive</option>
+                      </select>
+                    </label>
+                    <label>
+                      First name
+                      <input id="employeeFirstName" required />
+                    </label>
+                    <label>
+                      Last name
+                      <input id="employeeLastName" required />
+                    </label>
+                    <label>
+                      Date of birth
+                      <input id="employeeDateOfBirth" required type="date" />
+                    </label>
+                    <label>
+                      Gender
+                      <select id="employeeGender" required>
+                        <option value="">Select gender</option>
+                        <option>Female</option>
+                        <option>Male</option>
+                        <option>Other</option>
+                      </select>
+                    </label>
+                    <label class="wide">
+                      National ID / Passport
+                      <input id="employeeNationalId" autocomplete="off" required />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="employee-section">
+                  <h3>Contact</h3>
+                  <div class="employee-section-grid">
+                    <label>
+                      Work email
+                      <input id="employeeWorkEmail" required type="email" />
+                    </label>
+                    <label>
+                      Phone number
+                      <input id="employeePhone" required />
+                    </label>
+                    <label>
+                      Personal email
+                      <input id="employeePersonalEmail" type="email" />
+                    </label>
+                    <label class="wide">
+                      Address
+                      <textarea id="employeeAddress" rows="2"></textarea>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="employee-section">
+                  <h3>Job</h3>
+                  <div class="employee-section-grid">
+                    <label>
+                      Department
+                      <input id="employeeDepartment" required />
+                    </label>
+                    <label>
+                      Job title / designation
+                      <input id="employeeJobTitle" required />
+                    </label>
+                    <label>
+                      Employment type
+                      <select id="employeeEmploymentType">
+                        <option>Full-time</option>
+                        <option>Part-time</option>
+                        <option>Contract</option>
+                      </select>
+                    </label>
+                    <label>
+                      Start date / joining date
+                      <input id="employeeStartDate" required type="date" />
+                    </label>
+                    <label class="wide">
+                      Reporting manager
+                      <input id="employeeReportingManager" />
+                    </label>
+                  </div>
+                </div>
+
+                <div class="employee-section employee-section-muted">
+                  <h3>Optional</h3>
+                  <div class="employee-section-grid">
+                    <label>
+                      Emergency contact
+                      <input id="employeeEmergencyContact" />
+                    </label>
+                    <label>
+                      Salary / pay grade
+                      <input id="employeeSalaryGrade" />
+                    </label>
+                    <label class="wide">
+                      Bank account details
+                      <input id="employeeBankDetails" autocomplete="off" />
+                    </label>
+                    <label class="wide">
+                      Qualifications / skills
+                      <textarea id="employeeSkills" rows="2"></textarea>
+                    </label>
+                  </div>
+                </div>
+
+                <div class="employee-form-footer">
+                  <div class="system-note">
+                    <span>Created and updated dates are saved automatically.</span>
+                  </div>
+                  <button class="primary-action save-button" type="submit">Save employee</button>
+                </div>
+              </form>
+            </section>
+
+            <section class="panel">
+              <div class="panel-heading invoice-list-heading">
+                <h2>Employee list</h2>
+                <div class="filters">
+                  <input id="employeeSearchInput" placeholder="Search employees" />
+                  <select id="employeeStatusFilter">
+                    <option value="All">All statuses</option>
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="employee-table">
+                  <thead>
+                    <tr>
+                      <th>Employee</th>
+                      <th>Contact</th>
+                      <th>Job</th>
+                      <th>Status</th>
+                      <th>Updated</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="employeeTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="servicesView">
+          <div class="content-grid admin-workspace">
+            <section class="panel admin-form-panel">
+              <div class="panel-heading">
+                <h2>Service catalog</h2>
+                <button class="secondary-action" id="resetServiceButton" type="button">Clear</button>
+              </div>
+              <form class="form-grid admin-form" id="serviceForm">
+                <label>
+                  Service name
+                  <input id="serviceName" required />
+                </label>
+                <label>
+                  Category
+                  <select id="serviceCategory">
+                    <option>Website</option>
+                    <option>Hosting</option>
+                    <option>SEO</option>
+                    <option>Maintenance</option>
+                    <option>Social Media</option>
+                    <option>Design</option>
+                    <option>Support</option>
+                  </select>
+                </label>
+                <label>
+                  Currency
+                  <select id="serviceCurrency">
+                    <option value="LKR">LKR</option>
+                    <option value="USD">USD</option>
+                    <option value="AUD">AUD</option>
+                    <option value="GBP">GBP</option>
+                    <option value="CAD">CAD</option>
+                  </select>
+                </label>
+                <label>
+                  Price
+                  <input id="servicePrice" min="0" step="0.01" type="number" />
+                </label>
+                <label>
+                  Billing
+                  <select id="serviceBilling">
+                    <option value="one-time">One time</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </label>
+                <label class="wide">
+                  Description
+                  <textarea id="serviceDescription" rows="3"></textarea>
+                </label>
+                <button class="primary-action save-button" type="submit">Save service</button>
+              </form>
+            </section>
+            <section class="panel admin-list-panel">
+              <div class="panel-heading">
+                <h2>Saved services</h2>
+              </div>
+              <div class="table-wrap">
+                <table class="admin-table service-table">
+                  <thead>
+                    <tr>
+                      <th>Service</th>
+                      <th>Category</th>
+                      <th>Billing</th>
+                      <th>Price</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="serviceTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="settingsView">
+          <section class="panel settings-panel">
+            <div class="panel-heading">
+              <h2>Business settings</h2>
+              <button class="primary-action" id="saveSettingsButton" type="button">Save settings</button>
+            </div>
+            <div class="settings-grid">
+              <div class="settings-card">
+                <h3>Business profile</h3>
+                <div class="form-grid settings-form-grid">
+                  <label>
+                    Business name
+                    <input id="businessName" />
+                  </label>
+                  <label>
+                    Business email
+                    <input id="businessEmail" type="email" />
+                  </label>
+                  <label>
+                    Phone
+                    <input id="businessPhone" />
+                  </label>
+                  <label>
+                    Website
+                    <input id="businessWebsite" />
+                  </label>
+                  <label class="wide">
+                    Business address
+                    <textarea id="businessAddress" rows="3"></textarea>
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-card settings-logo-card">
+                <h3>Invoice branding</h3>
+                <label class="logo-upload-field">
+                  <span>Logo</span>
+                  <span class="file-button">Choose logo</span>
+                  <input id="logoInput" accept="image/*" type="file" />
+                </label>
+                <img class="logo-preview" id="logoPreview" alt="Current invoice logo" />
+                <label>
+                  Invoice currency
+                  <select id="currencyLabel">
+                    <option value="LKR">LKR</option>
+                    <option value="USD">USD</option>
+                    <option value="AUD">AUD</option>
+                    <option value="GBP">GBP</option>
+                    <option value="CAD">CAD</option>
+                  </select>
+                </label>
+              </div>
+
+              <div class="settings-card">
+                <h3>Payment details</h3>
+                <div class="form-grid settings-form-grid">
+                  <label>
+                    Bank name
+                    <input id="bankName" />
+                  </label>
+                  <label>
+                    Account name
+                    <input id="accountName" />
+                  </label>
+                  <label>
+                    Account number
+                    <input id="accountNumber" />
+                  </label>
+                  <label>
+                    Branch
+                    <input id="bankBranch" />
+                  </label>
+                  <label>
+                    Payment details
+                    <select id="showPaymentDetails">
+                      <option value="yes">Show on invoice</option>
+                      <option value="no">Hide on invoice</option>
+                    </select>
+                  </label>
+                  <label>
+                    WhatsApp / phone
+                    <input id="contactPhone" />
+                  </label>
+                </div>
+              </div>
+
+              <div class="settings-card">
+                <h3>Automation</h3>
+                <div class="form-grid settings-form-grid">
+                  <label>
+                    Project to Finance
+                    <select id="autoProjectFinance">
+                      <option value="no">Manual only</option>
+                      <option value="yes">Auto record completed projects</option>
+                    </select>
+                  </label>
+                  <label>
+                    AI mode
+                    <select id="aiMode">
+                      <option value="local">Local assistant</option>
+                      <option value="api">API ready</option>
+                    </select>
+                  </label>
+                  <label class="wide">
+                    AI API key
+                    <input id="aiApiKey" type="password" placeholder="Optional for future real AI upgrade" />
+                  </label>
+                </div>
+              </div>
+            </div>
+          </section>
+          <section class="panel backup-panel">
+            <div class="panel-heading">
+              <h2>Backup / Restore</h2>
+            </div>
+            <div class="backup-actions">
+              <button class="primary-action" id="exportBackupButton" type="button">Export backup</button>
+              <label class="backup-import">
+                Import backup
+                <input id="importBackupInput" accept="application/json,.json" type="file" />
+              </label>
+            </div>
+            <p class="settings-help">Backup includes invoices, quotations, clients, employees, portal passwords, finance records, business settings, logo, and USD rates. Keep the exported file private.</p>
+          </section>
+        </section>
+      </main>
+    </div>
+
+    <datalist id="itemTitleSuggestions"></datalist>
+    <datalist id="itemDescriptionSuggestions"></datalist>
+    <datalist id="clientNameSuggestions"></datalist>
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <script src="app.js"></script>
+  </body>
+</html>
