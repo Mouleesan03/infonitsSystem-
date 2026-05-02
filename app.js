@@ -8,6 +8,7 @@ const SERVICES_KEY = "infonits.services";
 const RENEWALS_KEY = "infonits.renewals";
 const WEBSITE_LOGINS_KEY = "infonits.websiteLogins";
 const EMPLOYEES_KEY = "infonits.employees";
+const CLOUD_BACKUP_KEY = "infonits.cloudBackup";
 const FINANCE_PAGE_SIZE = 8;
 const RECENT_INVOICE_PAGE_SIZE = 8;
 const CLIENT_PAGE_SIZE = 10;
@@ -343,6 +344,23 @@ function loadSettings() {
 
 function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+function loadCloudBackupSettings() {
+  try {
+    return {
+      backupId: "infonits-main",
+      autoBackup: "off",
+      lastAutoBackupDate: "",
+      ...(JSON.parse(localStorage.getItem(CLOUD_BACKUP_KEY)) || {}),
+    };
+  } catch {
+    return { backupId: "infonits-main", autoBackup: "off", lastAutoBackupDate: "" };
+  }
+}
+
+function saveCloudBackupSettings(config) {
+  localStorage.setItem(CLOUD_BACKUP_KEY, JSON.stringify(config));
 }
 
 function addSheetDetailsToProjectsAndClients() {
@@ -1525,7 +1543,20 @@ function saveCurrentProjectMonthSettings() {
 }
 
 function exportBackup() {
-  const backup = {
+  const backup = createBackupPackage();
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `infonits-backup-${today()}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+  showToast("Backup exported");
+}
+
+function createBackupPackage() {
+  return {
     app: "Infonits Invoice Manager",
     version: 1,
     exportedAt: new Date().toISOString(),
@@ -1542,15 +1573,33 @@ function exportBackup() {
       settings,
     },
   };
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = `infonits-backup-${today()}.json`;
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(link.href);
-  showToast("Backup exported");
+}
+
+function applyBackupData(backup) {
+  const data = backup.data || backup;
+  if (!Array.isArray(data.invoices) || !Array.isArray(data.clients)) {
+    throw new Error("Invalid backup file");
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data.invoices || []));
+  localStorage.setItem(CLIENTS_KEY, JSON.stringify(data.clients || []));
+  localStorage.setItem(PROJECTS_KEY, JSON.stringify(data.projects || []));
+  localStorage.setItem(PROJECT_TARGETS_KEY, JSON.stringify(data.projectTargets || {}));
+  localStorage.setItem(FINANCE_KEY, JSON.stringify(data.financeRecords || []));
+  localStorage.setItem(SERVICES_KEY, JSON.stringify(data.services || []));
+  localStorage.setItem(RENEWALS_KEY, JSON.stringify(data.renewals || []));
+  localStorage.setItem(WEBSITE_LOGINS_KEY, JSON.stringify(data.websiteLogins || []));
+  localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(data.employees || []));
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...defaultSettings, ...(data.settings || {}) }));
+  refreshStateFromStorage();
+  resetForm();
+  resetClientForm();
+  resetProjectForm();
+  resetServiceForm();
+  resetRenewalForm();
+  resetWebsiteLoginForm();
+  resetEmployeeForm();
+  resetFinanceForm();
+  renderAll();
 }
 
 function importBackup(file) {
@@ -1559,32 +1608,9 @@ function importBackup(file) {
   reader.addEventListener("load", () => {
     try {
       const backup = JSON.parse(reader.result);
-      const data = backup.data || backup;
-      if (!Array.isArray(data.invoices) || !Array.isArray(data.clients)) {
-        throw new Error("Invalid backup file");
-      }
       const confirmed = confirm("Import backup? This will replace current saved data.");
       if (!confirmed) return;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(data.invoices || []));
-      localStorage.setItem(CLIENTS_KEY, JSON.stringify(data.clients || []));
-      localStorage.setItem(PROJECTS_KEY, JSON.stringify(data.projects || []));
-      localStorage.setItem(PROJECT_TARGETS_KEY, JSON.stringify(data.projectTargets || {}));
-      localStorage.setItem(FINANCE_KEY, JSON.stringify(data.financeRecords || []));
-      localStorage.setItem(SERVICES_KEY, JSON.stringify(data.services || []));
-      localStorage.setItem(RENEWALS_KEY, JSON.stringify(data.renewals || []));
-      localStorage.setItem(WEBSITE_LOGINS_KEY, JSON.stringify(data.websiteLogins || []));
-      localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(data.employees || []));
-      localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...defaultSettings, ...(data.settings || {}) }));
-      refreshStateFromStorage();
-      resetForm();
-      resetClientForm();
-      resetProjectForm();
-      resetServiceForm();
-      resetRenewalForm();
-      resetWebsiteLoginForm();
-      resetEmployeeForm();
-      resetFinanceForm();
-      renderAll();
+      applyBackupData(backup);
       showToast("Backup imported");
     } catch {
       showToast("Backup import failed");
@@ -1593,6 +1619,110 @@ function importBackup(file) {
     }
   });
   reader.readAsText(file);
+}
+
+function cloudBackupConfigFromForm() {
+  const existing = loadCloudBackupSettings();
+  const config = {
+    url: document.getElementById("cloudSupabaseUrl").value.trim().replace(/\/$/, ""),
+    anonKey: document.getElementById("cloudSupabaseKey").value.trim(),
+    backupId: document.getElementById("cloudBackupId").value.trim() || "infonits-main",
+    autoBackup: document.getElementById("cloudAutoBackup").value,
+    lastAutoBackupDate: existing.lastAutoBackupDate || "",
+  };
+  saveCloudBackupSettings(config);
+  return config;
+}
+
+function renderCloudBackupSettings() {
+  const config = loadCloudBackupSettings();
+  const urlInput = document.getElementById("cloudSupabaseUrl");
+  const keyInput = document.getElementById("cloudSupabaseKey");
+  const backupIdInput = document.getElementById("cloudBackupId");
+  const autoBackupInput = document.getElementById("cloudAutoBackup");
+  if (!urlInput || !keyInput || !backupIdInput || !autoBackupInput) return;
+  urlInput.value = config.url || "";
+  keyInput.value = config.anonKey || "";
+  backupIdInput.value = config.backupId || "infonits-main";
+  autoBackupInput.value = config.autoBackup || "off";
+}
+
+function supabaseBackupEndpoint(config, query = "") {
+  return `${config.url}/rest/v1/app_backups${query}`;
+}
+
+function supabaseHeaders(config, extra = {}) {
+  return {
+    apikey: config.anonKey,
+    Authorization: `Bearer ${config.anonKey}`,
+    "Content-Type": "application/json",
+    ...extra,
+  };
+}
+
+async function backupToCloud() {
+  const config = cloudBackupConfigFromForm();
+  return saveBackupToCloud(config, { silent: false });
+}
+
+async function saveBackupToCloud(config, options = {}) {
+  const silent = Boolean(options.silent);
+  if (!config.url || !config.anonKey) {
+    if (!silent) showToast("Add Supabase URL and anon key");
+    return false;
+  }
+  try {
+    const response = await fetch(supabaseBackupEndpoint(config), {
+      method: "POST",
+      headers: supabaseHeaders(config, { Prefer: "resolution=merge-duplicates" }),
+      body: JSON.stringify({
+        id: config.backupId,
+        data: createBackupPackage(),
+        updated_at: new Date().toISOString(),
+      }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    if (!silent) showToast("Cloud backup saved");
+    return true;
+  } catch (error) {
+    console.error(error);
+    if (!silent) showToast("Cloud backup failed");
+    return false;
+  }
+}
+
+async function runDailyCloudBackup() {
+  const config = loadCloudBackupSettings();
+  if (config.autoBackup !== "daily" || !config.url || !config.anonKey) return;
+  if (config.lastAutoBackupDate === today()) return;
+  const saved = await saveBackupToCloud(config, { silent: true });
+  if (!saved) return;
+  saveCloudBackupSettings({ ...config, lastAutoBackupDate: today() });
+  showToast("Daily cloud backup saved");
+}
+
+async function restoreFromCloud() {
+  const config = cloudBackupConfigFromForm();
+  if (!config.url || !config.anonKey) {
+    showToast("Add Supabase URL and anon key");
+    return;
+  }
+  const confirmed = confirm("Restore cloud backup? This will replace current saved data.");
+  if (!confirmed) return;
+  try {
+    const response = await fetch(
+      supabaseBackupEndpoint(config, `?id=eq.${encodeURIComponent(config.backupId)}&select=data,updated_at&limit=1`),
+      { headers: supabaseHeaders(config) },
+    );
+    if (!response.ok) throw new Error(await response.text());
+    const rows = await response.json();
+    if (!rows.length || !rows[0].data) throw new Error("No cloud backup found");
+    applyBackupData(rows[0].data);
+    showToast("Cloud backup restored");
+  } catch (error) {
+    console.error(error);
+    showToast("Cloud restore failed");
+  }
 }
 
 function recalculateProjectUsdValues(month) {
@@ -3175,6 +3305,7 @@ function renderSettings() {
   document.getElementById("aiMode").value = settings.aiMode || "local";
   document.getElementById("aiApiKey").value = settings.aiApiKey || "";
   document.getElementById("logoPreview").src = settings.logoDataUrl || defaultSettings.logoDataUrl;
+  renderCloudBackupSettings();
 }
 
 async function downloadInvoicePdf(invoice) {
@@ -3691,6 +3822,9 @@ document.getElementById("newProjectButton").addEventListener("click", () => {
 document.getElementById("aiCreateDraftButton").addEventListener("click", createDocumentFromPrompt);
 document.getElementById("exportBackupButton").addEventListener("click", exportBackup);
 document.getElementById("importBackupInput").addEventListener("change", (event) => importBackup(event.target.files[0]));
+document.getElementById("cloudBackupButton").addEventListener("click", backupToCloud);
+document.getElementById("cloudRestoreButton").addEventListener("click", restoreFromCloud);
+document.getElementById("cloudAutoBackup").addEventListener("change", cloudBackupConfigFromForm);
 aiPromptInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
     createDocumentFromPrompt();
@@ -4190,3 +4324,4 @@ resetFinanceForm();
 renderAll();
 updatePreviewZoom();
 updatePreviewVisibility();
+runDailyCloudBackup();

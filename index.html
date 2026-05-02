@@ -1287,6 +1287,35 @@
                 <input id="importBackupInput" accept="application/json,.json" type="file" />
               </label>
             </div>
+            <div class="cloud-backup-card">
+              <h3>Cloud backup</h3>
+              <div class="cloud-backup-grid">
+                <label>
+                  Supabase URL
+                  <input id="cloudSupabaseUrl" placeholder="https://your-project.supabase.co" />
+                </label>
+                <label>
+                  Supabase anon key
+                  <input id="cloudSupabaseKey" type="password" placeholder="Paste anon public key" />
+                </label>
+                <label>
+                  Backup ID
+                  <input id="cloudBackupId" placeholder="infonits-main" />
+                </label>
+                <label>
+                  Auto backup
+                  <select id="cloudAutoBackup">
+                    <option value="off">Off</option>
+                    <option value="daily">Every day</option>
+                  </select>
+                </label>
+              </div>
+              <div class="backup-actions">
+                <button class="primary-action" id="cloudBackupButton" type="button">Backup to cloud</button>
+                <button class="secondary-action" id="cloudRestoreButton" type="button">Restore from cloud</button>
+              </div>
+              <p class="settings-help">Create one Supabase table named <strong>app_backups</strong>. Cloud backup stores the same data as the JSON export.</p>
+            </div>
             <p class="settings-help">Backup includes invoices, quotations, clients, employees, portal passwords, finance records, business settings, logo, and USD rates. Keep the exported file private.</p>
           </section>
         </section>

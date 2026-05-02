@@ -2548,6 +2548,27 @@ textarea {
   display: none;
 }
 
+.cloud-backup-card {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 14px;
+  border: 1px solid #dbe3ec;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.cloud-backup-card h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.cloud-backup-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.35fr) minmax(220px, 1.35fr) minmax(140px, 0.75fr) minmax(130px, 0.65fr);
+  gap: 12px;
+}
+
 .settings-help {
   margin: 12px 0 0;
   color: #64748b;
@@ -3264,6 +3285,10 @@ textarea {
   }
 
   .settings-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .cloud-backup-grid {
     grid-template-columns: 1fr;
   }
 
