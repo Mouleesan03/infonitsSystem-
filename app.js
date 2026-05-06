@@ -8,11 +8,22 @@ const SERVICES_KEY = "infonits.services";
 const RENEWALS_KEY = "infonits.renewals";
 const WEBSITE_LOGINS_KEY = "infonits.websiteLogins";
 const EMPLOYEES_KEY = "infonits.employees";
+const USERS_KEY = "infonits.users";
+const CURRENT_USER_KEY = "infonits.currentUserId";
+const AUTH_SESSION_KEY = "infonits.loggedInUserId";
+const MANAGER_HANDLES_KEY = "infonits.managerHandles";
+const SOCIAL_POSTS_KEY = "infonits.socialMediaPosts";
+const CORRECTIONS_KEY = "infonits.corrections";
+const PM_NOTIFICATIONS_KEY = "infonits.notifications";
+const MONTHLY_POST_REPORTS_KEY = "infonits.monthlyPostReports";
 const CLOUD_BACKUP_KEY = "infonits.cloudBackup";
 const FINANCE_PAGE_SIZE = 8;
 const RECENT_INVOICE_PAGE_SIZE = 8;
 const CLIENT_PAGE_SIZE = 10;
 const INVOICE_PAGE_SIZE = 10;
+const PM_PROJECT_PAGE_SIZE = 6;
+const PM_WEEKLY_POST_TARGET = 3;
+const PM_MONTHLY_POST_TARGET = PM_WEEKLY_POST_TARGET * 4;
 const MAX_IMAGE_UPLOAD_SIZE = 2 * 1024 * 1024;
 
 const defaultSettings = {
@@ -34,6 +45,37 @@ const defaultSettings = {
   aiApiKey: "",
 };
 
+const accessSections = [
+  { id: "dashboard", label: "Dashboard" },
+  { id: "create", label: "Create Invoice" },
+  { id: "clients", label: "Customers" },
+  { id: "employees", label: "Employees" },
+  { id: "services", label: "Service Catalog" },
+  { id: "invoices", label: "Invoices" },
+  { id: "quotations", label: "Quotations" },
+  { id: "projects", label: "Projects" },
+  { id: "manager", label: "Pr Tracker" },
+  { id: "renewals", label: "Subscriptions" },
+  { id: "logins", label: "Portal Access" },
+  { id: "finance", label: "Finance" },
+  { id: "users", label: "Users & Access" },
+  { id: "settings", label: "Settings" },
+];
+
+const roleLabels = {
+  admin: "Admin",
+  "project-manager": "Project manager",
+  designer: "Designer",
+  developer: "Developer",
+};
+
+const roleDefaultAccess = {
+  admin: accessSections.map((section) => section.id),
+  "project-manager": ["dashboard", "clients", "invoices", "quotations", "projects", "manager", "renewals"],
+  designer: ["dashboard", "projects", "manager", "services"],
+  developer: ["dashboard", "create", "clients", "employees", "services", "invoices", "quotations", "projects", "manager", "renewals"],
+};
+
 let invoices = loadInvoices();
 let clients = loadClients();
 let projects = loadProjects();
@@ -43,6 +85,12 @@ let services = loadServices();
 let renewals = loadRenewals();
 let websiteLogins = loadWebsiteLogins();
 let employees = loadEmployees();
+let users = hardenDefaultUserAccess(loadUsers());
+let managerHandles = loadManagerHandles();
+let socialMediaPosts = loadSocialMediaPosts();
+let corrections = loadCorrections();
+let pmNotifications = loadPmNotifications();
+let monthlyPostReports = loadMonthlyPostReports();
 let settings = loadSettings();
 let editingId = null;
 let editingClientId = null;
@@ -51,15 +99,21 @@ let editingServiceId = null;
 let editingRenewalId = null;
 let editingWebsiteLoginId = null;
 let editingEmployeeId = null;
+let editingUserId = null;
+let editingManagerHandleId = null;
+let editingSocialPostId = null;
+let editingCorrectionId = null;
 let linkedProjectId = null;
+let currentUserId = localStorage.getItem(AUTH_SESSION_KEY) || "";
 let selectedInvoiceId = invoices[0]?.id || null;
 let previewZoom = 0.8;
-let previewHidden = false;
+let previewHidden = true;
 let projectFormVisible = false;
 let financePage = 1;
 let recentInvoicesPage = 1;
 let clientPage = 1;
 let invoicePage = 1;
+let pmProjectPage = 1;
 let portalCalendarMonth = today().slice(0, 7);
 let portalCalendarPinned = false;
 let pendingEmployeePhotoDataUrl = "";
@@ -75,9 +129,11 @@ const views = {
   invoices: document.getElementById("invoicesView"),
   quotations: document.getElementById("quotationsView"),
   projects: document.getElementById("projectsView"),
+  manager: document.getElementById("managerView"),
   renewals: document.getElementById("renewalsView"),
   logins: document.getElementById("loginsView"),
   finance: document.getElementById("financeView"),
+  users: document.getElementById("usersView"),
   settings: document.getElementById("settingsView"),
 };
 
@@ -88,6 +144,10 @@ const serviceForm = document.getElementById("serviceForm");
 const renewalForm = document.getElementById("renewalForm");
 const websiteLoginForm = document.getElementById("websiteLoginForm");
 const employeeForm = document.getElementById("employeeForm");
+const userForm = document.getElementById("userForm");
+const managerHandleForm = document.getElementById("managerHandleForm");
+const socialPostForm = document.getElementById("socialPostForm");
+const correctionForm = document.querySelector("#correctionForm");
 const itemsContainer = document.getElementById("itemsContainer");
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
@@ -110,11 +170,21 @@ const renewalSearchInput = document.getElementById("renewalSearchInput");
 const websiteLoginSearchInput = document.getElementById("websiteLoginSearchInput");
 const employeeSearchInput = document.getElementById("employeeSearchInput");
 const employeeStatusFilter = document.getElementById("employeeStatusFilter");
+const appShell = document.getElementById("appShell");
+const loginScreen = document.getElementById("loginScreen");
+const loginForm = document.getElementById("loginForm");
+const userMenuButton = document.getElementById("userMenuButton");
+const userMenu = document.getElementById("userMenu");
+const activeUserInitial = document.getElementById("activeUserInitial");
+const activeUserName = document.getElementById("activeUserName");
+const activeUserRole = document.getElementById("activeUserRole");
+const managerHandleSearchInput = document.getElementById("managerHandleSearchInput");
+const pmMonthFilter = document.getElementById("pmMonthFilter");
 const statementClientSelect = document.getElementById("statementClientSelect");
 const clientSelect = document.getElementById("clientSelect");
 const previewScale = document.getElementById("previewScale");
 const previewZoomLabel = document.getElementById("previewZoomLabel");
-const togglePreviewButton = document.getElementById("togglePreviewButton");
+const invoiceModal = document.getElementById("invoiceModal");
 
 const countries = [
   "Sri Lanka",
@@ -154,6 +224,31 @@ const financeCategories = [
   "Gold coin",
   "Gold jewellery",
   "Other",
+];
+
+const socialPlatforms = ["Facebook", "Instagram", "TikTok"];
+const socialPostStatuses = [
+  "Planned",
+  "Design Pending",
+  "Design Completed",
+  "Waiting for Approval",
+  "Approved",
+  "Scheduled",
+  "Uploaded",
+  "Missed",
+  "Correction Needed",
+  "Cancelled",
+];
+const correctionStatuses = [
+  "Received from Client",
+  "Assigned to Designer",
+  "Assigned to Developer",
+  "In Progress",
+  "Completed by Team",
+  "Checked by Project Manager",
+  "Sent to Client",
+  "Approved by Client",
+  "Need More Correction",
 ];
 
 const aprilProjectSeed = [
@@ -320,6 +415,127 @@ function saveEmployees() {
   localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(employees));
 }
 
+function defaultUsers() {
+  return [
+    { id: "admin", name: "Admin", username: "admin", passwordHash: encodePassword("admin123"), email: "", role: "admin", status: "Active", access: roleDefaultAccess.admin, updatedAt: new Date().toISOString() },
+    { id: "project-manager", name: "Project Manager", username: "manager", passwordHash: encodePassword("manager123"), email: "", role: "project-manager", status: "Active", access: roleDefaultAccess["project-manager"], updatedAt: new Date().toISOString() },
+    { id: "designer", name: "Designer", username: "designer", passwordHash: encodePassword("designer123"), email: "", role: "designer", status: "Active", access: roleDefaultAccess.designer, updatedAt: new Date().toISOString() },
+    { id: "developer", name: "Developer", username: "developer", passwordHash: encodePassword("developer123"), email: "", role: "developer", status: "Active", access: roleDefaultAccess.developer, updatedAt: new Date().toISOString() },
+  ];
+}
+
+function encodePassword(password = "") {
+  return btoa(unescape(encodeURIComponent(password)));
+}
+
+async function hashPassword(password = "") {
+  if (!window.crypto?.subtle || !window.TextEncoder) return encodePassword(password);
+  const bytes = new TextEncoder().encode(`infonits-local-auth:${password}`);
+  const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+  const hash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `sha256:${hash}`;
+}
+
+function passwordMatches(user, password, hashedPassword) {
+  const savedHash = user.passwordHash || "";
+  return savedHash === hashedPassword || savedHash === encodePassword(password);
+}
+
+function normalizeUser(user) {
+  const username = user.username || String(user.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "user";
+  return {
+    ...user,
+    username,
+    passwordHash: user.passwordHash || encodePassword(user.password || `${username}123`),
+    access: user.role === "admin" ? roleDefaultAccess.admin : user.access || roleDefaultAccess[user.role] || ["dashboard"],
+  };
+}
+
+function loadUsers() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(USERS_KEY));
+    return Array.isArray(saved) && saved.length ? saved.map(normalizeUser) : defaultUsers();
+  } catch {
+    return defaultUsers();
+  }
+}
+
+function hardenDefaultUserAccess(savedUsers) {
+  const defaultAccountIds = new Set(["project-manager", "designer", "developer"]);
+  return savedUsers.map((user) => {
+    if (!defaultAccountIds.has(user.id) || user.role === "admin") return user;
+    return {
+      ...user,
+      access: roleDefaultAccess[user.role] || ["dashboard"],
+      updatedAt: user.updatedAt || new Date().toISOString(),
+    };
+  });
+}
+
+function saveUsers() {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function loadManagerHandles() {
+  try {
+    return JSON.parse(localStorage.getItem(MANAGER_HANDLES_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveManagerHandles() {
+  localStorage.setItem(MANAGER_HANDLES_KEY, JSON.stringify(managerHandles));
+}
+
+function loadSocialMediaPosts() {
+  try {
+    return JSON.parse(localStorage.getItem(SOCIAL_POSTS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveSocialMediaPosts() {
+  localStorage.setItem(SOCIAL_POSTS_KEY, JSON.stringify(socialMediaPosts));
+}
+
+function loadCorrections() {
+  try {
+    return JSON.parse(localStorage.getItem(CORRECTIONS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveCorrections() {
+  localStorage.setItem(CORRECTIONS_KEY, JSON.stringify(corrections));
+}
+
+function loadPmNotifications() {
+  try {
+    return JSON.parse(localStorage.getItem(PM_NOTIFICATIONS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function savePmNotifications() {
+  localStorage.setItem(PM_NOTIFICATIONS_KEY, JSON.stringify(pmNotifications));
+}
+
+function loadMonthlyPostReports() {
+  try {
+    return JSON.parse(localStorage.getItem(MONTHLY_POST_REPORTS_KEY)) || [];
+  } catch {
+    return [];
+  }
+}
+
+function saveMonthlyPostReports() {
+  localStorage.setItem(MONTHLY_POST_REPORTS_KEY, JSON.stringify(monthlyPostReports));
+}
+
 function refreshStateFromStorage() {
   invoices = loadInvoices();
   clients = loadClients();
@@ -330,7 +546,14 @@ function refreshStateFromStorage() {
   renewals = loadRenewals();
   websiteLogins = loadWebsiteLogins();
   employees = loadEmployees();
+  users = hardenDefaultUserAccess(loadUsers());
+  managerHandles = loadManagerHandles();
+  socialMediaPosts = loadSocialMediaPosts();
+  corrections = loadCorrections();
+  pmNotifications = loadPmNotifications();
+  monthlyPostReports = loadMonthlyPostReports();
   settings = loadSettings();
+  currentUserId = localStorage.getItem(AUTH_SESSION_KEY) || "";
   selectedInvoiceId = invoices[0]?.id || null;
 }
 
@@ -570,8 +793,20 @@ function updatePreviewZoom() {
 }
 
 function updatePreviewVisibility() {
-  document.getElementById("dashboardView").classList.toggle("preview-hidden", previewHidden);
-  togglePreviewButton.textContent = previewHidden ? "Show preview" : "Hide preview";
+  invoiceModal.classList.toggle("is-open", !previewHidden);
+  invoiceModal.setAttribute("aria-hidden", previewHidden ? "true" : "false");
+}
+
+function openInvoiceModal(id) {
+  selectedInvoiceId = id;
+  previewHidden = false;
+  renderPreview();
+  updatePreviewVisibility();
+}
+
+function closeInvoiceModal() {
+  previewHidden = true;
+  updatePreviewVisibility();
 }
 
 function populateCountrySelects() {
@@ -588,11 +823,115 @@ function populateFinanceCategories() {
   financeCategoryFilter.innerHTML = `<option value="All">All categories</option>${options}`;
 }
 
+function currentUser() {
+  return users.find((user) => user.id === currentUserId && user.status !== "Disabled") || null;
+}
+
+function isLoggedIn() {
+  return Boolean(currentUser());
+}
+
+function userCanAccess(viewName) {
+  const user = currentUser();
+  if (!user) return false;
+  if (user.role === "admin") return true;
+  return (user.access || []).includes(viewName);
+}
+
+function firstAllowedView() {
+  return accessSections.find((section) => views[section.id] && userCanAccess(section.id))?.id || "dashboard";
+}
+
+function applyAccessControl() {
+  const loggedIn = isLoggedIn();
+  appShell.classList.toggle("is-locked", !loggedIn);
+  loginScreen.classList.toggle("is-hidden", loggedIn);
+  userMenu.classList.remove("is-open");
+  if (!loggedIn) return;
+  const activeView = Object.entries(views).find(([, element]) => element.classList.contains("active"))?.[0] || "dashboard";
+  navTabs.forEach((tab) => {
+    tab.hidden = !userCanAccess(tab.dataset.view);
+  });
+  document.querySelectorAll(".nav-section-label").forEach((label) => {
+    let sibling = label.nextElementSibling;
+    let hasVisibleItem = false;
+    while (sibling && !sibling.classList.contains("nav-section-label")) {
+      if (sibling.classList.contains("nav-tab") && !sibling.hidden) hasVisibleItem = true;
+      sibling = sibling.nextElementSibling;
+    }
+    label.hidden = !hasVisibleItem;
+  });
+  document.querySelectorAll("[data-view-target]").forEach((button) => {
+    button.hidden = !userCanAccess(button.dataset.viewTarget);
+  });
+  document.getElementById("newInvoiceButton").hidden = !userCanAccess("create");
+  document.getElementById("newQuotationButton").hidden = !userCanAccess("quotations");
+  document.getElementById("newProjectButton").hidden = !userCanAccess("projects");
+  document.getElementById("editProfileButton").hidden = !userCanAccess("users");
+  renderActiveUserBadge();
+  if (!userCanAccess(activeView)) switchView(firstAllowedView());
+}
+
+function renderActiveUserBadge() {
+  const user = currentUser();
+  activeUserInitial.textContent = user ? String(user.name || user.username || "U").slice(0, 1).toUpperCase() : "U";
+  activeUserName.textContent = user?.name || "";
+  activeUserRole.textContent = user ? `${roleLabels[user.role] || user.role} • ${user.username || ""}` : "";
+}
+
+function populateUserAccessOptions(selected = roleDefaultAccess["project-manager"]) {
+  document.getElementById("userAccessOptions").innerHTML = accessSections
+    .map(
+      (section) => `
+        <label class="access-option">
+          <input type="checkbox" value="${escapeAttribute(section.id)}" ${selected.includes(section.id) ? "checked" : ""} />
+          <span>${escapeHtml(section.label)}</span>
+        </label>
+      `,
+    )
+    .join("");
+}
+
+async function loginUser(username, password) {
+  const normalizedUsername = String(username || "").trim().toLowerCase();
+  const passwordHash = await hashPassword(password || "");
+  const user = users.find((item) => {
+    return String(item.username || "").trim().toLowerCase() === normalizedUsername && passwordMatches(item, password || "", passwordHash) && item.status !== "Disabled";
+  });
+  if (!user) {
+    showToast("Invalid username or password");
+    return false;
+  }
+  if (user.passwordHash !== passwordHash) {
+    users = users.map((item) => (item.id === user.id ? { ...item, passwordHash, updatedAt: new Date().toISOString() } : item));
+    saveUsers();
+  }
+  currentUserId = user.id;
+  localStorage.setItem(AUTH_SESSION_KEY, currentUserId);
+  localStorage.setItem(CURRENT_USER_KEY, currentUserId);
+  loginForm.reset();
+  applyAccessControl();
+  switchView(firstAllowedView());
+  showToast(`Welcome ${user.name}`);
+  return true;
+}
+
+function logoutUser() {
+  currentUserId = "";
+  localStorage.removeItem(AUTH_SESSION_KEY);
+  loginForm.reset();
+  applyAccessControl();
+}
+
 function matchesMonth(dateString, monthValue) {
   return !monthValue || String(dateString || "").startsWith(monthValue);
 }
 
 function switchView(viewName) {
+  if (!userCanAccess(viewName)) {
+    showToast("This user cannot access that section");
+    viewName = firstAllowedView();
+  }
   Object.entries(views).forEach(([name, element]) => {
     element.classList.toggle("active", name === viewName);
   });
@@ -1084,9 +1423,7 @@ function invoiceStatusSelect(invoice) {
 }
 
 function selectInvoice(id) {
-  selectedInvoiceId = id;
-  renderPreview();
-  switchView("dashboard");
+  openInvoiceModal(id);
 }
 
 function getClientFormData() {
@@ -1261,6 +1598,24 @@ function resetProjectForm() {
   hideProjectForm();
 }
 
+function projectOptionLabel(project) {
+  return `${project.name || "Project"}${project.clientName ? ` - ${project.clientName}` : ""}`;
+}
+
+function populateManagerHandleSelects() {
+  const projectOptions = projects.length
+    ? projects
+        .map((project) => `<option value="${escapeAttribute(project.id)}">${escapeHtml(projectOptionLabel(project))}</option>`)
+        .join("")
+    : `<option value="">No projects yet</option>`;
+  document.getElementById("handleProject").innerHTML = projectOptions;
+
+  const assignableUsers = users.filter((user) => user.status !== "Disabled" && user.role !== "admin");
+  document.getElementById("handleUser").innerHTML = (assignableUsers.length ? assignableUsers : users)
+    .map((user) => `<option value="${escapeAttribute(user.id)}">${escapeHtml(user.name)} - ${escapeHtml(roleLabels[user.role] || user.role)}</option>`)
+    .join("");
+}
+
 function editProject(id) {
   id = ensureProjectForMonth(id);
   const project = projects.find((item) => item.id === id);
@@ -1283,15 +1638,34 @@ function editProject(id) {
   switchView("projects");
 }
 
+function projectDeleteScope(id) {
+  const virtual = parseVirtualProjectId(id);
+  const project = virtual ? projects.find((item) => item.id === virtual.sourceId) : projects.find((item) => item.id === id);
+  if (!project) return { project: null, ids: [] };
+  const key = projectRecurringKey(project);
+  const ids = projects
+    .filter((item) => item.id === project.id || item.sourceProjectId === project.id || projectRecurringKey(item) === key)
+    .map((item) => item.id);
+  return { project, ids: [...new Set(ids)] };
+}
+
 function deleteProject(id) {
-  id = ensureProjectForMonth(id);
-  const project = projects.find((item) => item.id === id);
+  const { project, ids } = projectDeleteScope(id);
   if (!project) return;
-  const confirmed = confirm(`Delete ${project.name}?`);
+  const confirmed = confirm(`Delete ${project.name}? This will remove its monthly copies and linked manager records.`);
   if (!confirmed) return;
-  projects = projects.filter((item) => item.id !== id);
+  projects = projects.filter((item) => !ids.includes(item.id));
+  managerHandles = managerHandles.filter((item) => !ids.includes(item.projectId));
+  socialMediaPosts = socialMediaPosts.map((post) => (ids.includes(post.projectId) ? { ...post, projectId: "", projectName: "" } : post));
+  corrections = corrections.map((correction) => (ids.includes(correction.projectId) ? { ...correction, projectId: "", projectName: "" } : correction));
   saveProjects();
+  saveManagerHandles();
+  saveSocialMediaPosts();
+  saveCorrections();
   renderProjects();
+  renderManagerHandles();
+  renderProjectManagerWorkspace();
+  renderFinance();
   showToast("Project deleted");
 }
 
@@ -1570,6 +1944,12 @@ function createBackupPackage() {
       renewals,
       websiteLogins,
       employees,
+      users,
+      managerHandles,
+      socialMediaPosts,
+      corrections,
+      pmNotifications,
+      monthlyPostReports,
       settings,
     },
   };
@@ -1589,6 +1969,12 @@ function applyBackupData(backup) {
   localStorage.setItem(RENEWALS_KEY, JSON.stringify(data.renewals || []));
   localStorage.setItem(WEBSITE_LOGINS_KEY, JSON.stringify(data.websiteLogins || []));
   localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(data.employees || []));
+  localStorage.setItem(USERS_KEY, JSON.stringify(data.users || defaultUsers()));
+  localStorage.setItem(MANAGER_HANDLES_KEY, JSON.stringify(data.managerHandles || []));
+  localStorage.setItem(SOCIAL_POSTS_KEY, JSON.stringify(data.socialMediaPosts || []));
+  localStorage.setItem(CORRECTIONS_KEY, JSON.stringify(data.corrections || []));
+  localStorage.setItem(PM_NOTIFICATIONS_KEY, JSON.stringify(data.pmNotifications || []));
+  localStorage.setItem(MONTHLY_POST_REPORTS_KEY, JSON.stringify(data.monthlyPostReports || []));
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...defaultSettings, ...(data.settings || {}) }));
   refreshStateFromStorage();
   resetForm();
@@ -1598,6 +1984,8 @@ function applyBackupData(backup) {
   resetRenewalForm();
   resetWebsiteLoginForm();
   resetEmployeeForm();
+  resetUserForm();
+  resetManagerHandleForm();
   resetFinanceForm();
   renderAll();
 }
@@ -2057,6 +2445,944 @@ function renderEmployees() {
         })
         .join("")
     : emptyRow("No employees yet", 6);
+}
+
+function getSelectedUserAccess() {
+  return [...document.querySelectorAll("#userAccessOptions input:checked")].map((input) => input.value);
+}
+
+async function getUserFormData() {
+  const role = document.getElementById("userRole").value;
+  const access = role === "admin" ? roleDefaultAccess.admin : getSelectedUserAccess();
+  const existing = users.find((user) => user.id === editingUserId);
+  const password = document.getElementById("userPassword").value;
+  return {
+    id: editingUserId || createId(),
+    name: document.getElementById("userName").value.trim(),
+    username: document.getElementById("userUsername").value.trim(),
+    passwordHash: password ? await hashPassword(password) : existing?.passwordHash || (await hashPassword("123456")),
+    email: document.getElementById("userEmail").value.trim(),
+    role,
+    status: document.getElementById("userStatus").value,
+    access,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function resetUserForm() {
+  editingUserId = null;
+  userForm.reset();
+  document.getElementById("userRole").value = "project-manager";
+  document.getElementById("userStatus").value = "Active";
+  document.getElementById("userPassword").placeholder = "Password";
+  populateUserAccessOptions(roleDefaultAccess["project-manager"]);
+}
+
+function editUser(id) {
+  const user = users.find((item) => item.id === id);
+  if (!user) return;
+  editingUserId = id;
+  document.getElementById("userName").value = user.name || "";
+  document.getElementById("userUsername").value = user.username || "";
+  document.getElementById("userPassword").value = "";
+  document.getElementById("userPassword").placeholder = "Leave blank to keep old password";
+  document.getElementById("userEmail").value = user.email || "";
+  document.getElementById("userRole").value = user.role || "project-manager";
+  document.getElementById("userStatus").value = user.status || "Active";
+  populateUserAccessOptions(user.access || roleDefaultAccess[user.role] || []);
+  switchView("users");
+}
+
+function deleteUser(id) {
+  const user = users.find((item) => item.id === id);
+  if (!user || user.role === "admin") {
+    showToast("Admin user cannot be deleted");
+    return;
+  }
+  const confirmed = confirm(`Delete ${user.name}?`);
+  if (!confirmed) return;
+  users = users.filter((item) => item.id !== id);
+  if (currentUserId === id) logoutUser();
+  saveUsers();
+  renderUsers();
+  renderManagerHandles();
+  applyAccessControl();
+  showToast("User deleted");
+}
+
+function renderUsers() {
+  document.getElementById("userTable").innerHTML = users.length
+    ? users
+        .map((user) => {
+          const accessText = user.role === "admin" ? "Full control" : `${(user.access || []).length} sections`;
+          return `
+            <tr>
+              <td><strong>${escapeHtml(user.name)}</strong><br /><span class="muted-label">${escapeHtml(user.email || "")}</span></td>
+              <td>${escapeHtml(user.username || "")}</td>
+              <td>${escapeHtml(roleLabels[user.role] || user.role)}</td>
+              <td>${escapeHtml(accessText)}</td>
+              <td>${statusBadge(user.status || "Active")}</td>
+              <td>
+                <div class="action-row icon-actions">
+                  <button class="icon-action edit" title="Edit user" aria-label="Edit user" type="button" data-user-edit="${user.id}">${iconEdit()}</button>
+                  <button class="icon-action delete" title="Delete user" aria-label="Delete user" type="button" data-user-delete="${user.id}">${iconDelete()}</button>
+                </div>
+              </td>
+            </tr>
+          `;
+        })
+        .join("")
+    : emptyRow("No users yet", 6);
+}
+
+function getManagerHandleFormData() {
+  const project = projects.find((item) => item.id === document.getElementById("handleProject").value);
+  const assignedUser = users.find((item) => item.id === document.getElementById("handleUser").value);
+  return {
+    id: editingManagerHandleId || createId(),
+    projectId: project?.id || "",
+    projectName: project?.name || "",
+    clientName: project?.clientName || "",
+    userId: assignedUser?.id || "",
+    userName: assignedUser?.name || "",
+    userRole: assignedUser?.role || "",
+    task: document.getElementById("handleTask").value.trim(),
+    priority: document.getElementById("handlePriority").value,
+    dueDate: document.getElementById("handleDueDate").value,
+    status: document.getElementById("handleStatus").value,
+    note: document.getElementById("handleNote").value.trim(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function resetManagerHandleForm() {
+  editingManagerHandleId = null;
+  managerHandleForm.reset();
+  populateManagerHandleSelects();
+  document.getElementById("handlePriority").value = "Normal";
+  document.getElementById("handleStatus").value = "Waiting";
+}
+
+function editManagerHandle(id) {
+  const handle = managerHandles.find((item) => item.id === id);
+  if (!handle) return;
+  editingManagerHandleId = id;
+  populateManagerHandleSelects();
+  document.getElementById("handleProject").value = handle.projectId || "";
+  document.getElementById("handleUser").value = handle.userId || "";
+  document.getElementById("handleTask").value = handle.task || "";
+  document.getElementById("handlePriority").value = handle.priority || "Normal";
+  document.getElementById("handleDueDate").value = handle.dueDate || "";
+  document.getElementById("handleStatus").value = handle.status || "Waiting";
+  document.getElementById("handleNote").value = handle.note || "";
+  switchView("manager");
+}
+
+function deleteManagerHandle(id) {
+  const handle = managerHandles.find((item) => item.id === id);
+  if (!handle) return;
+  const confirmed = confirm(`Delete handle for ${handle.projectName || handle.task}?`);
+  if (!confirmed) return;
+  managerHandles = managerHandles.filter((item) => item.id !== id);
+  saveManagerHandles();
+  renderManagerHandles();
+  resetManagerHandleForm();
+  showToast("Handle deleted");
+}
+
+function renderManagerHandles() {
+  populateManagerHandleSelects();
+  const query = managerHandleSearchInput.value.trim().toLowerCase();
+  const rows = managerHandles.filter((handle) => {
+    const haystack = `${handle.projectName} ${handle.clientName} ${handle.userName} ${handle.task} ${handle.status}`.toLowerCase();
+    return haystack.includes(query);
+  });
+  document.getElementById("managerHandleTable").innerHTML = rows.length
+    ? rows
+        .map(
+          (handle) => `
+            <tr>
+              <td><strong>${escapeHtml(handle.projectName || "Project")}</strong><br /><span class="muted-label">${escapeHtml(handle.clientName || "")}</span></td>
+              <td>${escapeHtml(handle.userName || "")}<br /><span class="muted-label">${escapeHtml(roleLabels[handle.userRole] || handle.userRole || "")}</span></td>
+              <td title="${escapeAttribute(handle.note || "")}">${escapeHtml(handle.task || "")}<br /><span class="muted-label">${escapeHtml(handle.priority || "Normal")}</span></td>
+              <td>${formatDate(handle.dueDate)}</td>
+              <td>${statusBadge(handle.status || "Waiting")}</td>
+              <td>
+                <div class="action-row icon-actions">
+                  <button class="icon-action edit" title="Edit handle" aria-label="Edit handle" type="button" data-handle-edit="${handle.id}">${iconEdit()}</button>
+                  <button class="icon-action delete" title="Delete handle" aria-label="Delete handle" type="button" data-handle-delete="${handle.id}">${iconDelete()}</button>
+                </div>
+              </td>
+            </tr>
+          `,
+        )
+        .join("")
+    : emptyRow("No assigned project work yet", 6);
+}
+
+function activeTeamUsers(role) {
+  return users.filter((user) => user.status !== "Disabled" && (!role || user.role === role));
+}
+
+function fieldValue(id, fallback = "") {
+  const element = document.getElementById(id);
+  return element ? element.value : fallback;
+}
+
+function setFieldValue(id, value = "") {
+  const element = document.getElementById(id);
+  if (element) element.value = value;
+}
+
+function setText(id, value = "") {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value;
+}
+
+function isManagerProject(project = {}) {
+  const text = `${project.name || ""} ${project.clientName || ""} ${project.note || ""}`.toLowerCase();
+  return text.includes("social media") || /\bsm\b/.test(text) || text.includes("maintenance") || text.includes("maintainance");
+}
+
+function managerMonth() {
+  return fieldValue("pmMonthFilter", today().slice(0, 7)) || today().slice(0, 7);
+}
+
+function managerProjects() {
+  const monthRows = projectsForMonth(managerMonth()).filter(isManagerProject);
+  const unique = new Map();
+  monthRows.forEach((project) => {
+    const key = projectRecurringKey(project);
+    if (!unique.has(key)) unique.set(key, project);
+  });
+  return [...unique.values()];
+}
+
+function postCount(post = {}) {
+  return Math.max(1, Number(post.count || 1));
+}
+
+function projectPlatformLinks(projectId) {
+  const links = new Map();
+  socialMediaPosts
+    .filter((post) => post.projectId === projectId && post.platform)
+    .sort((a, b) => String(b.uploadDate || "").localeCompare(String(a.uploadDate || "")))
+    .forEach((post) => {
+      if (!links.has(post.platform)) links.set(post.platform, post.link || "");
+    });
+  return socialPlatforms.map((platform) => ({ platform, link: links.get(platform) || "" }));
+}
+
+function platformIcon(platform = "") {
+  const name = String(platform).toLowerCase();
+  if (name.includes("instagram")) {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="4"></rect><circle cx="12" cy="12" r="3"></circle><circle cx="16.5" cy="7.5" r="1"></circle></svg>`;
+  }
+  if (name.includes("tiktok")) {
+    return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4v9.2a4.2 4.2 0 1 1-3-4V12a1.8 1.8 0 1 0 1.2 1.7V4h1.8c.4 2.2 1.8 3.6 4 4v2.3c-1.7-.2-3.1-.9-4-2v-4.3Z"></path></svg>`;
+  }
+  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 8h3V4h-3c-3 0-5 2-5 5v2H6v4h3v5h4v-5h3l1-4h-4V9c0-.6.4-1 1-1Z"></path></svg>`;
+}
+
+function platformButtons(projectId) {
+  const virtual = parseVirtualProjectId(projectId);
+  const ids = [projectId, virtual?.sourceId].filter(Boolean);
+  const buttons = socialPlatforms
+    .map((platform) => {
+      const posts = socialMediaPosts.filter((item) => ids.includes(item.projectId) && item.platform === platform && postMonth(item) === managerMonth());
+      const count = posts.reduce((sum, item) => sum + postCount(item), 0);
+      const post = posts
+        .filter((item) => item.link)
+        .sort((a, b) => String(b.uploadDate || "").localeCompare(String(a.uploadDate || "")))[0];
+      return { platform, link: post?.link || "", count };
+    })
+    .filter((item) => item.count || item.link);
+  if (!buttons.length) return `<span class="muted-label">No links</span>`;
+  return buttons
+    .map((item) =>
+      item.link
+        ? `<a class="pm-platform-link" href="${escapeAttribute(normalizeOpenUrl(item.link))}" target="_blank" rel="noopener noreferrer" title="${escapeAttribute(item.platform)}">${platformIcon(item.platform)}<span>${item.count}</span></a>`
+        : `<span class="pm-platform-link is-muted" title="${escapeAttribute(item.platform)}">${platformIcon(item.platform)}<span>${item.count}</span></span>`,
+    )
+    .join("");
+}
+
+function userOptions(role, selected = "") {
+  const rows = activeTeamUsers(role);
+  return [`<option value="">Not assigned</option>`]
+    .concat(rows.map((user) => `<option value="${escapeAttribute(user.id)}" ${user.id === selected ? "selected" : ""}>${escapeHtml(user.name)}</option>`))
+    .join("");
+}
+
+function managerTeamOptions(selected = "") {
+  const rows = users.filter((user) => user.status !== "Disabled" && ["designer", "developer"].includes(user.role));
+  return [`<option value="">Not assigned</option>`]
+    .concat(
+      rows.map(
+        (user) =>
+          `<option value="${escapeAttribute(user.id)}" ${user.id === selected ? "selected" : ""}>${escapeHtml(user.name)} - ${escapeHtml(roleLabels[user.role] || user.role)}</option>`,
+      ),
+    )
+    .join("");
+}
+
+function teamSelect(selectedId, projectId) {
+  return `<select class="pm-inline-select" data-pm-team="${escapeAttribute(projectId)}">${managerTeamOptions(selectedId || "")}</select>`;
+}
+
+function clientOptions(selected = "") {
+  const names = [...new Set(managerProjects().map((project) => project.clientName || project.name).filter(Boolean))];
+  return [`<option value="">Select client</option>`]
+    .concat(names.map((name) => `<option value="${escapeAttribute(name)}" ${name === selected ? "selected" : ""}>${escapeHtml(name)}</option>`))
+    .join("");
+}
+
+function projectOptions(selected = "", clientName = "") {
+  const source = document.getElementById("managerView") ? managerProjects() : projects;
+  const filtered = clientName ? source.filter((project) => (project.clientName || project.name) === clientName) : source;
+  return [`<option value="">Select project</option>`]
+    .concat(filtered.map((project) => `<option value="${escapeAttribute(project.id)}" ${project.id === selected ? "selected" : ""}>${escapeHtml(projectOptionLabel(project))}</option>`))
+    .join("");
+}
+
+function selectOptions(values, selected = "") {
+  return values.map((value) => `<option value="${escapeAttribute(value)}" ${value === selected ? "selected" : ""}>${escapeHtml(value)}</option>`).join("");
+}
+
+function socialPostDateTime(post = {}) {
+  if (!post.scheduledDate) return null;
+  return new Date(`${post.scheduledDate}T${post.scheduledTime || "00:00"}`);
+}
+
+function isPostMissed(post = {}) {
+  const due = socialPostDateTime(post);
+  return Boolean(due && due < new Date() && !["Uploaded", "Cancelled"].includes(post.status || ""));
+}
+
+function postMonth(post = {}) {
+  return (post.uploadDate || post.scheduledDate || "").slice(0, 7);
+}
+
+function currentWeekRange() {
+  const now = new Date();
+  const start = new Date(now);
+  const day = start.getDay() || 7;
+  start.setDate(start.getDate() - day + 1);
+  start.setHours(0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 7);
+  return { start, end };
+}
+
+function pastWeekRange() {
+  const end = new Date();
+  end.setHours(23, 59, 59, 999);
+  const start = new Date(end);
+  start.setDate(end.getDate() - 6);
+  start.setHours(0, 0, 0, 0);
+  return { start, end };
+}
+
+function addPmNotificationOnce(type, title, message, sourceId, assignedTo = "project-manager") {
+  if (pmNotifications.some((item) => item.sourceId === sourceId)) return;
+  pmNotifications.unshift({
+    id: createId(),
+    type,
+    title,
+    message,
+    sourceId,
+    assignedTo,
+    status: "Unread",
+    createdAt: new Date().toISOString(),
+  });
+  savePmNotifications();
+}
+
+function updatePmNotifications() {
+  pmNotifications = pmNotifications.filter((note) => ["Weekly warning", "Team notify"].includes(note.type || ""));
+  savePmNotifications();
+}
+
+function visiblePmNotifications() {
+  return pmNotifications.filter((note) => note.type === "Weekly warning");
+}
+
+function projectAssignedDesigner(project = {}) {
+  if (project.assignedTeamRole === "designer" && project.assignedTeamId) return users.find((user) => user.id === project.assignedTeamId);
+  if (project.assignedDesignerId) return users.find((user) => user.id === project.assignedDesignerId);
+  if (project.assignedDesigner) return users.find((user) => user.name === project.assignedDesigner);
+  return null;
+}
+
+function updateWeeklyProjectNotifications() {
+  const { start, end } = pastWeekRange();
+  const weekKey = start.toISOString().slice(0, 10);
+  pmNotifications = pmNotifications.filter((note) => note.type !== "Weekly warning");
+  managerProjects()
+    .filter(isActiveProject)
+    .forEach((project) => {
+      const weeklyPosts = socialMediaPosts.filter((post) => {
+        const postedDate = post.uploadDate || post.scheduledDate || "";
+        const due = postedDate ? new Date(`${postedDate}T00:00:00`) : null;
+        return post.projectId === project.id && due && due >= start && due < end;
+      });
+      const uploaded = groupedSocialPostCount(weeklyPosts);
+      const missing = Math.max(0, PM_WEEKLY_POST_TARGET - uploaded);
+      if (!missing) return;
+      const clientName = project.clientName || project.name || "Client";
+      const projectName = project.name || "Project";
+      const message = `${clientName} - ${projectName} missed ${missing} post${missing === 1 ? "" : "s"} in the past week. Required ${PM_WEEKLY_POST_TARGET}, posted ${uploaded}.`;
+      addPmNotificationOnce("Weekly warning", "Missed posts", message, `weekly-pm-${project.id}-${weekKey}`, "project-manager");
+      const designer = projectAssignedDesigner(project);
+      addPmNotificationOnce(
+        "Weekly warning",
+        "Designer missed post reminder",
+        designer ? `${designer.name}: ${message}` : `Designer not assigned: ${message}`,
+        `weekly-designer-${project.id}-${designer?.id || "none"}-${weekKey}`,
+        designer?.id || "designer",
+      );
+    });
+  savePmNotifications();
+}
+
+function populateProjectManagerForms() {
+  const clientHtml = clientOptions();
+  const projectHtml = projectOptions();
+  const designerHtml = userOptions("designer");
+  const developerHtml = userOptions("developer");
+  const assignableHtml = userOptions();
+  const elements = {
+    postClient: clientHtml,
+    postProject: projectHtml,
+    postDesigner: designerHtml,
+    postDeveloper: developerHtml,
+    postStatus: selectOptions(socialPostStatuses, "Planned"),
+    correctionClient: clientHtml,
+    correctionProject: projectHtml,
+    correctionAssignedTo: assignableHtml,
+    correctionStatus: selectOptions(correctionStatuses, "Received from Client"),
+  };
+  Object.entries(elements).forEach(([id, html]) => {
+    const element = document.getElementById(id);
+    if (element && !element.dataset.locked) element.innerHTML = html;
+  });
+}
+
+function getSocialPostFormData() {
+  const selectedProjectId = fieldValue("postProject");
+  const projectId = selectedProjectId ? ensureProjectForMonth(selectedProjectId) : "";
+  const project = projects.find((item) => item.id === projectId);
+  const designer = users.find((item) => item.id === fieldValue("postDesigner"));
+  const developer = users.find((item) => item.id === fieldValue("postDeveloper"));
+  const postedDate = fieldValue("postUploadDate") || fieldValue("postScheduledDate") || today();
+  const count = Math.max(1, Number(fieldValue("postCount", 1) || 1));
+  return {
+    id: editingSocialPostId || createId(),
+    clientName: fieldValue("postClient") || project?.clientName || "",
+    projectId: project?.id || "",
+    projectName: project?.name || "",
+    platform: "Social",
+    title: fieldValue("postTitle", "Posted count").trim() || "Posted count",
+    description: fieldValue("postDescription").trim(),
+    type: fieldValue("postType", "Posted count").trim() || "Posted count",
+    count,
+    scheduledDate: postedDate,
+    scheduledTime: fieldValue("postScheduledTime", "09:00"),
+    designerId: designer?.id || "",
+    designerName: designer?.name || "",
+    developerId: developer?.id || "",
+    developerName: developer?.name || "",
+    status: fieldValue("postStatus", "Uploaded"),
+    uploadDate: postedDate,
+    uploadTime: fieldValue("postUploadTime"),
+    link: "",
+    remarks: fieldValue("postRemarks").trim(),
+    attachment: fieldValue("postAttachment").trim(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function selectedPostPlatforms() {
+  return socialPlatforms
+    .map((platform) => {
+      const key = platform === "TikTok" ? "TikTok" : platform;
+      const checked = document.getElementById(`postPlatform${key}`)?.checked;
+      const link = fieldValue(`postLink${key}`).trim();
+      return checked || link ? { platform, link } : null;
+    })
+    .filter(Boolean);
+}
+
+function resetSocialPostForm() {
+  editingSocialPostId = null;
+  socialPostForm?.reset();
+  populateProjectManagerForms();
+  setFieldValue("pmMonthFilter", managerMonth());
+  socialPlatforms.forEach((platform) => {
+    const key = platform === "TikTok" ? "TikTok" : platform;
+    const checkbox = document.getElementById(`postPlatform${key}`);
+    if (checkbox) checkbox.checked = false;
+    setFieldValue(`postLink${key}`, "");
+  });
+  setFieldValue("postScheduledDate", today());
+  setFieldValue("postScheduledTime", "09:00");
+  setFieldValue("postUploadDate", today());
+  setFieldValue("postCount", 1);
+  setFieldValue("postStatus", "Uploaded");
+}
+
+function editSocialPost(id) {
+  const post = socialMediaPosts.find((item) => item.id === id);
+  if (!post) return;
+  editingSocialPostId = id;
+  populateProjectManagerForms();
+  setFieldValue("postClient", post.clientName || "");
+  setFieldValue("postProject", post.projectId || "");
+  socialPlatforms.forEach((platform) => {
+    const key = platform === "TikTok" ? "TikTok" : platform;
+    const checkbox = document.getElementById(`postPlatform${key}`);
+    if (checkbox) checkbox.checked = platform === post.platform;
+    setFieldValue(`postLink${key}`, platform === post.platform ? post.link || "" : "");
+  });
+  setFieldValue("postTitle", post.title || "");
+  setFieldValue("postDescription", post.description || "");
+  setFieldValue("postType", post.type || "");
+  setFieldValue("postScheduledDate", post.scheduledDate || "");
+  setFieldValue("postScheduledTime", post.scheduledTime || "");
+  setFieldValue("postDesigner", post.designerId || "");
+  setFieldValue("postDeveloper", post.developerId || "");
+  setFieldValue("postStatus", post.status || "Uploaded");
+  setFieldValue("postUploadDate", post.uploadDate || post.scheduledDate || "");
+  setFieldValue("postUploadTime", post.uploadTime || "");
+  setFieldValue("postCount", post.count || 1);
+  setFieldValue("postRemarks", post.remarks || "");
+  setFieldValue("postAttachment", post.attachment || "");
+  switchView("manager");
+}
+
+function deleteSocialPost(id) {
+  const post = socialMediaPosts.find((item) => item.id === id);
+  if (!post || !confirm(`Delete post ${post.title || ""}?`)) return;
+  socialMediaPosts = socialMediaPosts.filter((item) => item.id !== id);
+  saveSocialMediaPosts();
+  renderProjectManagerWorkspace();
+  showToast("Post deleted");
+}
+
+function socialPostGroupKey(post = {}) {
+  if (post.groupId) return post.groupId;
+  return [
+    post.uploadDate || post.scheduledDate || "",
+    post.clientName || "",
+    post.projectId || post.projectName || "",
+    post.count || 1,
+    post.remarks || "",
+  ].join("||");
+}
+
+function groupedSocialPosts(sourcePosts) {
+  const groups = new Map();
+  (sourcePosts || socialMediaPosts.filter((post) => postMonth(post) === managerMonth()))
+    .forEach((post) => {
+      const key = socialPostGroupKey(post);
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          posts: [],
+          date: post.uploadDate || post.scheduledDate || "",
+          clientName: post.clientName || "",
+          projectName: post.projectName || "",
+          remarks: post.remarks || "",
+        });
+      }
+      groups.get(key).posts.push(post);
+    });
+  return [...groups.values()].map((group) => ({
+    ...group,
+    count: Math.max(...group.posts.map((post) => postCount(post)), 0),
+  }));
+}
+
+function groupedSocialPostCount(posts) {
+  return groupedSocialPosts(posts).reduce((sum, group) => sum + group.count, 0);
+}
+
+function socialPostGroupPlatforms(posts = []) {
+  const byPlatform = new Map();
+  posts.forEach((post) => {
+    if (!post.platform || byPlatform.has(post.platform)) return;
+    byPlatform.set(post.platform, post);
+  });
+  return socialPlatforms
+    .map((platform) => byPlatform.get(platform))
+    .filter(Boolean)
+    .map((post) =>
+      post.link
+        ? `<a class="pm-platform-link pm-platform-icon-only" href="${escapeAttribute(normalizeOpenUrl(post.link))}" target="_blank" rel="noopener noreferrer" title="${escapeAttribute(post.platform)}">${platformIcon(post.platform)}</a>`
+        : `<span class="pm-platform-link pm-platform-icon-only is-muted" title="${escapeAttribute(post.platform)}">${platformIcon(post.platform)}</span>`,
+    )
+    .join("");
+}
+
+function deleteSocialPostGroup(encodedKey) {
+  const key = decodeURIComponent(encodedKey || "");
+  const group = groupedSocialPosts().find((item) => item.key === key);
+  if (!group || !confirm("Delete this posted record?")) return;
+  const ids = new Set(group.posts.map((post) => post.id));
+  socialMediaPosts = socialMediaPosts.filter((post) => !ids.has(post.id));
+  saveSocialMediaPosts();
+  renderProjectManagerWorkspace();
+  showToast("Posted record deleted");
+}
+
+function getCorrectionFormData() {
+  const project = projects.find((item) => item.id === fieldValue("correctionProject"));
+  const assignedUser = users.find((item) => item.id === fieldValue("correctionAssignedTo"));
+  return {
+    id: editingCorrectionId || createId(),
+    clientName: fieldValue("correctionClient") || project?.clientName || "",
+    projectId: project?.id || "",
+    projectName: project?.name || "",
+    type: fieldValue("correctionType").trim(),
+    description: fieldValue("correctionDescription").trim(),
+    assignedToId: assignedUser?.id || "",
+    assignedToName: assignedUser?.name || "",
+    assignedToRole: assignedUser?.role || "",
+    priority: fieldValue("correctionPriority", "Normal"),
+    dueDate: fieldValue("correctionDueDate"),
+    status: fieldValue("correctionStatus", "Received from Client"),
+    attachment: fieldValue("correctionAttachment").trim(),
+    clientMessage: fieldValue("correctionClientMessage").trim(),
+    pmRemark: fieldValue("correctionPmRemark").trim(),
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function resetCorrectionForm() {
+  editingCorrectionId = null;
+  correctionForm?.reset();
+  populateProjectManagerForms();
+  setFieldValue("correctionPriority", "Normal");
+  setFieldValue("correctionStatus", "Received from Client");
+}
+
+function editCorrection(id) {
+  const correction = corrections.find((item) => item.id === id);
+  if (!correction) return;
+  editingCorrectionId = id;
+  populateProjectManagerForms();
+  setFieldValue("correctionClient", correction.clientName || "");
+  setFieldValue("correctionProject", correction.projectId || "");
+  setFieldValue("correctionType", correction.type || "");
+  setFieldValue("correctionAssignedTo", correction.assignedToId || "");
+  setFieldValue("correctionPriority", correction.priority || "Normal");
+  setFieldValue("correctionDueDate", correction.dueDate || "");
+  setFieldValue("correctionStatus", correction.status || "Received from Client");
+  setFieldValue("correctionAttachment", correction.attachment || "");
+  setFieldValue("correctionDescription", correction.description || "");
+  setFieldValue("correctionClientMessage", correction.clientMessage || "");
+  setFieldValue("correctionPmRemark", correction.pmRemark || "");
+  switchView("manager");
+}
+
+function deleteCorrection(id) {
+  const correction = corrections.find((item) => item.id === id);
+  if (!correction || !confirm(`Delete correction for ${correction.clientName || "client"}?`)) return;
+  corrections = corrections.filter((item) => item.id !== id);
+  saveCorrections();
+  renderProjectManagerWorkspace();
+  showToast("Correction deleted");
+}
+
+function assignProjectTeamMember(projectId, role) {
+  const project = projects.find((item) => item.id === projectId);
+  if (!project) return;
+  const available = activeTeamUsers(role);
+  const current = role === "designer" ? project.assignedDesigner || "" : project.assignedDeveloper || "";
+  const typed = prompt(
+    `Assign ${role}. Available: ${available.map((user) => user.name).join(", ") || "no saved users"}`,
+    current,
+  );
+  if (typed === null) return;
+  const matched = available.find((user) => user.name.toLowerCase() === typed.trim().toLowerCase());
+  projects = projects.map((item) => {
+    if (item.id !== projectId) return item;
+    return role === "designer"
+      ? { ...item, assignedDesigner: matched?.name || typed.trim(), assignedDesignerId: matched?.id || "", updatedAt: new Date().toISOString() }
+      : { ...item, assignedDeveloper: matched?.name || typed.trim(), assignedDeveloperId: matched?.id || "", updatedAt: new Date().toISOString() };
+  });
+  saveProjects();
+  renderProjectManagerWorkspace();
+  renderProjects();
+  showToast(`${roleLabels[role] || role} assigned`);
+}
+
+function updateProjectTeamFromSelect(projectId, userId) {
+  projectId = ensureProjectForMonth(projectId);
+  const user = users.find((item) => item.id === userId);
+  projects = projects.map((project) => {
+    if (project.id !== projectId) return project;
+    return {
+      ...project,
+      assignedTeamId: user?.id || "",
+      assignedTeamName: user?.name || "",
+      assignedTeamRole: user?.role || "",
+      assignedDesignerId: user?.role === "designer" ? user.id : project.assignedDesignerId || "",
+      assignedDesigner: user?.role === "designer" ? user.name : project.assignedDesigner || "",
+      assignedDeveloperId: user?.role === "developer" ? user.id : project.assignedDeveloperId || "",
+      assignedDeveloper: user?.role === "developer" ? user.name : project.assignedDeveloper || "",
+      updatedAt: new Date().toISOString(),
+    };
+  });
+  saveProjects();
+  renderProjectManagerWorkspace();
+  showToast("Team updated");
+}
+
+function renderProjectManagerDashboard() {
+  const month = managerMonth();
+  const activeProjects = managerProjects().filter(isActiveProject);
+  const monthPosts = socialMediaPosts.filter((post) => postMonth(post) === month);
+  const posted = groupedSocialPostCount(monthPosts);
+  const required = activeProjects.length * PM_MONTHLY_POST_TARGET;
+  const remaining = Math.max(0, required - posted);
+  setText("pmActiveProjects", activeProjects.length);
+  setText("pmPendingPosts", remaining);
+  setText("pmUploadedPosts", posted);
+  setText("pmMissedPosts", 0);
+  setText("pmPendingCorrections", 0);
+  setText("pmDesignerPending", 0);
+  setText("pmDeveloperPending", 0);
+  setText("pmNotificationCount", visiblePmNotifications().length);
+}
+
+function renderProjectManagerProjects() {
+  const rows = managerProjects();
+  const totalPages = Math.max(1, Math.ceil(rows.length / PM_PROJECT_PAGE_SIZE));
+  pmProjectPage = Math.min(pmProjectPage, totalPages);
+  const start = (pmProjectPage - 1) * PM_PROJECT_PAGE_SIZE;
+  const visibleRows = rows.slice(start, start + PM_PROJECT_PAGE_SIZE);
+  document.getElementById("pmProjectTable").innerHTML = rows.length
+    ? visibleRows.map((project) => {
+        const teamId =
+          project.assignedTeamId ||
+          project.assignedDesignerId ||
+          project.assignedDeveloperId ||
+          users.find((user) => user.name === project.assignedDesigner || user.name === project.assignedDeveloper)?.id ||
+          "";
+        const posted = socialMediaPosts.filter((post) => post.projectId === project.id && postMonth(post) === managerMonth());
+        const postedCount = groupedSocialPostCount(posted);
+        const remaining = Math.max(0, PM_MONTHLY_POST_TARGET - postedCount);
+        return `
+          <tr>
+            <td>${escapeHtml(project.clientName || project.name || "")}</td>
+            <td><strong>${escapeHtml(project.name || "")}</strong></td>
+            <td><div class="pm-platform-list">${platformButtons(project.id)}</div></td>
+            <td><div class="pm-team-cell">${teamSelect(teamId, project.id)}</div></td>
+            <td>${postedCount} / ${PM_MONTHLY_POST_TARGET}</td>
+            <td>${remaining}</td>
+          </tr>
+        `;
+      }).join("")
+    : emptyRow("No social media or maintenance projects yet", 6);
+  document.getElementById("pmProjectPrevPage").disabled = pmProjectPage <= 1;
+  document.getElementById("pmProjectNextPage").disabled = pmProjectPage >= totalPages;
+  document.getElementById("pmProjectPageLabel").textContent = `Page ${pmProjectPage} of ${totalPages}`;
+}
+
+function renderSocialMediaPosts() {
+  const table = document.getElementById("socialPostTable");
+  if (!table) return;
+  const rows = groupedSocialPosts()
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  table.innerHTML = rows.length
+    ? rows.map((group) => `
+        <tr>
+          <td>${formatDate(group.date)}</td>
+          <td>${escapeHtml(group.clientName || "")}</td>
+          <td>${escapeHtml(group.projectName || "")}</td>
+          <td><div class="pm-platform-list">${socialPostGroupPlatforms(group.posts)}</div></td>
+          <td><strong>${group.count}</strong></td>
+          <td title="${escapeAttribute(group.remarks || "")}">${escapeHtml(group.remarks || "")}</td>
+          <td><div class="action-row icon-actions">
+            <button class="icon-action edit" title="Edit posted record" aria-label="Edit posted record" type="button" data-post-edit="${group.posts[0]?.id || ""}">${iconEdit()}</button>
+            <button class="icon-action delete" title="Delete posted record" aria-label="Delete posted record" type="button" data-post-delete-group="${escapeAttribute(encodeURIComponent(group.key))}">${iconDelete()}</button>
+          </div></td>
+        </tr>
+      `).join("")
+    : emptyRow("No posted records for this month", 7);
+}
+
+function monthlyPostRows() {
+  const month = managerMonth();
+  const clientNames = [...new Set([...managerProjects().map((project) => project.clientName || project.name), ...socialMediaPosts.map((post) => post.clientName)].filter(Boolean))];
+  return clientNames.map((clientName) => {
+    const posts = socialMediaPosts.filter((post) => post.clientName === clientName && postMonth(post) === month);
+    const uploaded = groupedSocialPostCount(posts);
+    const remaining = Math.max(0, PM_MONTHLY_POST_TARGET - uploaded);
+    const status = uploaded >= PM_MONTHLY_POST_TARGET ? "Complete" : "Pending";
+    return { clientName, required: PM_MONTHLY_POST_TARGET, uploaded, remaining, status };
+  });
+}
+
+function renderMonthlyPostTracking() {
+  const rows = monthlyPostRows();
+  monthlyPostReports = rows.map((row) => ({ ...row, month: today().slice(0, 7), updatedAt: new Date().toISOString() }));
+  saveMonthlyPostReports();
+  document.getElementById("monthlyPostTable").innerHTML = rows.length
+    ? rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.clientName)}</td>
+          <td>${row.required}</td>
+          <td>${row.uploaded}</td>
+          <td>${row.remaining}</td>
+          <td>${statusBadge(row.status)}</td>
+        </tr>
+      `).join("")
+    : emptyRow("No clients to track yet", 5);
+}
+
+function renderWeeklyPostTracking() {
+  const { start, end } = currentWeekRange();
+  const clientNames = [...new Set([...managerProjects().map((project) => project.clientName || project.name), ...socialMediaPosts.map((post) => post.clientName)].filter(Boolean))];
+  const rows = clientNames.map((clientName) => {
+    const posts = socialMediaPosts.filter((post) => {
+      const due = new Date(`${post.uploadDate || post.scheduledDate || ""}T00:00:00`);
+      return post.clientName === clientName && due && due >= start && due < end;
+    });
+    const uploaded = groupedSocialPostCount(posts);
+    const missing = Math.max(0, PM_WEEKLY_POST_TARGET - uploaded);
+    if (missing > 0) {
+      addPmNotificationOnce("Weekly warning", "Weekly posts missing", `${clientName} is missing ${missing} post${missing === 1 ? "" : "s"} this week.`, `weekly-missing-${clientName}-${today().slice(0, 7)}-${start.toISOString().slice(0, 10)}`);
+    }
+    return { clientName, required: PM_WEEKLY_POST_TARGET, uploaded, missing, status: missing ? "Warning" : "On track" };
+  });
+  document.getElementById("weeklyPostTable").innerHTML = rows.length
+    ? rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.clientName)}</td>
+          <td>${row.required}</td>
+          <td>${row.uploaded}</td>
+          <td>${row.missing}</td>
+          <td>${statusBadge(row.status)}</td>
+        </tr>
+      `).join("")
+    : emptyRow("No weekly tracking yet", 5);
+}
+
+function clientCalendarColor(clientName = "") {
+  const colors = ["#2563eb", "#7c3aed", "#0f766e", "#db2777", "#ea580c", "#16a34a", "#0891b2", "#4f46e5", "#be123c", "#9333ea"];
+  const seed = [...String(clientName || "Client")].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return colors[seed % colors.length];
+}
+
+function renderPostCalendar() {
+  const calendar = document.querySelector("#postCalendarGrid");
+  if (!calendar) return;
+  const month = managerMonth();
+  const [year, monthNumber] = month.split("-").map(Number);
+  const firstDay = new Date(year, monthNumber - 1, 1);
+  const daysInMonth = new Date(year, monthNumber, 0).getDate();
+  const leadingEmptyDays = firstDay.getDay();
+  const postedGroups = groupedSocialPosts(socialMediaPosts.filter((post) => postMonth(post) === month));
+  const postsByDate = new Map();
+  postedGroups.forEach((group) => {
+    if (!group.date) return;
+    const list = postsByDate.get(group.date) || [];
+    list.push(group);
+    postsByDate.set(group.date, list);
+  });
+  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const cells = [
+    ...weekdays.map((day) => `<div class="pm-calendar-weekday">${day}</div>`),
+    ...Array.from({ length: leadingEmptyDays }, () => `<div class="pm-calendar-day is-empty"></div>`),
+    ...Array.from({ length: daysInMonth }, (_, index) => {
+      const day = index + 1;
+      const dateKey = `${month}-${String(day).padStart(2, "0")}`;
+      const posted = postsByDate.get(dateKey) || [];
+      const chips = posted
+        .map((group) => {
+          const label = `${group.clientName || "Client"} (${group.count})`;
+          return `<span class="pm-calendar-chip" style="background:${clientCalendarColor(group.clientName)}" title="${escapeAttribute(`${group.clientName || ""} - ${group.projectName || ""}`)}">${escapeHtml(label)}</span>`;
+        })
+        .join("");
+      return `
+        <div class="pm-calendar-day">
+          <div class="pm-calendar-date"><span>${day}</span>${chips ? `<small>${posted.length}</small>` : ""}</div>
+          ${chips || ""}
+        </div>
+      `;
+    }),
+  ];
+  calendar.innerHTML = cells.join("");
+}
+
+function renderCorrections() {
+  const table = document.querySelector("#correctionTable");
+  if (!table) return;
+  table.innerHTML = corrections.length
+    ? corrections.map((correction) => `
+        <tr>
+          <td><strong>${escapeHtml(correction.clientName || "")}</strong><br /><span class="muted-label">${escapeHtml(correction.projectName || "")}</span></td>
+          <td title="${escapeAttribute(correction.description || "")}">${escapeHtml(correction.type || "")}</td>
+          <td>${escapeHtml(correction.assignedToName || "Not assigned")}</td>
+          <td>${escapeHtml(correction.priority || "Normal")}</td>
+          <td>${formatDate(correction.dueDate)}</td>
+          <td>${statusBadge(correction.status || "Received from Client")}</td>
+          <td><div class="action-row icon-actions">
+            <button class="icon-action edit" title="Edit correction" aria-label="Edit correction" type="button" data-correction-edit="${correction.id}">${iconEdit()}</button>
+            <button class="icon-action delete" title="Delete correction" aria-label="Delete correction" type="button" data-correction-delete="${correction.id}">${iconDelete()}</button>
+          </div></td>
+        </tr>
+      `).join("")
+    : emptyRow("No corrections yet", 7);
+}
+
+function renderPmNotifications() {
+  const list = document.getElementById("pmNotificationList");
+  if (!list) return;
+  const notes = visiblePmNotifications();
+  list.innerHTML = notes.length
+    ? notes.slice(0, 8).map((note) => `
+        <article class="pm-notification ${escapeAttribute(note.type || "")}">
+          <div>
+            <strong>${escapeHtml(note.title || note.type || "Notification")}</strong>
+            <p>${escapeHtml(note.message || "")}</p>
+            <span>${escapeHtml(note.assignedTo || "project-manager")} | ${new Date(note.createdAt || Date.now()).toLocaleString()}</span>
+          </div>
+          <div class="action-row icon-actions">
+            <button class="icon-action invoice" title="Notify designer" aria-label="Notify designer" type="button" data-notify-role="designer">D</button>
+            <button class="icon-action next" title="Notify developer" aria-label="Notify developer" type="button" data-notify-role="developer">V</button>
+          </div>
+        </article>
+      `).join("")
+    : `<p class="muted-label">No notifications right now.</p>`;
+}
+
+function renderPmDatabaseTables() {
+  const table = document.querySelector("#pmDatabaseTables");
+  if (!table) return;
+  const tables = [
+    ["projects", projects.length],
+    ["social_media_posts", socialMediaPosts.length],
+    ["monthly_post_reports", monthlyPostReports.length],
+    ["corrections", corrections.length],
+    ["notifications", pmNotifications.length],
+  ];
+  table.innerHTML = tables
+    .map(([name, count]) => `<article><strong>${escapeHtml(name)}</strong><span>${count} records</span></article>`)
+    .join("");
+}
+
+function renderProjectManagerWorkspace() {
+  if (!views.manager) return;
+  populateProjectManagerForms();
+  updateWeeklyProjectNotifications();
+  renderProjectManagerDashboard();
+  renderProjectManagerProjects();
+  renderSocialMediaPosts();
+  renderPmNotifications();
+  renderPostCalendar();
 }
 
 function renderItemSuggestions() {
@@ -2831,6 +4157,208 @@ function projectExportRows(month) {
       worker: project.worker || "",
       note: project.note || "",
     }));
+}
+
+function managerProjectsForMonth(month) {
+  const unique = new Map();
+  projectsForMonth(month)
+    .filter(isManagerProject)
+    .forEach((project) => {
+      const key = projectRecurringKey(project);
+      if (!unique.has(key)) unique.set(key, project);
+    });
+  return [...unique.values()];
+}
+
+function managerMonthlyReportData(month = managerMonth()) {
+  const reportProjects = managerProjectsForMonth(month).filter(isActiveProject);
+  const groupedPosts = groupedSocialPosts(socialMediaPosts.filter((post) => postMonth(post) === month));
+  const clientMap = new Map();
+  reportProjects.forEach((project) => {
+    const clientName = project.clientName || project.name || "Client";
+    if (!clientMap.has(clientName)) {
+      clientMap.set(clientName, { clientName, projects: [], required: 0, posted: 0, remaining: 0 });
+    }
+    const row = clientMap.get(clientName);
+    row.projects.push(project.name || "Project");
+    row.required += PM_MONTHLY_POST_TARGET;
+  });
+  groupedPosts.forEach((group) => {
+    const clientName = group.clientName || "Client";
+    if (!clientMap.has(clientName)) {
+      clientMap.set(clientName, { clientName, projects: [], required: PM_MONTHLY_POST_TARGET, posted: 0, remaining: 0 });
+    }
+    const row = clientMap.get(clientName);
+    row.posted += group.count;
+    if (group.projectName && !row.projects.includes(group.projectName)) row.projects.push(group.projectName);
+  });
+  const clientRows = [...clientMap.values()]
+    .map((client) => ({ ...client, remaining: Math.max(0, client.required - client.posted) }))
+    .sort((a, b) => a.clientName.localeCompare(b.clientName));
+  const postRows = groupedPosts
+    .map((group) => ({
+      date: group.date,
+      clientName: group.clientName || "",
+      projectName: group.projectName || "",
+      count: group.count,
+      platforms: group.posts.map((post) => post.platform).filter(Boolean).join(" | "),
+      links: group.posts.map((post) => [post.platform, post.link].filter(Boolean).join(": ")).filter(Boolean).join(" | "),
+      note: group.remarks || "",
+    }))
+    .sort((a, b) => `${a.clientName}${a.date}`.localeCompare(`${b.clientName}${b.date}`));
+  const summary = {
+    clients: clientRows.length,
+    projects: reportProjects.length,
+    required: clientRows.reduce((sum, row) => sum + row.required, 0),
+    posted: clientRows.reduce((sum, row) => sum + row.posted, 0),
+    remaining: clientRows.reduce((sum, row) => sum + row.remaining, 0),
+  };
+  return { summary, clientRows, postRows };
+}
+
+function downloadManagerMonthlyReport() {
+  const month = managerMonth();
+  const { summary, clientRows, postRows } = managerMonthlyReportData(month);
+  if (!clientRows.length && !postRows.length) {
+    showToast("No manager report data for this month");
+    return;
+  }
+  const sections = [
+    ["Infonits Manager Handle Monthly Report"],
+    ["Month", formatMonth(month)],
+    ["Generated", formatDate(today())],
+    [],
+    ["Overall Summary"],
+    ["Clients", "Active projects", "Required posts", "Posted posts", "Remaining posts"],
+    [summary.clients, summary.projects, summary.required, summary.posted, summary.remaining],
+    [],
+    ["Client Summary"],
+    ["Client", "Projects", "Required posts", "Posted posts", "Remaining posts"],
+    ...clientRows.map((row) => [row.clientName, row.projects.join(" | "), row.required, row.posted, row.remaining]),
+    [],
+    ["Posted Details"],
+    ["Date", "Client", "Project", "Post count", "Platforms", "Post links", "Note"],
+    ...postRows.map((row) => [row.date, row.clientName, row.projectName, row.count, row.platforms, row.links, row.note]),
+  ];
+  const csv = sections.map((line) => line.map(escapeCsv).join(",")).join("\n");
+  saveBlob(`\uFEFF${csv}`, `infonits-manager-report-${month}.csv`, "text/csv;charset=utf-8");
+  showToast("Manager CSV report downloaded");
+}
+
+function downloadManagerMonthlyPdfReport() {
+  const month = managerMonth();
+  const { summary, clientRows, postRows } = managerMonthlyReportData(month);
+  if (!clientRows.length && !postRows.length) {
+    showToast("No manager report data for this month");
+    return;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = 1240;
+  canvas.height = Math.max(1754, 520 + clientRows.length * 58 + postRows.length * 68);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#1d2e63";
+  ctx.fillRect(0, 0, canvas.width, 150);
+  ctx.fillStyle = "#ff6b2c";
+  ctx.fillRect(0, 150, canvas.width, 8);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "600 36px Poppins, Arial, sans-serif";
+  ctx.fillText("Manager Handle Monthly Report", 70, 82);
+  ctx.font = "400 20px Poppins, Arial, sans-serif";
+  ctx.fillText(`${formatMonth(month)} | Generated ${formatDate(today())}`, 70, 118);
+
+  let y = 220;
+  ctx.fillStyle = "#172033";
+  ctx.font = "600 24px Poppins, Arial, sans-serif";
+  ctx.fillText("Overall Summary", 70, y);
+  y += 34;
+  const summaryCards = [
+    ["Clients", summary.clients],
+    ["Projects", summary.projects],
+    ["Required", summary.required],
+    ["Posted", summary.posted],
+    ["Remaining", summary.remaining],
+  ];
+  summaryCards.forEach(([label, value], index) => {
+    const x = 70 + index * 220;
+    ctx.fillStyle = "#f5f8fc";
+    ctx.fillRect(x, y, 195, 76);
+    ctx.fillStyle = "#64748b";
+    ctx.font = "500 16px Poppins, Arial, sans-serif";
+    ctx.fillText(label, x + 16, y + 28);
+    ctx.fillStyle = "#1d2e63";
+    ctx.font = "600 26px Poppins, Arial, sans-serif";
+    ctx.fillText(String(value), x + 16, y + 58);
+  });
+  y += 130;
+
+  ctx.fillStyle = "#172033";
+  ctx.font = "600 24px Poppins, Arial, sans-serif";
+  ctx.fillText("Client Summary", 70, y);
+  y += 36;
+  const clientColumns = [
+    ["Client", 70, 280],
+    ["Projects", 360, 420],
+    ["Required", 800, 100],
+    ["Posted", 920, 100],
+    ["Remaining", 1040, 120],
+  ];
+  drawReportHeader(ctx, clientColumns, y);
+  y += 42;
+  ctx.font = "500 16px Poppins, Arial, sans-serif";
+  clientRows.forEach((row, index) => {
+    drawReportRowBg(ctx, y, index);
+    drawFitText(ctx, row.clientName, 80, y, 260);
+    drawFitText(ctx, row.projects.join(" | "), 370, y, 400);
+    drawFitText(ctx, row.required, 815, y, 80);
+    drawFitText(ctx, row.posted, 935, y, 80);
+    drawFitText(ctx, row.remaining, 1060, y, 90);
+    y += 42;
+  });
+  y += 40;
+
+  ctx.fillStyle = "#172033";
+  ctx.font = "600 24px Poppins, Arial, sans-serif";
+  ctx.fillText("Posted Details", 70, y);
+  y += 36;
+  const postColumns = [
+    ["Date", 70, 120],
+    ["Client", 200, 210],
+    ["Project", 425, 240],
+    ["Count", 680, 70],
+    ["Platforms", 760, 150],
+    ["Links", 925, 240],
+  ];
+  drawReportHeader(ctx, postColumns, y);
+  y += 42;
+  ctx.font = "500 15px Poppins, Arial, sans-serif";
+  postRows.forEach((row, index) => {
+    drawReportRowBg(ctx, y, index);
+    drawFitText(ctx, formatDate(row.date), 80, y, 105);
+    drawFitText(ctx, row.clientName, 210, y, 195);
+    drawFitText(ctx, row.projectName, 435, y, 225);
+    drawFitText(ctx, row.count, 700, y, 50);
+    drawFitText(ctx, row.platforms, 770, y, 140);
+    drawFitText(ctx, row.links || "-", 935, y, 220);
+    y += 48;
+  });
+  const pdf = buildImagePdf(canvas.toDataURL("image/jpeg", 0.98), canvas.width, canvas.height);
+  saveBlob(pdf, `infonits-manager-report-${month}.pdf`, "application/pdf");
+  showToast("Manager PDF report downloaded");
+}
+
+function drawReportHeader(ctx, columns, y) {
+  ctx.fillStyle = "#eef2f7";
+  ctx.fillRect(60, y - 28, 1120, 42);
+  ctx.fillStyle = "#172033";
+  ctx.font = "600 16px Poppins, Arial, sans-serif";
+  columns.forEach(([label, x, width]) => drawFitText(ctx, label, x, y, width));
+}
+
+function drawReportRowBg(ctx, y, index) {
+  ctx.fillStyle = index % 2 === 0 ? "#ffffff" : "#f8fafc";
+  ctx.fillRect(60, y - 26, 1120, 40);
 }
 
 function escapeCsv(value) {
@@ -3741,6 +5269,9 @@ function renderAll() {
   renderServices();
   renderRenewals();
   renderWebsiteLogins();
+  renderUsers();
+  renderManagerHandles();
+  renderProjectManagerWorkspace();
   renderItemSuggestions();
   renderProjects();
   renderFinance();
@@ -3748,6 +5279,7 @@ function renderAll() {
   renderQuotationTable();
   renderPreview();
   renderSettings();
+  applyAccessControl();
 }
 
 function statusBadge(status) {
@@ -3838,11 +5370,6 @@ document.getElementById("zoomOutButton").addEventListener("click", () => {
   previewZoom = Math.max(0.45, previewZoom - 0.1);
   updatePreviewZoom();
 });
-togglePreviewButton.addEventListener("click", () => {
-  previewHidden = !previewHidden;
-  updatePreviewVisibility();
-});
-
 document.getElementById("documentType").addEventListener("change", () => {
   if (!editingId) {
     const type = document.getElementById("documentType").value;
@@ -3886,6 +5413,18 @@ projectMonthFilter.addEventListener("change", () => {
 });
 projectStatusFilter.addEventListener("change", renderProjects);
 projectUsdRate.addEventListener("input", convertProjectUsdToLkr);
+pmMonthFilter.addEventListener("change", () => {
+  pmProjectPage = 1;
+  renderProjectManagerWorkspace();
+});
+document.getElementById("pmProjectPrevPage").addEventListener("click", () => {
+  pmProjectPage = Math.max(1, pmProjectPage - 1);
+  renderProjectManagerWorkspace();
+});
+document.getElementById("pmProjectNextPage").addEventListener("click", () => {
+  pmProjectPage += 1;
+  renderProjectManagerWorkspace();
+});
 document.getElementById("saveProjectTargetButton").addEventListener("click", saveCurrentProjectMonthSettings);
 toggleProjectFormButton.addEventListener("click", toggleProjectForm);
 document.getElementById("projectValueUsd").addEventListener("input", convertProjectUsdToLkr);
@@ -3938,6 +5477,8 @@ document.getElementById("downloadFinanceReportButton").addEventListener("click",
 document.getElementById("downloadClientStatementButton").addEventListener("click", downloadClientStatement);
 document.getElementById("downloadProjectSheetButton").addEventListener("click", downloadProjectSheet);
 document.getElementById("downloadProjectPdfButton").addEventListener("click", downloadProjectPdf);
+document.getElementById("downloadPmReportButton").addEventListener("click", downloadManagerMonthlyReport);
+document.getElementById("downloadPmPdfReportButton").addEventListener("click", downloadManagerMonthlyPdfReport);
 clientSelect.addEventListener("change", () => fillInvoiceClient(clientSelect.value));
 
 clientForm.addEventListener("submit", (event) => {
@@ -3975,10 +5516,40 @@ document.getElementById("resetProjectButton").addEventListener("click", resetPro
 document.getElementById("resetServiceButton").addEventListener("click", resetServiceForm);
 document.getElementById("resetRenewalButton").addEventListener("click", resetRenewalForm);
 document.getElementById("resetWebsiteLoginButton").addEventListener("click", resetWebsiteLoginForm);
+document.getElementById("resetUserButton").addEventListener("click", resetUserForm);
+document.getElementById("resetManagerHandleButton").addEventListener("click", resetManagerHandleForm);
+document.getElementById("resetSocialPostButton").addEventListener("click", resetSocialPostForm);
+document.querySelector("#resetCorrectionButton")?.addEventListener("click", resetCorrectionForm);
+document.getElementById("refreshPmNotificationsButton").addEventListener("click", () => {
+  renderProjectManagerWorkspace();
+  showToast("Project manager notifications refreshed");
+});
 renewalSearchInput.addEventListener("input", renderRenewals);
 websiteLoginSearchInput.addEventListener("input", renderWebsiteLogins);
 employeeSearchInput.addEventListener("input", renderEmployees);
 employeeStatusFilter.addEventListener("change", renderEmployees);
+managerHandleSearchInput.addEventListener("input", renderManagerHandles);
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  await loginUser(document.getElementById("loginUsername").value, document.getElementById("loginPassword").value);
+});
+userMenuButton.addEventListener("click", (event) => {
+  event.stopPropagation();
+  userMenu.classList.toggle("is-open");
+});
+document.getElementById("editProfileButton").addEventListener("click", () => {
+  userMenu.classList.remove("is-open");
+  const user = currentUser();
+  if (user) editUser(user.id);
+});
+document.getElementById("logoutButton").addEventListener("click", () => {
+  userMenu.classList.remove("is-open");
+  logoutUser();
+  showToast("Logged out");
+});
+document.getElementById("userRole").addEventListener("change", (event) => {
+  populateUserAccessOptions(roleDefaultAccess[event.target.value] || []);
+});
 
 document.getElementById("employeeProfilePhoto").addEventListener("change", (event) => {
   const file = event.target.files[0];
@@ -4079,6 +5650,120 @@ employeeForm.addEventListener("submit", (event) => {
   renderEmployees();
 });
 
+userForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const user = await getUserFormData();
+  if (!user.name) {
+    showToast("User name is required");
+    return;
+  }
+  if (!user.username) {
+    showToast("Username is required");
+    return;
+  }
+  if (!editingUserId && !document.getElementById("userPassword").value) {
+    showToast("Password is required");
+    return;
+  }
+  const duplicate = users.some((item) => item.id !== user.id && item.name.trim().toLowerCase() === user.name.toLowerCase());
+  if (duplicate) {
+    showToast("User already exists");
+    return;
+  }
+  const duplicateUsername = users.some((item) => item.id !== user.id && String(item.username || "").trim().toLowerCase() === user.username.toLowerCase());
+  if (duplicateUsername) {
+    showToast("Username already exists");
+    return;
+  }
+  if (editingUserId) {
+    users = users.map((item) => (item.id === editingUserId ? user : item));
+    showToast("User updated");
+  } else {
+    users.unshift(user);
+    showToast("User created");
+  }
+  saveUsers();
+  resetUserForm();
+  renderUsers();
+  renderManagerHandles();
+  applyAccessControl();
+});
+
+managerHandleForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const handle = getManagerHandleFormData();
+  if (!handle.projectId || !handle.userId || !handle.task) {
+    showToast("Select project, user, and task");
+    return;
+  }
+  if (editingManagerHandleId) {
+    managerHandles = managerHandles.map((item) => (item.id === editingManagerHandleId ? handle : item));
+    showToast("Handle updated");
+  } else {
+    managerHandles.unshift(handle);
+    showToast("Handle saved");
+  }
+  saveManagerHandles();
+  resetManagerHandleForm();
+  renderManagerHandles();
+  renderDashboard();
+});
+
+socialPostForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const post = getSocialPostFormData();
+  if (!post.clientName || !post.uploadDate || !post.count) {
+    showToast("Client, posted date, and count are required");
+    return;
+  }
+  const platforms = selectedPostPlatforms();
+  if (!platforms.length) {
+    showToast("Select at least one platform");
+    return;
+  }
+  if (editingSocialPostId) {
+    const platform = platforms[0];
+    const existingPost = socialMediaPosts.find((item) => item.id === editingSocialPostId);
+    socialMediaPosts = socialMediaPosts.map((item) =>
+      item.id === editingSocialPostId ? { ...post, groupId: existingPost?.groupId || post.groupId || createId(), platform: platform.platform, link: platform.link } : item,
+    );
+    showToast("Posted count updated");
+  } else {
+    const groupId = createId();
+    const posts = platforms.map((platform) => ({
+      ...post,
+      id: createId(),
+      groupId,
+      platform: platform.platform,
+      link: platform.link,
+    }));
+    socialMediaPosts.unshift(...posts);
+    showToast(`${posts.length} platform record${posts.length === 1 ? "" : "s"} saved`);
+  }
+  saveSocialMediaPosts();
+  resetSocialPostForm();
+  renderProjectManagerWorkspace();
+});
+
+correctionForm?.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const correction = getCorrectionFormData();
+  if (!correction.clientName || !correction.type || !correction.description) {
+    showToast("Client, correction type, and description are required");
+    return;
+  }
+  if (editingCorrectionId) {
+    corrections = corrections.map((item) => (item.id === editingCorrectionId ? correction : item));
+    showToast("Correction updated");
+  } else {
+    corrections.unshift(correction);
+    showToast("Correction saved");
+  }
+  saveCorrections();
+  resetCorrectionForm();
+  renderProjectManagerWorkspace();
+});
+
 renewalForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const renewal = getRenewalFormData();
@@ -4136,6 +5821,7 @@ projectForm.addEventListener("submit", (event) => {
   saveProjects();
   resetProjectForm();
   renderProjects();
+  renderManagerHandles();
   renderFinance();
 });
 
@@ -4181,6 +5867,7 @@ form.addEventListener("submit", (event) => {
 });
 
 document.body.addEventListener("click", (event) => {
+  if (!event.target.closest(".user-menu-wrap")) userMenu.classList.remove("is-open");
   const selectButton = event.target.closest("[data-select]");
   const editButton = event.target.closest("[data-edit]");
   const monthlyButton = event.target.closest("[data-monthly]");
@@ -4192,6 +5879,21 @@ document.body.addEventListener("click", (event) => {
   const clientDeleteButton = event.target.closest("[data-client-delete]");
   const employeeEditButton = event.target.closest("[data-employee-edit]");
   const employeeDeleteButton = event.target.closest("[data-employee-delete]");
+  const userEditButton = event.target.closest("[data-user-edit]");
+  const userDeleteButton = event.target.closest("[data-user-delete]");
+  const handleEditButton = event.target.closest("[data-handle-edit]");
+  const handleDeleteButton = event.target.closest("[data-handle-delete]");
+  const postEditButton = event.target.closest("[data-post-edit]");
+  const postDeleteButton = event.target.closest("[data-post-delete]");
+  const postDeleteGroupButton = event.target.closest("[data-post-delete-group]");
+  const correctionEditButton = event.target.closest("[data-correction-edit]");
+  const correctionDeleteButton = event.target.closest("[data-correction-delete]");
+  const notifyRoleButton = event.target.closest("[data-notify-role]");
+  const pmAssignDesignerButton = event.target.closest("[data-pm-assign-designer]");
+  const pmAssignDeveloperButton = event.target.closest("[data-pm-assign-developer]");
+  const pmViewProjectButton = event.target.closest("[data-pm-view-project]");
+  const pmSocialPlanButton = event.target.closest("[data-pm-social-plan]");
+  const pmCorrectionsButton = event.target.closest("[data-pm-corrections]");
   const projectEditButton = event.target.closest("[data-project-edit]");
   const projectDeleteButton = event.target.closest("[data-project-delete]");
   const projectNextButton = event.target.closest("[data-project-next]");
@@ -4208,7 +5910,9 @@ document.body.addEventListener("click", (event) => {
   const copyLoginButton = event.target.closest("[data-copy-login]");
   const togglePasswordButton = event.target.closest("[data-toggle-password]");
   const portalCalendarButton = event.target.closest("[data-portal-calendar]");
+  const closeInvoiceModalButton = event.target.closest("[data-close-invoice-modal]");
 
+  if (closeInvoiceModalButton) closeInvoiceModal();
   if (selectButton) selectInvoice(selectButton.dataset.select);
   if (editButton) editInvoice(editButton.dataset.edit);
   if (monthlyButton) createMonthlyCopy(monthlyButton.dataset.monthly);
@@ -4225,6 +5929,42 @@ document.body.addEventListener("click", (event) => {
   if (clientDeleteButton) deleteClient(clientDeleteButton.dataset.clientDelete);
   if (employeeEditButton) editEmployee(employeeEditButton.dataset.employeeEdit);
   if (employeeDeleteButton) deleteEmployee(employeeDeleteButton.dataset.employeeDelete);
+  if (userEditButton) editUser(userEditButton.dataset.userEdit);
+  if (userDeleteButton) deleteUser(userDeleteButton.dataset.userDelete);
+  if (handleEditButton) editManagerHandle(handleEditButton.dataset.handleEdit);
+  if (handleDeleteButton) deleteManagerHandle(handleDeleteButton.dataset.handleDelete);
+  if (postEditButton) editSocialPost(postEditButton.dataset.postEdit);
+  if (postDeleteButton) deleteSocialPost(postDeleteButton.dataset.postDelete);
+  if (postDeleteGroupButton) deleteSocialPostGroup(postDeleteGroupButton.dataset.postDeleteGroup);
+  if (correctionEditButton) editCorrection(correctionEditButton.dataset.correctionEdit);
+  if (correctionDeleteButton) deleteCorrection(correctionDeleteButton.dataset.correctionDelete);
+  if (notifyRoleButton) {
+    const role = notifyRoleButton.dataset.notifyRole;
+    pmNotifications.unshift({
+      id: createId(),
+      type: "Team notify",
+      title: `Notify ${roleLabels[role] || role}`,
+      message: `Project manager notified ${roleLabels[role] || role} to check pending work.`,
+      sourceId: `manual-${role}-${Date.now()}`,
+      assignedTo: role,
+      status: "Unread",
+      createdAt: new Date().toISOString(),
+    });
+    savePmNotifications();
+    renderProjectManagerWorkspace();
+    showToast(`${roleLabels[role] || role} notified`);
+  }
+  if (pmAssignDesignerButton) assignProjectTeamMember(pmAssignDesignerButton.dataset.pmAssignDesigner, "designer");
+  if (pmAssignDeveloperButton) assignProjectTeamMember(pmAssignDeveloperButton.dataset.pmAssignDeveloper, "developer");
+  if (pmViewProjectButton) editProject(pmViewProjectButton.dataset.pmViewProject);
+  if (pmSocialPlanButton) {
+    const project = projects.find((item) => item.id === pmSocialPlanButton.dataset.pmSocialPlan);
+    showToast(`${socialMediaPosts.filter((post) => post.projectId === project?.id).length} social posts for ${project?.name || "project"}`);
+  }
+  if (pmCorrectionsButton) {
+    const project = projects.find((item) => item.id === pmCorrectionsButton.dataset.pmCorrections);
+    showToast(`${corrections.filter((item) => item.projectId === project?.id).length} corrections for ${project?.name || "project"}`);
+  }
   if (projectEditButton) editProject(projectEditButton.dataset.projectEdit);
   if (projectDeleteButton) deleteProject(projectDeleteButton.dataset.projectDelete);
   if (projectNextButton) createNextMonthProject(projectNextButton.dataset.projectNext);
@@ -4249,8 +5989,14 @@ document.body.addEventListener("change", (event) => {
   const statusSelect = event.target.closest("[data-project-status]");
   const invoiceStatusSelect = event.target.closest("[data-invoice-status]");
   const moneyInput = event.target.closest("[data-project-money]");
+  const postClientSelect = event.target.closest("#postClient");
+  const correctionClientSelect = event.target.closest("#correctionClient");
+  const pmTeamSelect = event.target.closest("[data-pm-team]");
   if (statusSelect) updateProjectStatus(statusSelect.dataset.projectStatus, statusSelect.value);
   if (invoiceStatusSelect) updateInvoiceStatus(invoiceStatusSelect.dataset.invoiceStatus, invoiceStatusSelect.value);
+  if (postClientSelect) document.getElementById("postProject").innerHTML = projectOptions("", postClientSelect.value);
+  if (correctionClientSelect) document.querySelector("#correctionProject").innerHTML = projectOptions("", correctionClientSelect.value);
+  if (pmTeamSelect) updateProjectTeamFromSelect(pmTeamSelect.dataset.pmTeam, pmTeamSelect.value);
   if (moneyInput) {
     const amount = parseFormattedNumber(moneyInput.value);
     moneyInput.value = amount ? formatNumber(amount) : "";
@@ -4320,6 +6066,10 @@ resetProjectForm();
 resetServiceForm();
 resetRenewalForm();
 resetWebsiteLoginForm();
+resetUserForm();
+resetManagerHandleForm();
+resetSocialPostForm();
+resetCorrectionForm();
 resetFinanceForm();
 renderAll();
 updatePreviewZoom();

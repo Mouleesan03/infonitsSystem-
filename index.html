@@ -8,7 +8,29 @@
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
-    <div class="app-shell">
+    <section class="login-screen" id="loginScreen">
+      <form class="login-card" id="loginForm">
+        <div class="login-brand">
+          <div class="brand-mark">IN</div>
+          <div>
+            <p>Infonits</p>
+            <span>Management System</span>
+          </div>
+        </div>
+        <h1>Login</h1>
+        <label>
+          Username
+          <input id="loginUsername" autocomplete="username" required />
+        </label>
+        <label>
+          Password
+          <input id="loginPassword" autocomplete="current-password" type="password" required />
+        </label>
+        <button class="primary-action" type="submit">Login</button>
+      </form>
+    </section>
+
+    <div class="app-shell is-locked" id="appShell">
       <aside class="sidebar">
         <div class="brand">
           <div class="brand-mark">IN</div>
@@ -19,17 +41,20 @@
         </div>
 
         <nav class="nav-tabs" aria-label="Main views">
+          <span class="nav-section-label">Overview</span>
           <button class="nav-tab active" data-view="dashboard" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm10 7h6V4h-6v16ZM4 20h6v-4H4v4Z" /></svg></span>Dashboard</button>
-          <button class="nav-tab" data-view="create" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg></span>Create Invoice</button>
-          <button class="nav-tab" data-view="clients" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0M4 20a8 8 0 0 1 16 0M19 8a3 3 0 0 1 0 6M21 20a6 6 0 0 0-3-5" /></svg></span>Customers</button>
-          <button class="nav-tab" data-view="employees" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21a8 8 0 0 1 16 0M16 13l2 2 4-4" /></svg></span>Employees</button>
-          <button class="nav-tab" data-view="services" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10M6 5v14" /></svg></span>Service Catalog</button>
           <button class="nav-tab" data-view="invoices" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7V3Zm7 1v4h4M9 12h6M9 16h6M9 8h3" /></svg></span>Invoices</button>
           <button class="nav-tab" data-view="quotations" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M6 4h12v16H6V4Zm3 5h6M9 13h4M9 17h6" /></svg></span>Quotations</button>
+          <span class="nav-section-label">Manage</span>
+          <button class="nav-tab" data-view="clients" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0M4 20a8 8 0 0 1 16 0M19 8a3 3 0 0 1 0 6M21 20a6 6 0 0 0-3-5" /></svg></span>Customers</button>
           <button class="nav-tab" data-view="projects" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 7h6l2 2h8v10H4V7Zm0 4h16" /></svg></span>Projects</button>
+          <button class="nav-tab" data-view="employees" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21a8 8 0 0 1 16 0M16 13l2 2 4-4" /></svg></span>Employees</button>
+          <button class="nav-tab" data-view="manager" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4 6h1M4 12h1M4 18h1" /></svg></span>Pr Tracker</button>
+          <span class="nav-section-label">System</span>
           <button class="nav-tab" data-view="renewals" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 3h10v4H7V3Zm-2 8h14M6 7h12v14H6V7Zm3 8h6" /></svg></span>Subscriptions</button>
           <button class="nav-tab" data-view="logins" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5V11Zm7 4v2" /></svg></span>Portal Access</button>
           <button class="nav-tab" data-view="finance" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 19V5M4 19h16M8 16v-5M12 16V8M16 16v-9M20 16v-3" /></svg></span>Finance</button>
+          <button class="nav-tab" data-view="users" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0M4 20a8 8 0 0 1 16 0M18 4v6M15 7h6" /></svg></span>Users & Access</button>
           <button class="nav-tab" data-view="settings" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12a7 7 0 0 0-.1-1.1l2-1.5-2-3.4-2.4 1a7 7 0 0 0-1.9-1.1L14.2 3h-4.4l-.4 2.9A7 7 0 0 0 7.5 7l-2.4-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.1l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 1.9 1.1l.4 2.9h4.4l.4-2.9a7 7 0 0 0 1.9-1.1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1.1Z" /></svg></span>Settings</button>
         </nav>
 
@@ -51,10 +76,22 @@
           </div>
           <div class="topbar-actions">
             <input class="topbar-search" id="dashboardSearchInput" placeholder="Search invoices and quotations" />
-            <button class="secondary-action" id="togglePreviewButton" type="button">Hide preview</button>
             <button class="secondary-action" id="newProjectButton" type="button">+ Add project</button>
             <button class="secondary-action" id="newQuotationButton" type="button">+ New quotation</button>
             <button class="primary-action" id="newInvoiceButton" type="button">+ New invoice</button>
+            <div class="user-menu-wrap">
+              <button class="user-avatar-button" id="userMenuButton" type="button" aria-label="User menu">
+                <span id="activeUserInitial">A</span>
+              </button>
+              <div class="user-menu" id="userMenu">
+                <div class="user-menu-details">
+                  <strong id="activeUserName">Admin</strong>
+                  <span id="activeUserRole">Admin</span>
+                </div>
+                <button type="button" id="editProfileButton">Change details</button>
+                <button type="button" id="logoutButton">Logout</button>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -110,7 +147,7 @@
 
           <div class="dashboard-layout">
             <div class="dashboard-main">
-              <section class="panel">
+              <section class="panel dashboard-table-card">
                 <div class="panel-heading">
                   <h2>Recent invoices</h2>
                   <button class="text-action" data-view-target="invoices" type="button">View all</button>
@@ -137,23 +174,6 @@
                 </div>
               </section>
             </div>
-
-            <section class="panel invoice-preview dashboard-preview" id="previewPanel">
-              <div class="panel-heading preview-heading">
-                <h2>Customer invoice</h2>
-                <div class="preview-tools">
-                  <button class="secondary-action" id="zoomOutButton" type="button">-</button>
-                  <span id="previewZoomLabel">80%</span>
-                  <button class="secondary-action" id="zoomInButton" type="button">+</button>
-                  <button class="text-action" id="printInvoiceButton" type="button">Download PDF</button>
-                </div>
-              </div>
-              <div class="preview-viewport">
-                <div class="preview-scale" id="previewScale">
-                  <div id="invoicePreview" class="invoice-paper"></div>
-                </div>
-              </div>
-            </section>
           </div>
         </section>
 
@@ -609,6 +629,158 @@
           </div>
         </section>
 
+        <section class="view" id="managerView">
+          <section class="panel pm-hero-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">Project manager workspace</p>
+                <h2>Social media and maintenance tracking</h2>
+              </div>
+              <div class="pm-report-actions">
+                <label class="pm-month-field">
+                  Month
+                  <input id="pmMonthFilter" type="month" />
+                </label>
+                <button class="primary-action report-download-button" id="downloadPmReportButton" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" /></svg>
+                  <span>CSV</span>
+                </button>
+                <button class="secondary-action report-download-button" id="downloadPmPdfReportButton" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7V3Zm7 1v4h4M9 13h6M9 17h6" /></svg>
+                  <span>PDF</span>
+                </button>
+              </div>
+            </div>
+            <div class="pm-dashboard-grid">
+              <article class="pm-kpi">
+                <div class="pm-kpi-icon folder">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" /></svg>
+                </div>
+                <div><span>Active projects</span><strong id="pmActiveProjects">0</strong></div>
+                <svg class="pm-sparkline" viewBox="0 0 120 42" aria-hidden="true"><path d="M4 30 18 22 33 26 47 18 62 30 77 14 91 20 105 7 116 10" /></svg>
+              </article>
+              <article class="pm-kpi notice">
+                <div class="pm-kpi-icon edit">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m4 20 4.5-1 10-10a2.1 2.1 0 0 0-3-3l-10 10L4 20Zm12-14 2 2" /></svg>
+                </div>
+                <div><span>Posted this month</span><strong id="pmUploadedPosts">0</strong></div>
+                <svg class="pm-sparkline purple" viewBox="0 0 120 42" aria-hidden="true"><path d="M4 31 20 25 36 29 52 22 67 16 82 5 98 7 116 13" /></svg>
+              </article>
+              <article class="pm-kpi warning">
+                <div class="pm-kpi-icon megaphone">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 13h4l9-5v10l-9-5H4Zm4 0 2 6m8-9c2 1 3 2.5 3 4s-1 3-3 4" /></svg>
+                </div>
+                <div><span>Remaining posts</span><strong id="pmPendingPosts">0</strong></div>
+                <svg class="pm-sparkline orange" viewBox="0 0 120 42" aria-hidden="true"><path d="M4 30 19 20 34 24 49 17 63 27 78 20 93 5 107 18 116 13" /></svg>
+              </article>
+            </div>
+          </section>
+
+          <div class="pm-workspace-grid pm-simple-grid">
+            <section class="panel pm-wide-panel">
+              <div class="panel-heading">
+                <h2>Projects</h2>
+                <span class="muted-label">Team, platforms, and monthly count</span>
+              </div>
+              <div class="table-wrap pm-table-wrap">
+                <table class="pm-table">
+                  <thead>
+                    <tr>
+                      <th>Client</th>
+                      <th>Project</th>
+                      <th>Platforms</th>
+                      <th>Team</th>
+                      <th>This month</th>
+                      <th>Remaining</th>
+                    </tr>
+                  </thead>
+                  <tbody id="pmProjectTable"></tbody>
+                </table>
+              </div>
+              <div class="pagination-controls pm-pagination">
+                <button class="secondary-action" id="pmProjectPrevPage" type="button">Prev</button>
+                <span id="pmProjectPageLabel">Page 1 of 1</span>
+                <button class="secondary-action" id="pmProjectNextPage" type="button">Next</button>
+              </div>
+            </section>
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>Add posted update</h2>
+                <button class="secondary-action" id="resetSocialPostButton" type="button">Clear</button>
+              </div>
+              <form class="form-grid pm-form" id="socialPostForm">
+                <label>Client<select id="postClient" required></select></label>
+                <label>Project<select id="postProject"></select></label>
+                <label>Posted date<input id="postUploadDate" type="date" required /></label>
+                <label>Post count<input id="postCount" min="1" type="number" value="1" required /></label>
+                <fieldset class="pm-platform-field">
+                  <legend>Platforms and links</legend>
+                  <label><input id="postPlatformFacebook" type="checkbox" value="Facebook" /><span class="pm-platform-dot facebook">f</span> Facebook</label>
+                  <input id="postLinkFacebook" placeholder="Facebook post link" />
+                  <label><input id="postPlatformInstagram" type="checkbox" value="Instagram" /><span class="pm-platform-dot instagram">◎</span> Instagram</label>
+                  <input id="postLinkInstagram" placeholder="Instagram post link" />
+                  <label><input id="postPlatformTikTok" type="checkbox" value="TikTok" /><span class="pm-platform-dot tiktok">♪</span> TikTok</label>
+                  <input id="postLinkTikTok" placeholder="TikTok post link" />
+                </fieldset>
+                <label class="pm-note-field">Note<textarea id="postRemarks" rows="2" placeholder="Optional note"></textarea></label>
+                <button class="primary-action save-button" type="submit">Save count</button>
+              </form>
+            </section>
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>Posted records</h2>
+                <span class="muted-label">One row per posted update</span>
+              </div>
+              <div class="table-wrap pm-table-wrap">
+                <table class="pm-table">
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Client</th>
+                      <th>Project</th>
+                      <th>Platform</th>
+                      <th>Count</th>
+                      <th>Remarks</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="socialPostTable"></tbody>
+                </table>
+              </div>
+            </section>
+            <section class="panel pm-alert-panel">
+              <div class="panel-heading">
+                <h2>Missed post notifications</h2>
+                <button class="secondary-action" id="refreshPmNotificationsButton" type="button">Refresh</button>
+              </div>
+              <div class="pm-notification-list" id="pmNotificationList"></div>
+            </section>
+            <section class="panel pm-calendar-panel">
+              <div class="panel-heading">
+                <h2>Post calendar</h2>
+                <span class="muted-label">Posted only, color by client</span>
+              </div>
+              <div class="pm-calendar-grid" id="postCalendarGrid"></div>
+            </section>
+          </div>
+
+          <div hidden>
+            <table><tbody id="monthlyPostTable"></tbody><tbody id="weeklyPostTable"></tbody></table>
+            <button id="resetManagerHandleButton" type="button"></button>
+            <input id="managerHandleSearchInput" />
+            <form id="managerHandleForm">
+              <select id="handleProject"></select>
+              <select id="handleUser"></select>
+              <input id="handleTask" />
+              <select id="handlePriority"><option>Normal</option></select>
+              <input id="handleDueDate" />
+              <select id="handleStatus"><option>Waiting</option></select>
+              <textarea id="handleNote"></textarea>
+            </form>
+            <table><tbody id="managerHandleTable"></tbody></table>
+          </div>
+        </section>
+
         <section class="view" id="loginsView">
           <div class="content-grid admin-workspace website-logins-grid">
             <section class="panel admin-form-panel">
@@ -709,6 +881,76 @@
                     </tr>
                   </thead>
                   <tbody id="websiteLoginTable"></tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        </section>
+
+        <section class="view" id="usersView">
+          <div class="content-grid users-grid">
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>Create user</h2>
+                <button class="secondary-action" id="resetUserButton" type="button">Clear</button>
+              </div>
+              <form class="form-grid" id="userForm">
+                <label>
+                  Full name
+                  <input id="userName" required />
+                </label>
+                <label>
+                  Email
+                  <input id="userEmail" type="email" />
+                </label>
+                <label>
+                  Username
+                  <input id="userUsername" autocomplete="off" required />
+                </label>
+                <label>
+                  Password
+                  <input id="userPassword" autocomplete="new-password" type="password" placeholder="Leave blank to keep old password" />
+                </label>
+                <label>
+                  Role
+                  <select id="userRole">
+                    <option value="admin">Admin</option>
+                    <option value="project-manager">Project manager</option>
+                    <option value="designer">Designer</option>
+                    <option value="developer">Developer</option>
+                  </select>
+                </label>
+                <label>
+                  Status
+                  <select id="userStatus">
+                    <option value="Active">Active</option>
+                    <option value="Disabled">Disabled</option>
+                  </select>
+                </label>
+                <div class="wide access-picker">
+                  <span>Allowed sections</span>
+                  <div id="userAccessOptions"></div>
+                </div>
+                <button class="primary-action save-button" type="submit">Save user</button>
+              </form>
+            </section>
+            <section class="panel">
+              <div class="panel-heading">
+                <h2>System users</h2>
+              </div>
+              <div class="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>User</th>
+                      <th>Username</th>
+                      <th>Role</th>
+                      <th>Access</th>
+                      <th>Status</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody id="userTable"></tbody>
                 </table>
               </div>
             </section>
@@ -1316,7 +1558,7 @@
               </div>
               <p class="settings-help">Create one Supabase table named <strong>app_backups</strong>. Cloud backup stores the same data as the JSON export.</p>
             </div>
-            <p class="settings-help">Backup includes invoices, quotations, clients, employees, portal passwords, finance records, business settings, logo, and USD rates. Keep the exported file private.</p>
+            <p class="settings-help">Backup includes invoices, quotations, clients, employees, users, manager handles, portal passwords, finance records, business settings, logo, and USD rates. Keep the exported file private.</p>
           </section>
         </section>
       </main>
@@ -1325,6 +1567,26 @@
     <datalist id="itemTitleSuggestions"></datalist>
     <datalist id="itemDescriptionSuggestions"></datalist>
     <datalist id="clientNameSuggestions"></datalist>
+    <div class="invoice-modal" id="invoiceModal" aria-hidden="true">
+      <div class="invoice-modal-backdrop" data-close-invoice-modal></div>
+      <section class="panel invoice-preview invoice-modal-panel">
+        <div class="panel-heading preview-heading">
+          <h2>Customer invoice</h2>
+          <div class="preview-tools">
+            <button class="secondary-action" id="zoomOutButton" type="button">-</button>
+            <span id="previewZoomLabel">80%</span>
+            <button class="secondary-action" id="zoomInButton" type="button">+</button>
+            <button class="text-action" id="printInvoiceButton" type="button">Download PDF</button>
+            <button class="secondary-action" data-close-invoice-modal type="button">Close</button>
+          </div>
+        </div>
+        <div class="preview-viewport">
+          <div class="preview-scale" id="previewScale">
+            <div id="invoicePreview" class="invoice-paper"></div>
+          </div>
+        </div>
+      </section>
+    </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="app.js"></script>
   </body>
