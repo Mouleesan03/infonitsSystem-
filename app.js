@@ -105,6 +105,7 @@ let editingSocialPostId = null;
 let editingCorrectionId = null;
 let linkedProjectId = null;
 let currentUserId = sessionStorage.getItem(AUTH_SESSION_KEY) || "";
+let activeUserSnapshot = null;
 let selectedInvoiceId = invoices[0]?.id || null;
 let previewZoom = 0.8;
 let previewHidden = true;
@@ -1543,7 +1544,15 @@ function populateFinanceCategories() {
 }
 
 function currentUser() {
-  return users.find((user) => user.id === currentUserId && user.status !== "Disabled") || null;
+  const savedUser = users.find((user) => user.id === currentUserId && user.status !== "Disabled") || null;
+  if (savedUser) {
+    activeUserSnapshot = savedUser;
+    return savedUser;
+  }
+  if (activeUserSnapshot?.id === currentUserId && activeUserSnapshot.status !== "Disabled") {
+    return activeUserSnapshot;
+  }
+  return null;
 }
 
 function isLoggedIn() {
@@ -1606,6 +1615,17 @@ function renderActiveUserBadge() {
   activeUserRole.textContent = user ? `${roleLabels[user.role] || user.role} • ${user.username || ""}` : "";
 }
 
+function openAuthenticatedApp() {
+  appIsStarting = false;
+  document.body.classList.remove("app-loading");
+  appPreloader.classList.add("is-hidden");
+  loginScreen.classList.remove("is-loading");
+  loginScreen.classList.add("is-hidden");
+  appShell.classList.remove("is-locked");
+  switchView(firstAllowedView());
+  applyAccessControl();
+}
+
 function populateUserAccessOptions(selected = roleDefaultAccess["project-manager"]) {
   document.getElementById("userAccessOptions").innerHTML = accessSections
     .map(
@@ -1656,21 +1676,17 @@ async function loginUser(username, password) {
     saveUsers();
   }
   currentUserId = user.id;
+  activeUserSnapshot = user;
   sessionStorage.setItem(AUTH_SESSION_KEY, currentUserId);
   loginForm.reset();
-  appIsStarting = false;
-  document.body.classList.remove("app-loading");
-  appPreloader.classList.add("is-hidden");
-  loginScreen.classList.add("is-hidden");
-  appShell.classList.remove("is-locked");
-  switchView(firstAllowedView());
-  renderAll();
+  openAuthenticatedApp();
   showToast(`Welcome ${user.name}`);
   return true;
 }
 
 function logoutUser() {
   currentUserId = "";
+  activeUserSnapshot = null;
   sessionStorage.removeItem(AUTH_SESSION_KEY);
   loginForm.reset();
   applyAccessControl();
@@ -6864,6 +6880,7 @@ async function startApp() {
   resetSocialPostForm();
   resetCorrectionForm();
   resetFinanceForm();
+  activeUserSnapshot = currentUser();
   appIsStarting = false;
   document.body.classList.remove("app-loading");
   renderAll();

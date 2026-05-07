@@ -7,7 +7,17 @@
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body class="app-loading">
+    <section class="app-preloader" id="appPreloader" aria-live="polite">
+      <div class="preloader-card">
+        <div class="brand-mark">IN</div>
+        <div>
+          <strong>Infonits</strong>
+          <span>Loading management system</span>
+        </div>
+        <div class="preloader-bar" aria-hidden="true"><span></span></div>
+      </div>
+    </section>
     <section class="login-screen" id="loginScreen">
       <form class="login-card" id="loginForm">
         <div class="login-brand">
@@ -1600,7 +1610,7 @@
       </section>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="supabase-config.js"></script>
-    <script src="app.js"></script>
+    <script src="supabase-config.js?v=20260507-loginfix"></script>
+    <script src="app.js?v=20260507-loginfix"></script>
   </body>
 </html>
