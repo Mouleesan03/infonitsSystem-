@@ -317,6 +317,7 @@ function loadInvoices() {
 
 function saveInvoices() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
+  queueCloudBackup();
 }
 
 function loadClients() {
@@ -329,6 +330,7 @@ function loadClients() {
 
 function saveClients() {
   localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
+  queueCloudBackup();
 }
 
 function loadProjects() {
@@ -341,6 +343,7 @@ function loadProjects() {
 
 function saveProjects() {
   localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  queueCloudBackup();
 }
 
 function loadProjectTargets() {
@@ -353,6 +356,7 @@ function loadProjectTargets() {
 
 function saveProjectTargets() {
   localStorage.setItem(PROJECT_TARGETS_KEY, JSON.stringify(projectTargets));
+  queueCloudBackup();
 }
 
 function loadFinanceRecords() {
@@ -365,6 +369,7 @@ function loadFinanceRecords() {
 
 function saveFinanceRecords() {
   localStorage.setItem(FINANCE_KEY, JSON.stringify(financeRecords));
+  queueCloudBackup();
 }
 
 function loadServices() {
@@ -377,6 +382,7 @@ function loadServices() {
 
 function saveServices() {
   localStorage.setItem(SERVICES_KEY, JSON.stringify(services));
+  queueCloudBackup();
 }
 
 function loadRenewals() {
@@ -389,6 +395,7 @@ function loadRenewals() {
 
 function saveRenewals() {
   localStorage.setItem(RENEWALS_KEY, JSON.stringify(renewals));
+  queueCloudBackup();
 }
 
 function loadWebsiteLogins() {
@@ -401,6 +408,7 @@ function loadWebsiteLogins() {
 
 function saveWebsiteLogins() {
   localStorage.setItem(WEBSITE_LOGINS_KEY, JSON.stringify(websiteLogins));
+  queueCloudBackup();
 }
 
 function loadEmployees() {
@@ -413,6 +421,7 @@ function loadEmployees() {
 
 function saveEmployees() {
   localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(employees));
+  queueCloudBackup();
 }
 
 function defaultUsers() {
@@ -474,6 +483,7 @@ function hardenDefaultUserAccess(savedUsers) {
 
 function saveUsers() {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
+  queueCloudBackup();
 }
 
 function loadManagerHandles() {
@@ -486,6 +496,7 @@ function loadManagerHandles() {
 
 function saveManagerHandles() {
   localStorage.setItem(MANAGER_HANDLES_KEY, JSON.stringify(managerHandles));
+  queueCloudBackup();
 }
 
 function loadSocialMediaPosts() {
@@ -498,6 +509,7 @@ function loadSocialMediaPosts() {
 
 function saveSocialMediaPosts() {
   localStorage.setItem(SOCIAL_POSTS_KEY, JSON.stringify(socialMediaPosts));
+  queueCloudBackup();
 }
 
 function loadCorrections() {
@@ -510,6 +522,7 @@ function loadCorrections() {
 
 function saveCorrections() {
   localStorage.setItem(CORRECTIONS_KEY, JSON.stringify(corrections));
+  queueCloudBackup();
 }
 
 function loadPmNotifications() {
@@ -522,6 +535,7 @@ function loadPmNotifications() {
 
 function savePmNotifications() {
   localStorage.setItem(PM_NOTIFICATIONS_KEY, JSON.stringify(pmNotifications));
+  queueCloudBackup();
 }
 
 function loadMonthlyPostReports() {
@@ -534,6 +548,7 @@ function loadMonthlyPostReports() {
 
 function saveMonthlyPostReports() {
   localStorage.setItem(MONTHLY_POST_REPORTS_KEY, JSON.stringify(monthlyPostReports));
+  queueCloudBackup();
 }
 
 function refreshStateFromStorage() {
@@ -567,23 +582,43 @@ function loadSettings() {
 
 function saveSettings() {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  queueCloudBackup();
 }
 
 function loadCloudBackupSettings() {
   try {
+    const hostedConfig = window.INFONITS_SUPABASE || {};
     return {
-      backupId: "infonits-main",
+      url: hostedConfig.url || "",
+      anonKey: hostedConfig.anonKey || "",
+      backupId: hostedConfig.backupId || "infonits-main",
       autoBackup: "off",
       lastAutoBackupDate: "",
       ...(JSON.parse(localStorage.getItem(CLOUD_BACKUP_KEY)) || {}),
     };
   } catch {
-    return { backupId: "infonits-main", autoBackup: "off", lastAutoBackupDate: "" };
+    const hostedConfig = window.INFONITS_SUPABASE || {};
+    return { url: hostedConfig.url || "", anonKey: hostedConfig.anonKey || "", backupId: hostedConfig.backupId || "infonits-main", autoBackup: "off", lastAutoBackupDate: "" };
   }
 }
 
 function saveCloudBackupSettings(config) {
   localStorage.setItem(CLOUD_BACKUP_KEY, JSON.stringify(config));
+}
+
+let cloudBackupTimer = null;
+
+function cloudBackupIsReady(config = loadCloudBackupSettings()) {
+  return Boolean(config.url && config.anonKey && config.backupId);
+}
+
+function queueCloudBackup() {
+  const config = loadCloudBackupSettings();
+  if (config.autoBackup !== "live" || !cloudBackupIsReady(config)) return;
+  window.clearTimeout(cloudBackupTimer);
+  cloudBackupTimer = window.setTimeout(() => {
+    saveBackupToCloud(config, { silent: true });
+  }, 900);
 }
 
 function addSheetDetailsToProjectsAndClients() {
@@ -1990,6 +2025,29 @@ function applyBackupData(backup) {
   renderAll();
 }
 
+async function restoreCloudOnEmptyLocalData() {
+  const config = loadCloudBackupSettings();
+  if (!cloudBackupIsReady(config)) return false;
+  const hasLocalBusinessData = invoices.length || clients.length || projects.length || financeRecords.length || socialMediaPosts.length;
+  if (hasLocalBusinessData) return false;
+  try {
+    const response = await fetch(
+      supabaseBackupEndpoint(config, `?id=eq.${encodeURIComponent(config.backupId)}&select=data,updated_at&limit=1`),
+      { headers: supabaseHeaders(config) },
+    );
+    if (!response.ok) throw new Error(await response.text());
+    const rows = await response.json();
+    if (!rows.length || !rows[0].data) return false;
+    applyBackupData(rows[0].data);
+    showToast("Cloud data loaded");
+    return true;
+  } catch (error) {
+    console.error(error);
+    showToast("Cloud data load failed");
+    return false;
+  }
+}
+
 function importBackup(file) {
   if (!file) return;
   const reader = new FileReader();
@@ -2060,16 +2118,18 @@ async function saveBackupToCloud(config, options = {}) {
     return false;
   }
   try {
+    const backup = createBackupPackage();
     const response = await fetch(supabaseBackupEndpoint(config), {
       method: "POST",
       headers: supabaseHeaders(config, { Prefer: "resolution=merge-duplicates" }),
       body: JSON.stringify({
         id: config.backupId,
-        data: createBackupPackage(),
+        data: backup,
         updated_at: new Date().toISOString(),
       }),
     });
     if (!response.ok) throw new Error(await response.text());
+    saveCloudBackupSettings({ ...config, lastCloudBackupAt: backup.exportedAt });
     if (!silent) showToast("Cloud backup saved");
     return true;
   } catch (error) {
@@ -6074,4 +6134,5 @@ resetFinanceForm();
 renderAll();
 updatePreviewZoom();
 updatePreviewVisibility();
+restoreCloudOnEmptyLocalData();
 runDailyCloudBackup();
