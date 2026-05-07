@@ -513,6 +513,28 @@ function hardenDefaultUserAccess(savedUsers) {
   });
 }
 
+function ensureDefaultAdminUser() {
+  const defaultAdmin = defaultUsers()[0];
+  const admin = users.find((user) => user.id === "admin" || String(user.username || "").trim().toLowerCase() === "admin");
+  if (!admin) {
+    users = [defaultAdmin, ...users];
+    return;
+  }
+  users = users.map((user) =>
+    user.id === admin.id
+      ? {
+          ...defaultAdmin,
+          ...user,
+          id: user.id || "admin",
+          username: "admin",
+          role: "admin",
+          status: "Active",
+          access: roleDefaultAccess.admin,
+        }
+      : user,
+  );
+}
+
 function saveUsers() {
   syncCollectionToSupabase("users");
 }
@@ -1198,6 +1220,7 @@ async function loadAllDataFromSupabase() {
       settings = { ...defaultSettings, ...(settingsRows[0]?.payload || {}) };
     }
     selectedInvoiceId = invoices[0]?.id || null;
+    ensureDefaultAdminUser();
     if (hasLoadError) showToast("Some Supabase tables could not load");
     return true;
   } catch (error) {
@@ -1597,12 +1620,14 @@ function populateUserAccessOptions(selected = roleDefaultAccess["project-manager
 }
 
 async function loginUser(username, password) {
+  ensureDefaultAdminUser();
   const normalizedUsername = String(username || "").trim().toLowerCase();
-  const passwordHash = await hashPassword(password || "");
+  const passwordValue = String(password || "").trim();
+  const passwordHash = await hashPassword(passwordValue);
   let user = users.find((item) => {
-    return String(item.username || "").trim().toLowerCase() === normalizedUsername && passwordMatches(item, password || "", passwordHash) && item.status !== "Disabled";
+    return String(item.username || "").trim().toLowerCase() === normalizedUsername && passwordMatches(item, passwordValue, passwordHash) && item.status !== "Disabled";
   });
-  if (!user && normalizedUsername === "admin" && password === "admin123") {
+  if (!user && normalizedUsername === "admin" && passwordValue === "admin123") {
     const existingAdmin = users.find((item) => item.id === "admin" || String(item.username || "").trim().toLowerCase() === "admin");
     const repairedAdmin = {
       ...(existingAdmin || defaultUsers()[0]),
@@ -6815,8 +6840,10 @@ async function startApp() {
   const supabaseLoaded = await loadAllDataFromSupabase();
   if (supabaseLoaded) {
     migrateOldLocalDataToSupabase();
+    ensureDefaultAdminUser();
     seedDefaultServices();
   } else {
+    ensureDefaultAdminUser();
     currentUserId = "";
     sessionStorage.removeItem(AUTH_SESSION_KEY);
   }
