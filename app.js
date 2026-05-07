@@ -6137,6 +6137,10 @@ loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   await loginUser(document.getElementById("loginUsername").value, document.getElementById("loginPassword").value);
 });
+document.getElementById("loginPasswordToggle").addEventListener("click", () => {
+  const passwordInput = document.getElementById("loginPassword");
+  passwordInput.type = passwordInput.type === "password" ? "text" : "password";
+});
 userMenuButton.addEventListener("click", (event) => {
   event.stopPropagation();
   userMenu.classList.toggle("is-open");
