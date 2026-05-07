@@ -1658,8 +1658,13 @@ async function loginUser(username, password) {
   currentUserId = user.id;
   sessionStorage.setItem(AUTH_SESSION_KEY, currentUserId);
   loginForm.reset();
-  applyAccessControl();
+  appIsStarting = false;
+  document.body.classList.remove("app-loading");
+  appPreloader.classList.add("is-hidden");
+  loginScreen.classList.add("is-hidden");
+  appShell.classList.remove("is-locked");
   switchView(firstAllowedView());
+  renderAll();
   showToast(`Welcome ${user.name}`);
   return true;
 }
