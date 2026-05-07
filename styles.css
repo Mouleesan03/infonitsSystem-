@@ -41,6 +41,85 @@ body {
   overflow-x: hidden;
 }
 
+.app-preloader {
+  display: none !important;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 0 0, rgba(37, 99, 235, 0.2), transparent 25%),
+    radial-gradient(circle at 96% 90%, rgba(255, 107, 44, 0.18), transparent 30%),
+    linear-gradient(135deg, #f3f7ff 0%, #ffffff 48%, #fff4ee 100%);
+}
+
+.app-preloader.is-hidden {
+  display: none;
+}
+
+body.app-loading .login-screen,
+body.app-loading .app-shell {
+  display: none !important;
+}
+
+body:not(.app-loading) .app-preloader:not(.is-hidden) {
+  display: none;
+}
+
+.preloader-card {
+  width: min(360px, 100%);
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid rgba(219, 227, 236, 0.8);
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 26px 80px rgba(29, 46, 99, 0.14);
+  backdrop-filter: blur(18px);
+}
+
+.preloader-card strong,
+.preloader-card span {
+  display: block;
+}
+
+.preloader-card strong {
+  color: #111b34;
+  font-size: 1rem;
+}
+
+.preloader-card span {
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.preloader-bar {
+  grid-column: 1 / -1;
+  height: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef7;
+}
+
+.preloader-bar span {
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #ff6b2c, #1d2e63);
+  animation: preloader-slide 1.15s ease-in-out infinite;
+}
+
+@keyframes preloader-slide {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(250%);
+  }
+}
+
 .login-screen {
   min-height: 100vh;
   display: grid;
@@ -83,6 +162,7 @@ body {
 }
 
 .login-screen.is-hidden,
+.login-screen.is-loading,
 .app-shell.is-locked {
   display: none;
 }

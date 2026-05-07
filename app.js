@@ -1080,6 +1080,26 @@ function syncAllCollectionsToSupabase() {
   syncCollectionToSupabase("settings");
 }
 
+async function syncAllCollectionsToSupabaseNow() {
+  if (!supabaseReady()) return false;
+  Object.values(supabaseSyncTimers).forEach((timer) => window.clearTimeout(timer));
+  const collections = [
+    ...Object.keys(supabaseDirectCollections),
+    ...Object.keys(supabaseAppDataCollections),
+    "settings",
+  ];
+  const results = await Promise.allSettled(collections.map((collection) => writeCollectionToSupabase(collection)));
+  const failed = results
+    .map((result, index) => (result.status === "rejected" ? collections[index] : ""))
+    .filter(Boolean);
+  if (failed.length) {
+    console.error("Supabase immediate save failed:", failed, results);
+    showToast(`Supabase save failed: ${failed.slice(0, 3).join(", ")}`);
+    return false;
+  }
+  return true;
+}
+
 async function deleteSupabaseRows(table, keepAppIds = []) {
   const keepFilter = keepAppIds.length ? `&app_id=not.in.(${keepAppIds.map((id) => encodeURIComponent(id)).join(",")})` : "";
   const response = await fetch(supabaseTableUrl(table, `?app_id=not.is.null${keepFilter}`), {
@@ -1281,31 +1301,46 @@ function oldLocalDataExists() {
   ].some((key) => localStorage.getItem(key) !== null);
 }
 
-function migrateOldLocalDataToSupabase() {
+async function migrateOldLocalDataToSupabase() {
   if (!oldLocalDataExists()) return false;
-  const supabaseAlreadyHasData = invoices.length || clients.length || projects.length || financeRecords.length || socialMediaPosts.length;
-  if (supabaseAlreadyHasData) {
-    removeOldLocalData();
-    return false;
-  }
-  invoices = readOldLocalJson(STORAGE_KEY, []);
-  clients = readOldLocalJson(CLIENTS_KEY, []);
-  projects = readOldLocalJson(PROJECTS_KEY, []);
-  projectTargets = readOldLocalJson(PROJECT_TARGETS_KEY, {});
-  financeRecords = readOldLocalJson(FINANCE_KEY, []);
-  services = readOldLocalJson(SERVICES_KEY, []);
-  renewals = readOldLocalJson(RENEWALS_KEY, []);
-  websiteLogins = readOldLocalJson(WEBSITE_LOGINS_KEY, []);
-  employees = readOldLocalJson(EMPLOYEES_KEY, []);
-  users = hardenDefaultUserAccess(readOldLocalJson(USERS_KEY, defaultUsers()).map(normalizeUser));
-  managerHandles = readOldLocalJson(MANAGER_HANDLES_KEY, []);
-  socialMediaPosts = readOldLocalJson(SOCIAL_POSTS_KEY, []);
-  corrections = readOldLocalJson(CORRECTIONS_KEY, []);
-  pmNotifications = readOldLocalJson(PM_NOTIFICATIONS_KEY, []);
-  monthlyPostReports = readOldLocalJson(MONTHLY_POST_REPORTS_KEY, []);
-  settings = { ...defaultSettings, ...readOldLocalJson(SETTINGS_KEY, {}) };
+  const oldData = {
+    invoices: readOldLocalJson(STORAGE_KEY, []),
+    clients: readOldLocalJson(CLIENTS_KEY, []),
+    projects: readOldLocalJson(PROJECTS_KEY, []),
+    projectTargets: readOldLocalJson(PROJECT_TARGETS_KEY, {}),
+    financeRecords: readOldLocalJson(FINANCE_KEY, []),
+    services: readOldLocalJson(SERVICES_KEY, []),
+    renewals: readOldLocalJson(RENEWALS_KEY, []),
+    websiteLogins: readOldLocalJson(WEBSITE_LOGINS_KEY, []),
+    employees: readOldLocalJson(EMPLOYEES_KEY, []),
+    users: readOldLocalJson(USERS_KEY, []),
+    managerHandles: readOldLocalJson(MANAGER_HANDLES_KEY, []),
+    socialMediaPosts: readOldLocalJson(SOCIAL_POSTS_KEY, []),
+    corrections: readOldLocalJson(CORRECTIONS_KEY, []),
+    pmNotifications: readOldLocalJson(PM_NOTIFICATIONS_KEY, []),
+    monthlyPostReports: readOldLocalJson(MONTHLY_POST_REPORTS_KEY, []),
+    settings: readOldLocalJson(SETTINGS_KEY, {}),
+  };
+  let moved = false;
+  if (!invoices.length && oldData.invoices.length) { invoices = oldData.invoices; moved = true; }
+  if (!clients.length && oldData.clients.length) { clients = oldData.clients; moved = true; }
+  if (!projects.length && oldData.projects.length) { projects = oldData.projects; moved = true; }
+  if (!Object.keys(projectTargets).length && Object.keys(oldData.projectTargets).length) { projectTargets = oldData.projectTargets; moved = true; }
+  if (!financeRecords.length && oldData.financeRecords.length) { financeRecords = oldData.financeRecords; moved = true; }
+  if (!services.length && oldData.services.length) { services = oldData.services; moved = true; }
+  if (!renewals.length && oldData.renewals.length) { renewals = oldData.renewals; moved = true; }
+  if (!websiteLogins.length && oldData.websiteLogins.length) { websiteLogins = oldData.websiteLogins; moved = true; }
+  if (!employees.length && oldData.employees.length) { employees = oldData.employees; moved = true; }
+  if (users.length <= defaultUsers().length && oldData.users.length) { users = hardenDefaultUserAccess(oldData.users.map(normalizeUser)); moved = true; }
+  if (!managerHandles.length && oldData.managerHandles.length) { managerHandles = oldData.managerHandles; moved = true; }
+  if (!socialMediaPosts.length && oldData.socialMediaPosts.length) { socialMediaPosts = oldData.socialMediaPosts; moved = true; }
+  if (!corrections.length && oldData.corrections.length) { corrections = oldData.corrections; moved = true; }
+  if (!pmNotifications.length && oldData.pmNotifications.length) { pmNotifications = oldData.pmNotifications; moved = true; }
+  if (!monthlyPostReports.length && oldData.monthlyPostReports.length) { monthlyPostReports = oldData.monthlyPostReports; moved = true; }
+  if (Object.keys(oldData.settings).length) { settings = { ...defaultSettings, ...settings, ...oldData.settings }; moved = true; }
   removeOldLocalData();
-  syncAllCollectionsToSupabase();
+  if (!moved) return false;
+  await syncAllCollectionsToSupabaseNow();
   showToast("Old browser data moved to Supabase");
   return true;
 }
@@ -2724,7 +2759,7 @@ function createBackupPackage() {
   };
 }
 
-function applyBackupData(backup) {
+async function applyBackupData(backup) {
   const data = backup.data || backup;
   if (!Array.isArray(data.invoices) || !Array.isArray(data.clients)) {
     throw new Error("Invalid backup file");
@@ -2745,7 +2780,7 @@ function applyBackupData(backup) {
   pmNotifications = data.pmNotifications || [];
   monthlyPostReports = data.monthlyPostReports || [];
   settings = { ...defaultSettings, ...(data.settings || {}) };
-  syncAllCollectionsToSupabase();
+  await syncAllCollectionsToSupabaseNow();
   resetForm();
   resetClientForm();
   resetProjectForm();
@@ -2772,7 +2807,7 @@ async function restoreCloudOnEmptyLocalData() {
     if (!response.ok) throw new Error(await response.text());
     const rows = await response.json();
     if (!rows.length || !rows[0].data) return false;
-    applyBackupData(rows[0].data);
+    await applyBackupData(rows[0].data);
     showToast("Cloud data loaded");
     return true;
   } catch (error) {
@@ -2785,13 +2820,14 @@ async function restoreCloudOnEmptyLocalData() {
 function importBackup(file) {
   if (!file) return;
   const reader = new FileReader();
-  reader.addEventListener("load", () => {
+  reader.addEventListener("load", async () => {
     try {
       const backup = JSON.parse(reader.result);
       const confirmed = confirm("Import backup? This will replace current saved data.");
       if (!confirmed) return;
-      applyBackupData(backup);
-      showToast("Backup imported");
+      showToast("Saving imported data to Supabase...");
+      await applyBackupData(backup);
+      showToast("Backup imported and saved to Supabase");
     } catch {
       showToast("Backup import failed");
     } finally {
@@ -2899,8 +2935,8 @@ async function restoreFromCloud() {
     if (!response.ok) throw new Error(await response.text());
     const rows = await response.json();
     if (!rows.length || !rows[0].data) throw new Error("No cloud backup found");
-    applyBackupData(rows[0].data);
-    showToast("Cloud backup restored");
+    await applyBackupData(rows[0].data);
+    showToast("Cloud backup restored and saved to Supabase");
   } catch (error) {
     console.error(error);
     showToast("Cloud restore failed");
@@ -6860,7 +6896,7 @@ async function startApp() {
   populateFinanceCategories();
   const supabaseLoaded = await loadAllDataFromSupabase();
   if (supabaseLoaded) {
-    migrateOldLocalDataToSupabase();
+    await migrateOldLocalDataToSupabase();
     ensureDefaultAdminUser();
     seedDefaultServices();
   } else {
