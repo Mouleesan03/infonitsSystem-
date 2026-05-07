@@ -585,6 +585,14 @@ function invoiceTotalValue(invoice) {
   return Math.max(0, subtotal + tax - cleanNumber(invoice.discount) - cleanNumber(invoice.advancePaid));
 }
 
+function hasUsefulPayload(value) {
+  return value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
+}
+
+function rowPayload(row, fallback) {
+  return hasUsefulPayload(row.payload) ? row.payload : fallback;
+}
+
 const supabaseDirectCollections = {
   clients: {
     table: "clients",
@@ -603,6 +611,17 @@ const supabaseDirectCollections = {
       payload: client,
       updated_at: client.updatedAt || new Date().toISOString(),
     }),
+    fromRow: (row) =>
+      rowPayload(row, {
+        id: row.app_id || row.id,
+        clientCode: row.client_code || "",
+        name: row.name || "Client",
+        email: row.email || "",
+        phone: row.phone || "",
+        country: row.country || "",
+        address: row.billing_address || "",
+        updatedAt: row.updated_at || "",
+      }),
   },
   employees: {
     table: "employees",
@@ -620,6 +639,16 @@ const supabaseDirectCollections = {
       payload: employee,
       updated_at: employee.updatedAt || new Date().toISOString(),
     }),
+    fromRow: (row) =>
+      rowPayload(row, {
+        id: row.app_id || row.id,
+        name: row.name || "Employee",
+        jobTitle: row.role || "",
+        workEmail: row.email || "",
+        phone: row.phone || "",
+        status: row.status || "Active",
+        updatedAt: row.updated_at || "",
+      }),
   },
   services: {
     table: "services",
@@ -636,6 +665,16 @@ const supabaseDirectCollections = {
       payload: service,
       updated_at: service.updatedAt || new Date().toISOString(),
     }),
+    fromRow: (row) =>
+      rowPayload(row, {
+        id: row.app_id || row.id,
+        name: row.title || "Service",
+        title: row.title || "Service",
+        description: row.description || "",
+        price: cleanNumber(row.default_amount),
+        currency: row.currency || "LKR",
+        updatedAt: row.updated_at || "",
+      }),
   },
   invoices: {
     table: "invoices",
@@ -660,6 +699,30 @@ const supabaseDirectCollections = {
       payload: invoice,
       updated_at: invoice.updatedAt || new Date().toISOString(),
     }),
+    fromRow: (row) =>
+      rowPayload(row, {
+        id: row.app_id || row.id,
+        documentType: row.document_type || "Invoice",
+        invoiceNumber: row.invoice_no || "",
+        customerName: row.client_name || "Customer",
+        invoiceDate: row.issue_date || today(),
+        dueDate: row.due_date || row.issue_date || today(),
+        status: row.status || "Unpaid",
+        currency: row.currency || "LKR",
+        items: [
+          {
+            title: "Service",
+            description: "",
+            quantity: "",
+            price: "",
+            amount: cleanNumber(row.subtotal || row.total),
+          },
+        ],
+        taxRate: row.subtotal ? (cleanNumber(row.tax) / cleanNumber(row.subtotal)) * 100 : 0,
+        discount: cleanNumber(row.discount),
+        advancePaid: cleanNumber(row.advance_paid),
+        updatedAt: row.updated_at || "",
+      }),
   },
   projects: {
     table: "projects",
@@ -682,6 +745,21 @@ const supabaseDirectCollections = {
       payload: project,
       updated_at: project.updatedAt || new Date().toISOString(),
     }),
+    fromRow: (row) =>
+      rowPayload(row, {
+        id: row.app_id || row.id,
+        clientName: row.client_name || "Client",
+        name: row.project_name || "Project",
+        month: row.month || today().slice(0, 7),
+        paymentStatus: row.status || "Waiting",
+        valueLkr: row.currency === "USD" ? 0 : cleanNumber(row.project_value),
+        valueUsd: row.currency === "USD" ? cleanNumber(row.project_value) : 0,
+        advance: cleanNumber(row.advance_received),
+        payForWork: cleanNumber(row.pay_for_work),
+        paidForWork: cleanNumber(row.paid_for_work),
+        note: row.note || "",
+        updatedAt: row.updated_at || "",
+      }),
   },
   socialMediaPosts: {
     table: "social_media_posts",
@@ -701,6 +779,18 @@ const supabaseDirectCollections = {
       payload: post,
       updated_at: post.updatedAt || new Date().toISOString(),
     }),
+    fromRow: (row) =>
+      rowPayload(row, {
+        id: row.app_id || row.id,
+        clientName: row.client_name || "Client",
+        projectName: row.project_name || "Project",
+        postedDate: row.posted_date || today(),
+        count: cleanNumber(row.post_count || 1) || 1,
+        platforms: Array.isArray(row.platforms) ? row.platforms : [],
+        platformLinks: row.platform_links || {},
+        note: row.note || "",
+        updatedAt: row.updated_at || "",
+      }),
   },
   financeRecords: {
     table: "finance_records",
@@ -723,6 +813,20 @@ const supabaseDirectCollections = {
       payload: record,
       updated_at: record.updatedAt || new Date().toISOString(),
     }),
+    fromRow: (row) =>
+      rowPayload(row, {
+        id: row.app_id || row.id,
+        date: row.record_date || today(),
+        type: row.type || "expense",
+        category: row.category || "General",
+        amount: cleanNumber(row.amount),
+        status: row.status || "unpaid",
+        sourceType: row.source_type || "",
+        sourceId: row.source_id || "",
+        repeat: row.repeat || "none",
+        note: row.note || "",
+        updatedAt: row.updated_at || "",
+      }),
   },
   renewals: {
     table: "renewals",
@@ -741,6 +845,19 @@ const supabaseDirectCollections = {
       payload: renewal,
       updated_at: renewal.updatedAt || new Date().toISOString(),
     }),
+    fromRow: (row) =>
+      rowPayload(row, {
+        id: row.app_id || row.id,
+        name: row.name || "Renewal",
+        type: row.renewal_type || "Renewal",
+        renewalType: row.renewal_type || "Renewal",
+        date: row.renewal_date || today(),
+        renewalDate: row.renewal_date || today(),
+        amount: cleanNumber(row.amount),
+        status: row.status || "Active",
+        note: row.note || "",
+        updatedAt: row.updated_at || "",
+      }),
   },
   websiteLogins: {
     table: "website_logins",
@@ -764,6 +881,22 @@ const supabaseDirectCollections = {
       payload: login,
       updated_at: login.updatedAt || new Date().toISOString(),
     }),
+    fromRow: (row) =>
+      rowPayload(row, {
+        id: row.app_id || row.id,
+        websiteName: row.website_name || "Website",
+        websiteLoginUrl: row.website_login_url || "",
+        username: row.username || "",
+        password: row.password_encrypted || "",
+        domainSource: row.domain_source || "",
+        domainLoginUrl: row.domain_login_url || "",
+        hostingProvider: row.hosting_provider || "",
+        hostingLoginUrl: row.hosting_login_url || "",
+        domainRenewalDate: row.domain_renewal_date || "",
+        hostingRenewalDate: row.hosting_renewal_date || "",
+        note: row.note || "",
+        updatedAt: row.updated_at || "",
+      }),
   },
   pmNotifications: {
     table: "notifications",
@@ -779,6 +912,14 @@ const supabaseDirectCollections = {
       status: notification.status || "Unread",
       payload: notification,
     }),
+    fromRow: (row) =>
+      rowPayload(row, {
+        id: row.app_id || row.id,
+        type: row.type || "Notification",
+        title: row.title || "Notification",
+        message: row.message || "",
+        status: row.status || "Unread",
+      }),
   },
 };
 
@@ -888,13 +1029,13 @@ async function writeCollectionToSupabase(collection) {
   return false;
 }
 
-async function readTablePayloads(table) {
-  const response = await fetch(supabaseTableUrl(table, "?select=payload,updated_at&order=updated_at.desc"), {
+async function readTableRows(config) {
+  const response = await fetch(supabaseTableUrl(config.table, "?select=*&order=updated_at.desc"), {
     headers: supabaseTableHeaders(),
   });
   if (!response.ok) throw new Error(await response.text());
   const rows = await response.json();
-  return rows.map((row) => row.payload).filter(Boolean);
+  return rows.map((row) => config.fromRow(row)).filter(Boolean);
 }
 
 async function readAppDataPayload(collection, fallback) {
@@ -913,12 +1054,26 @@ async function loadAllDataFromSupabase() {
   }
   try {
     const directEntries = Object.entries(supabaseDirectCollections);
-    const directData = await Promise.all(directEntries.map(([, config]) => readTablePayloads(config.table)));
-    directEntries.forEach(([collection, config], index) => config.set(directData[index]));
+    const directData = await Promise.allSettled(directEntries.map(([, config]) => readTableRows(config)));
+    directEntries.forEach(([collection, config], index) => {
+      const result = directData[index];
+      if (result.status === "fulfilled") {
+        config.set(result.value);
+      } else {
+        console.error(`Supabase load failed: ${collection}`, result.reason);
+      }
+    });
 
     const appDataEntries = Object.entries(supabaseAppDataCollections);
-    const appData = await Promise.all(appDataEntries.map(([collection, config]) => readAppDataPayload(collection, config.get())));
-    appDataEntries.forEach(([collection, config], index) => config.set(appData[index]));
+    const appData = await Promise.allSettled(appDataEntries.map(([collection, config]) => readAppDataPayload(collection, config.get())));
+    appDataEntries.forEach(([collection, config], index) => {
+      const result = appData[index];
+      if (result.status === "fulfilled") {
+        config.set(result.value);
+      } else {
+        console.error(`Supabase app data load failed: ${collection}`, result.reason);
+      }
+    });
 
     const settingsResponse = await fetch(supabaseTableUrl("app_settings", "?id=eq.default&select=payload&limit=1"), {
       headers: supabaseTableHeaders(),
