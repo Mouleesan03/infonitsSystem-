@@ -489,6 +489,16 @@ function passwordMatches(user, password, hashedPassword) {
   return savedHash === hashedPassword || savedHash === encodePassword(password);
 }
 
+function isDefaultPassword(username, password) {
+  const defaults = {
+    admin: "admin123",
+    manager: "manager123",
+    designer: "designer123",
+    developer: "developer123",
+  };
+  return defaults[String(username || "").trim().toLowerCase()] === String(password || "");
+}
+
 function normalizeUser(user) {
   const username = user.username || String(user.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "user";
   return {
@@ -1063,15 +1073,33 @@ const supabaseAppDataCollections = {
 };
 
 const supabaseSyncTimers = {};
+let pendingSupabaseSaves = 0;
+
+function setSupabaseSaveStatus(status) {
+  const labels = {
+    saving: "Saving to Supabase...",
+    saved: "Saved to Supabase",
+    failed: "Supabase save failed",
+  };
+  if (labels[status]) showToast(labels[status]);
+}
 
 function syncCollectionToSupabase(collection) {
   if (!supabaseReady()) return;
   window.clearTimeout(supabaseSyncTimers[collection]);
   supabaseSyncTimers[collection] = window.setTimeout(() => {
-    writeCollectionToSupabase(collection).catch((error) => {
-      console.error(error);
-      showToast(`Supabase save failed: ${collection}`);
-    });
+    pendingSupabaseSaves += 1;
+    if (pendingSupabaseSaves === 1) setSupabaseSaveStatus("saving");
+    writeCollectionToSupabase(collection)
+      .then(() => {
+        pendingSupabaseSaves = Math.max(0, pendingSupabaseSaves - 1);
+        if (!pendingSupabaseSaves) setSupabaseSaveStatus("saved");
+      })
+      .catch((error) => {
+        pendingSupabaseSaves = Math.max(0, pendingSupabaseSaves - 1);
+        console.error(error);
+        showToast(`Supabase save failed: ${collection}`);
+      });
   }, 350);
 }
 
@@ -1081,7 +1109,7 @@ function syncAllCollectionsToSupabase() {
   syncCollectionToSupabase("settings");
 }
 
-async function syncAllCollectionsToSupabaseNow() {
+async function syncAllCollectionsToSupabaseNow(options = {}) {
   if (!supabaseReady()) return false;
   Object.values(supabaseSyncTimers).forEach((timer) => window.clearTimeout(timer));
   const collections = [
@@ -1089,7 +1117,8 @@ async function syncAllCollectionsToSupabaseNow() {
     ...Object.keys(supabaseAppDataCollections),
     "settings",
   ];
-  const results = await Promise.allSettled(collections.map((collection) => writeCollectionToSupabase(collection)));
+  setSupabaseSaveStatus("saving");
+  const results = await Promise.allSettled(collections.map((collection) => writeCollectionToSupabase(collection, options)));
   const failed = results
     .map((result, index) => (result.status === "rejected" ? collections[index] : ""))
     .filter(Boolean);
@@ -1098,6 +1127,7 @@ async function syncAllCollectionsToSupabaseNow() {
     showToast(`Supabase save failed: ${failed.slice(0, 3).join(", ")}`);
     return false;
   }
+  setSupabaseSaveStatus("saved");
   return true;
 }
 
@@ -1110,6 +1140,18 @@ async function deleteSupabaseRows(table, keepAppIds = []) {
   if (!response.ok) throw new Error(await response.text());
 }
 
+function deleteSupabaseRecord(collection, id) {
+  const direct = supabaseDirectCollections[collection];
+  if (!supabaseReady() || !direct || !id) return;
+  fetch(supabaseTableUrl(direct.table, `?app_id=eq.${encodeURIComponent(id)}`), {
+    method: "DELETE",
+    headers: supabaseTableHeaders({ Prefer: "return=minimal" }),
+  }).catch((error) => {
+    console.error(error);
+    showToast(`Supabase delete failed: ${collection}`);
+  });
+}
+
 async function insertSupabaseRows(table, rows) {
   if (!rows.length) return;
   const response = await fetch(supabaseTableUrl(table, "?on_conflict=app_id"), {
@@ -1120,7 +1162,7 @@ async function insertSupabaseRows(table, rows) {
   if (!response.ok) throw new Error(await response.text());
 }
 
-async function writeCollectionToSupabase(collection) {
+async function writeCollectionToSupabase(collection, options = {}) {
   if (!supabaseReady()) return false;
   if (collection === "settings") {
     const response = await fetch(supabaseTableUrl("app_settings"), {
@@ -1135,7 +1177,9 @@ async function writeCollectionToSupabase(collection) {
   if (direct) {
     const rows = direct.get().map(direct.toRow);
     await insertSupabaseRows(direct.table, rows);
-    await deleteSupabaseRows(direct.table, rows.map((row) => row.app_id).filter(Boolean));
+    if (options.replaceStale) {
+      await deleteSupabaseRows(direct.table, rows.map((row) => row.app_id).filter(Boolean));
+    }
     return true;
   }
   const appData = supabaseAppDataCollections[collection];
@@ -1764,7 +1808,7 @@ async function loginUser(username, password) {
   sessionStorage.setItem(AUTH_SESSION_KEY, currentUserId);
   loginForm.reset();
   openAuthenticatedApp();
-  showToast(`Welcome ${user.name}`);
+  showToast(isDefaultPassword(normalizedUsername, passwordValue) ? "Login ok. Please change this default password now." : `Welcome ${user.name}`);
   return true;
 }
 
@@ -2183,6 +2227,7 @@ function deleteInvoice(id) {
   if (!confirmed) return;
 
   invoices = invoices.filter((item) => item.id !== id);
+  deleteSupabaseRecord("invoices", id);
   if (selectedInvoiceId === id) {
     selectedInvoiceId = invoices[0]?.id || null;
   }
@@ -2329,6 +2374,7 @@ function deleteClient(id) {
   const confirmed = confirm(`Delete ${client.name}?`);
   if (!confirmed) return;
   clients = clients.filter((item) => item.id !== id);
+  deleteSupabaseRecord("clients", id);
   saveClients();
   renderClients();
   showToast("Client deleted");
@@ -2413,6 +2459,7 @@ function deleteEmployee(id) {
   const confirmed = confirm(`Delete ${employee.firstName} ${employee.lastName}?`);
   if (!confirmed) return;
   employees = employees.filter((item) => item.id !== id);
+  deleteSupabaseRecord("employees", id);
   saveEmployees();
   renderEmployees();
   resetEmployeeForm();
@@ -2511,6 +2558,7 @@ function deleteProject(id) {
   managerHandles = managerHandles.filter((item) => !ids.includes(item.projectId));
   socialMediaPosts = socialMediaPosts.map((post) => (ids.includes(post.projectId) ? { ...post, projectId: "", projectName: "" } : post));
   corrections = corrections.map((correction) => (ids.includes(correction.projectId) ? { ...correction, projectId: "", projectName: "" } : correction));
+  ids.forEach((projectId) => deleteSupabaseRecord("projects", projectId));
   saveProjects();
   saveManagerHandles();
   saveSocialMediaPosts();
@@ -2829,7 +2877,7 @@ async function applyBackupData(backup) {
   pmNotifications = data.pmNotifications || [];
   monthlyPostReports = data.monthlyPostReports || [];
   settings = { ...defaultSettings, ...(data.settings || {}) };
-  await syncAllCollectionsToSupabaseNow();
+  await syncAllCollectionsToSupabaseNow({ replaceStale: true });
   resetForm();
   resetClientForm();
   resetProjectForm();
@@ -3843,6 +3891,7 @@ function deleteSocialPost(id) {
   const post = socialMediaPosts.find((item) => item.id === id);
   if (!post || !confirm(`Delete post ${post.title || ""}?`)) return;
   socialMediaPosts = socialMediaPosts.filter((item) => item.id !== id);
+  deleteSupabaseRecord("socialMediaPosts", id);
   saveSocialMediaPosts();
   renderProjectManagerWorkspace();
   showToast("Post deleted");
@@ -3909,6 +3958,7 @@ function deleteSocialPostGroup(encodedKey) {
   if (!group || !confirm("Delete this posted record?")) return;
   const ids = new Set(group.posts.map((post) => post.id));
   socialMediaPosts = socialMediaPosts.filter((post) => !ids.has(post.id));
+  group.posts.forEach((post) => deleteSupabaseRecord("socialMediaPosts", post.id));
   saveSocialMediaPosts();
   renderProjectManagerWorkspace();
   showToast("Posted record deleted");
@@ -4323,6 +4373,7 @@ function deleteService(id) {
   const confirmed = confirm(`Delete service "${service.name}"?`);
   if (!confirmed) return;
   services = services.filter((item) => item.id !== id);
+  deleteSupabaseRecord("services", id);
   saveServices();
   renderServices();
   renderItemSuggestions();
@@ -4392,6 +4443,7 @@ function deleteRenewal(id) {
   const confirmed = confirm(`Delete renewal "${renewal.name}"?`);
   if (!confirmed) return;
   renewals = renewals.filter((item) => item.id !== id);
+  deleteSupabaseRecord("renewals", id);
   saveRenewals();
   renderRenewals();
   showToast("Renewal deleted");
@@ -4473,6 +4525,7 @@ function deleteWebsiteLogin(id) {
   const confirmed = confirm(`Delete portal access for ${login.websiteName}?`);
   if (!confirmed) return;
   websiteLogins = websiteLogins.filter((item) => item.id !== id);
+  deleteSupabaseRecord("websiteLogins", id);
   saveWebsiteLogins();
   renderWebsiteLogins();
   showToast("Website login deleted");
@@ -4957,6 +5010,7 @@ function deleteFinanceRecord(id) {
   const confirmed = confirm(`Delete finance record "${record.category}" for ${compactMoney(record.amount, "LKR")}?`);
   if (!confirmed) return;
   financeRecords = financeRecords.filter((record) => record.id !== id);
+  deleteSupabaseRecord("financeRecords", id);
   saveFinanceRecords();
   renderFinance();
   showToast("Finance record deleted");

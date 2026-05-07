@@ -3658,6 +3658,14 @@ textarea {
   font-size: 0.9rem;
 }
 
+.warning-help {
+  padding: 10px 12px;
+  border: 1px solid #fed7aa;
+  border-radius: 12px;
+  background: #fff7ed;
+  color: #9a3412;
+}
+
 .muted-label {
   color: #64748b;
   font-size: 0.84rem;

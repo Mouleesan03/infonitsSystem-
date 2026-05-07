@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Infonits Invoice Manager</title>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20260507-responsive" />
+    <link rel="stylesheet" href="styles.css?v=20260507-qa-fix" />
   </head>
   <body class="app-loading">
     <section class="app-preloader" id="appPreloader" aria-live="polite">
@@ -1578,9 +1578,10 @@
                 <button class="primary-action" id="cloudBackupButton" type="button">Backup to cloud</button>
                 <button class="secondary-action" id="cloudRestoreButton" type="button">Restore from cloud</button>
               </div>
-              <p class="settings-help">Create one Supabase table named <strong>app_backups</strong>. Cloud backup stores the same data as the JSON export.</p>
+            <p class="settings-help">Create one Supabase table named <strong>app_backups</strong>. Cloud backup stores the same data as the JSON export.</p>
             </div>
             <p class="settings-help">Backup includes invoices, quotations, clients, employees, users, manager handles, portal passwords, finance records, business settings, logo, and USD rates. Keep the exported file private.</p>
+            <p class="settings-help warning-help"><strong>Security note:</strong> Portal Access passwords are visible to users with access to that section. Use this only for trusted staff until Supabase Auth and encrypted password storage are enabled.</p>
           </section>
         </section>
       </main>
@@ -1610,7 +1611,7 @@
       </section>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="supabase-config.js?v=20260507-responsive"></script>
-    <script src="app.js?v=20260507-responsive"></script>
+    <script src="supabase-config.js?v=20260507-qa-fix"></script>
+    <script src="app.js?v=20260507-qa-fix"></script>
   </body>
 </html>
