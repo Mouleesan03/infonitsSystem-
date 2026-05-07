@@ -119,6 +119,8 @@ let portalCalendarPinned = false;
 let pendingEmployeePhotoDataUrl = "";
 const visibleWebsitePasswords = new Set();
 
+let appIsStarting = true;
+
 const navTabs = document.querySelectorAll(".nav-tab");
 const views = {
   dashboard: document.getElementById("dashboardView"),
@@ -172,6 +174,7 @@ const employeeSearchInput = document.getElementById("employeeSearchInput");
 const employeeStatusFilter = document.getElementById("employeeStatusFilter");
 const appShell = document.getElementById("appShell");
 const loginScreen = document.getElementById("loginScreen");
+const appPreloader = document.getElementById("appPreloader");
 const loginForm = document.getElementById("loginForm");
 const userMenuButton = document.getElementById("userMenuButton");
 const userMenu = document.getElementById("userMenu");
@@ -602,7 +605,7 @@ const supabaseDirectCollections = {
     },
     toRow: (client, index) => ({
       app_id: payloadId(client, `client-${index + 1}`),
-      client_code: client.clientCode || "",
+      client_code: client.clientCode || null,
       name: client.name || "Client",
       email: client.email || "",
       phone: client.phone || "",
@@ -975,8 +978,9 @@ function syncAllCollectionsToSupabase() {
   syncCollectionToSupabase("settings");
 }
 
-async function deleteSupabaseRows(table) {
-  const response = await fetch(supabaseTableUrl(table, "?app_id=not.is.null"), {
+async function deleteSupabaseRows(table, keepAppIds = []) {
+  const keepFilter = keepAppIds.length ? `&app_id=not.in.(${keepAppIds.map((id) => encodeURIComponent(id)).join(",")})` : "";
+  const response = await fetch(supabaseTableUrl(table, `?app_id=not.is.null${keepFilter}`), {
     method: "DELETE",
     headers: supabaseTableHeaders({ Prefer: "return=minimal" }),
   });
@@ -985,7 +989,7 @@ async function deleteSupabaseRows(table) {
 
 async function insertSupabaseRows(table, rows) {
   if (!rows.length) return;
-  const response = await fetch(supabaseTableUrl(table), {
+  const response = await fetch(supabaseTableUrl(table, "?on_conflict=app_id"), {
     method: "POST",
     headers: supabaseTableHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
     body: JSON.stringify(rows),
@@ -1007,8 +1011,8 @@ async function writeCollectionToSupabase(collection) {
   const direct = supabaseDirectCollections[collection];
   if (direct) {
     const rows = direct.get().map(direct.toRow);
-    await deleteSupabaseRows(direct.table);
     await insertSupabaseRows(direct.table, rows);
+    await deleteSupabaseRows(direct.table, rows.map((row) => row.app_id).filter(Boolean));
     return true;
   }
   const appData = supabaseAppDataCollections[collection];
@@ -1030,12 +1034,15 @@ async function writeCollectionToSupabase(collection) {
 }
 
 async function readTableRows(config) {
-  const response = await fetch(supabaseTableUrl(config.table, "?select=*&order=updated_at.desc"), {
+  const response = await fetch(supabaseTableUrl(config.table, "?select=*"), {
     headers: supabaseTableHeaders(),
   });
   if (!response.ok) throw new Error(await response.text());
   const rows = await response.json();
-  return rows.map((row) => config.fromRow(row)).filter(Boolean);
+  return rows
+    .sort((a, b) => String(b.updated_at || "").localeCompare(String(a.updated_at || "")))
+    .map((row) => config.fromRow(row))
+    .filter(Boolean);
 }
 
 async function readAppDataPayload(collection, fallback) {
@@ -1047,12 +1054,39 @@ async function readAppDataPayload(collection, fallback) {
   return rows[0]?.payload ?? fallback;
 }
 
+async function checkSupabaseTables() {
+  if (!supabaseReady()) return [];
+  const tableChecks = [
+    ...Object.values(supabaseDirectCollections).map((config) => config.table),
+    "app_data",
+    "app_settings",
+  ];
+  const checks = await Promise.allSettled(
+    [...new Set(tableChecks)].map(async (table) => {
+      const response = await fetch(supabaseTableUrl(table, "?select=*&limit=1"), {
+        headers: supabaseTableHeaders(),
+      });
+      if (!response.ok) throw new Error(`${table}: ${await response.text()}`);
+      return table;
+    }),
+  );
+  return checks
+    .map((result, index) => (result.status === "rejected" ? [...new Set(tableChecks)][index] : ""))
+    .filter(Boolean);
+}
+
 async function loadAllDataFromSupabase() {
   if (!supabaseReady()) {
     showToast("Supabase config missing");
     return false;
   }
+  let hasLoadError = false;
   try {
+    const failedTables = await checkSupabaseTables();
+    if (failedTables.length) {
+      console.error("Supabase table check failed:", failedTables);
+      showToast(`Check Supabase SQL: ${failedTables.slice(0, 3).join(", ")}`);
+    }
     const directEntries = Object.entries(supabaseDirectCollections);
     const directData = await Promise.allSettled(directEntries.map(([, config]) => readTableRows(config)));
     directEntries.forEach(([collection, config], index) => {
@@ -1060,6 +1094,7 @@ async function loadAllDataFromSupabase() {
       if (result.status === "fulfilled") {
         config.set(result.value);
       } else {
+        hasLoadError = true;
         console.error(`Supabase load failed: ${collection}`, result.reason);
       }
     });
@@ -1071,6 +1106,7 @@ async function loadAllDataFromSupabase() {
       if (result.status === "fulfilled") {
         config.set(result.value);
       } else {
+        hasLoadError = true;
         console.error(`Supabase app data load failed: ${collection}`, result.reason);
       }
     });
@@ -1083,6 +1119,7 @@ async function loadAllDataFromSupabase() {
       settings = { ...defaultSettings, ...(settingsRows[0]?.payload || {}) };
     }
     selectedInvoiceId = invoices[0]?.id || null;
+    if (hasLoadError) showToast("Some Supabase tables could not load");
     return true;
   } catch (error) {
     console.error(error);
@@ -1423,6 +1460,14 @@ function firstAllowedView() {
 }
 
 function applyAccessControl() {
+  if (appIsStarting) {
+    appPreloader.classList.remove("is-hidden");
+    loginScreen.classList.add("is-loading");
+    appShell.classList.add("is-locked");
+    return;
+  }
+  appPreloader.classList.add("is-hidden");
+  loginScreen.classList.remove("is-loading");
   const loggedIn = isLoggedIn();
   appShell.classList.toggle("is-locked", !loggedIn);
   loginScreen.classList.toggle("is-hidden", loggedIn);
@@ -6664,12 +6709,18 @@ document.getElementById("logoInput").addEventListener("change", (event) => {
 });
 
 async function startApp() {
+  appIsStarting = true;
+  applyAccessControl();
   populateCountrySelects();
   populateFinanceCategories();
-  await loadAllDataFromSupabase();
-  migrateOldLocalDataToSupabase();
-  addSheetDetailsToProjectsAndClients();
-  seedDefaultServices();
+  const supabaseLoaded = await loadAllDataFromSupabase();
+  if (supabaseLoaded) {
+    migrateOldLocalDataToSupabase();
+    seedDefaultServices();
+  } else {
+    currentUserId = "";
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+  }
   resetForm();
   resetClientForm();
   resetEmployeeForm();
@@ -6682,6 +6733,8 @@ async function startApp() {
   resetSocialPostForm();
   resetCorrectionForm();
   resetFinanceForm();
+  appIsStarting = false;
+  document.body.classList.remove("app-loading");
   renderAll();
   updatePreviewZoom();
   updatePreviewVisibility();
