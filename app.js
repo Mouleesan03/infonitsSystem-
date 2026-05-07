@@ -324,6 +324,7 @@ function loadClients() {
 }
 
 function saveClients() {
+  clients = normalizeClientRecords();
   syncCollectionToSupabase("clients");
 }
 
@@ -703,7 +704,7 @@ const supabaseDirectCollections = {
     table: "clients",
     get: () => clients,
     set: (rows) => {
-      clients = rows;
+      clients = normalizeClientRecords(rows);
     },
     toRow: (client, index) => ({
       app_id: payloadId(client, `client-${index + 1}`),
@@ -1524,6 +1525,54 @@ function generateClientCode() {
     return match ? Math.max(max, Number(match[1])) : max;
   }, 0);
   return `CL${year}${String(maxNumber + 1).padStart(4, "0")}`;
+}
+
+function normalizeClientRecords(records = clients) {
+  const year = String(new Date().getFullYear()).slice(2);
+  const usedIds = new Set();
+  const usedCodes = new Set();
+  const usedNames = new Set();
+  let codeCounter = records.reduce((max, client) => {
+    const match = String(client.clientCode || "").match(/^CL\d{2}(\d+)$/);
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  const nextCode = () => {
+    let code = "";
+    do {
+      codeCounter += 1;
+      code = `CL${year}${String(codeCounter).padStart(4, "0")}`;
+    } while (usedCodes.has(code));
+    return code;
+  };
+
+  return records.reduce((cleaned, client) => {
+    const name = String(client.name || client.customerName || "").trim();
+    if (!name) return cleaned;
+    const duplicateKey = name.toLowerCase();
+    if (usedNames.has(duplicateKey)) return cleaned;
+    usedNames.add(duplicateKey);
+
+    let id = String(client.id || "").trim();
+    if (!id || usedIds.has(id)) id = createId();
+    usedIds.add(id);
+
+    let clientCode = String(client.clientCode || "").trim();
+    if (!clientCode || usedCodes.has(clientCode)) clientCode = nextCode();
+    usedCodes.add(clientCode);
+
+    cleaned.push({
+      ...client,
+      id,
+      clientCode,
+      name,
+      email: String(client.email || "").trim(),
+      phone: formatPhone(client.phone),
+      country: client.country || "Sri Lanka",
+      address: client.address || client.billingAddress || "",
+      updatedAt: client.updatedAt || new Date().toISOString(),
+    });
+    return cleaned;
+  }, []);
 }
 
 function generateEmployeeCode() {
