@@ -104,7 +104,7 @@ let editingManagerHandleId = null;
 let editingSocialPostId = null;
 let editingCorrectionId = null;
 let linkedProjectId = null;
-let currentUserId = "";
+let currentUserId = sessionStorage.getItem(AUTH_SESSION_KEY) || "";
 let selectedInvoiceId = invoices[0]?.id || null;
 let previewZoom = 0.8;
 let previewHidden = true;
@@ -1487,6 +1487,7 @@ async function loginUser(username, password) {
     saveUsers();
   }
   currentUserId = user.id;
+  sessionStorage.setItem(AUTH_SESSION_KEY, currentUserId);
   loginForm.reset();
   applyAccessControl();
   switchView(firstAllowedView());
@@ -1496,6 +1497,7 @@ async function loginUser(username, password) {
 
 function logoutUser() {
   currentUserId = "";
+  sessionStorage.removeItem(AUTH_SESSION_KEY);
   loginForm.reset();
   applyAccessControl();
 }
