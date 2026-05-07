@@ -104,7 +104,7 @@ let editingManagerHandleId = null;
 let editingSocialPostId = null;
 let editingCorrectionId = null;
 let linkedProjectId = null;
-let currentUserId = localStorage.getItem(AUTH_SESSION_KEY) || "";
+let currentUserId = "";
 let selectedInvoiceId = invoices[0]?.id || null;
 let previewZoom = 0.8;
 let previewHidden = true;
@@ -308,120 +308,75 @@ const defaultServices = [
 ];
 
 function loadInvoices() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveInvoices() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(invoices));
-  queueCloudBackup();
+  syncCollectionToSupabase("invoices");
 }
 
 function loadClients() {
-  try {
-    return JSON.parse(localStorage.getItem(CLIENTS_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveClients() {
-  localStorage.setItem(CLIENTS_KEY, JSON.stringify(clients));
-  queueCloudBackup();
+  syncCollectionToSupabase("clients");
 }
 
 function loadProjects() {
-  try {
-    return JSON.parse(localStorage.getItem(PROJECTS_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveProjects() {
-  localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
-  queueCloudBackup();
+  syncCollectionToSupabase("projects");
 }
 
 function loadProjectTargets() {
-  try {
-    return JSON.parse(localStorage.getItem(PROJECT_TARGETS_KEY)) || {};
-  } catch {
-    return {};
-  }
+  return {};
 }
 
 function saveProjectTargets() {
-  localStorage.setItem(PROJECT_TARGETS_KEY, JSON.stringify(projectTargets));
-  queueCloudBackup();
+  syncCollectionToSupabase("projectTargets");
 }
 
 function loadFinanceRecords() {
-  try {
-    return JSON.parse(localStorage.getItem(FINANCE_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveFinanceRecords() {
-  localStorage.setItem(FINANCE_KEY, JSON.stringify(financeRecords));
-  queueCloudBackup();
+  syncCollectionToSupabase("financeRecords");
 }
 
 function loadServices() {
-  try {
-    return JSON.parse(localStorage.getItem(SERVICES_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveServices() {
-  localStorage.setItem(SERVICES_KEY, JSON.stringify(services));
-  queueCloudBackup();
+  syncCollectionToSupabase("services");
 }
 
 function loadRenewals() {
-  try {
-    return JSON.parse(localStorage.getItem(RENEWALS_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveRenewals() {
-  localStorage.setItem(RENEWALS_KEY, JSON.stringify(renewals));
-  queueCloudBackup();
+  syncCollectionToSupabase("renewals");
 }
 
 function loadWebsiteLogins() {
-  try {
-    return JSON.parse(localStorage.getItem(WEBSITE_LOGINS_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveWebsiteLogins() {
-  localStorage.setItem(WEBSITE_LOGINS_KEY, JSON.stringify(websiteLogins));
-  queueCloudBackup();
+  syncCollectionToSupabase("websiteLogins");
 }
 
 function loadEmployees() {
-  try {
-    return JSON.parse(localStorage.getItem(EMPLOYEES_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveEmployees() {
-  localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(employees));
-  queueCloudBackup();
+  syncCollectionToSupabase("employees");
 }
 
 function defaultUsers() {
@@ -461,12 +416,7 @@ function normalizeUser(user) {
 }
 
 function loadUsers() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(USERS_KEY));
-    return Array.isArray(saved) && saved.length ? saved.map(normalizeUser) : defaultUsers();
-  } catch {
-    return defaultUsers();
-  }
+  return defaultUsers();
 }
 
 function hardenDefaultUserAccess(savedUsers) {
@@ -482,73 +432,47 @@ function hardenDefaultUserAccess(savedUsers) {
 }
 
 function saveUsers() {
-  localStorage.setItem(USERS_KEY, JSON.stringify(users));
-  queueCloudBackup();
+  syncCollectionToSupabase("users");
 }
 
 function loadManagerHandles() {
-  try {
-    return JSON.parse(localStorage.getItem(MANAGER_HANDLES_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveManagerHandles() {
-  localStorage.setItem(MANAGER_HANDLES_KEY, JSON.stringify(managerHandles));
-  queueCloudBackup();
+  syncCollectionToSupabase("managerHandles");
 }
 
 function loadSocialMediaPosts() {
-  try {
-    return JSON.parse(localStorage.getItem(SOCIAL_POSTS_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveSocialMediaPosts() {
-  localStorage.setItem(SOCIAL_POSTS_KEY, JSON.stringify(socialMediaPosts));
-  queueCloudBackup();
+  syncCollectionToSupabase("socialMediaPosts");
 }
 
 function loadCorrections() {
-  try {
-    return JSON.parse(localStorage.getItem(CORRECTIONS_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveCorrections() {
-  localStorage.setItem(CORRECTIONS_KEY, JSON.stringify(corrections));
-  queueCloudBackup();
+  syncCollectionToSupabase("corrections");
 }
 
 function loadPmNotifications() {
-  try {
-    return JSON.parse(localStorage.getItem(PM_NOTIFICATIONS_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function savePmNotifications() {
-  localStorage.setItem(PM_NOTIFICATIONS_KEY, JSON.stringify(pmNotifications));
-  queueCloudBackup();
+  syncCollectionToSupabase("pmNotifications");
 }
 
 function loadMonthlyPostReports() {
-  try {
-    return JSON.parse(localStorage.getItem(MONTHLY_POST_REPORTS_KEY)) || [];
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveMonthlyPostReports() {
-  localStorage.setItem(MONTHLY_POST_REPORTS_KEY, JSON.stringify(monthlyPostReports));
-  queueCloudBackup();
+  syncCollectionToSupabase("monthlyPostReports");
 }
 
 function refreshStateFromStorage() {
@@ -568,21 +492,16 @@ function refreshStateFromStorage() {
   pmNotifications = loadPmNotifications();
   monthlyPostReports = loadMonthlyPostReports();
   settings = loadSettings();
-  currentUserId = localStorage.getItem(AUTH_SESSION_KEY) || "";
+  currentUserId = "";
   selectedInvoiceId = invoices[0]?.id || null;
 }
 
 function loadSettings() {
-  try {
-    return { ...defaultSettings, ...(JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}) };
-  } catch {
-    return { ...defaultSettings };
-  }
+  return { ...defaultSettings };
 }
 
 function saveSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
-  queueCloudBackup();
+  syncCollectionToSupabase("settings");
 }
 
 function loadCloudBackupSettings() {
@@ -592,18 +511,22 @@ function loadCloudBackupSettings() {
       url: hostedConfig.url || "",
       anonKey: hostedConfig.anonKey || "",
       backupId: hostedConfig.backupId || "infonits-main",
-      autoBackup: "off",
+      autoBackup: "live",
       lastAutoBackupDate: "",
-      ...(JSON.parse(localStorage.getItem(CLOUD_BACKUP_KEY)) || {}),
     };
   } catch {
     const hostedConfig = window.INFONITS_SUPABASE || {};
-    return { url: hostedConfig.url || "", anonKey: hostedConfig.anonKey || "", backupId: hostedConfig.backupId || "infonits-main", autoBackup: "off", lastAutoBackupDate: "" };
+    return { url: hostedConfig.url || "", anonKey: hostedConfig.anonKey || "", backupId: hostedConfig.backupId || "infonits-main", autoBackup: "live", lastAutoBackupDate: "" };
   }
 }
 
 function saveCloudBackupSettings(config) {
-  localStorage.setItem(CLOUD_BACKUP_KEY, JSON.stringify(config));
+  window.INFONITS_SUPABASE = {
+    ...(window.INFONITS_SUPABASE || {}),
+    url: config.url || "",
+    anonKey: config.anonKey || "",
+    backupId: config.backupId || "infonits-main",
+  };
 }
 
 let cloudBackupTimer = null;
@@ -613,20 +536,487 @@ function cloudBackupIsReady(config = loadCloudBackupSettings()) {
 }
 
 function queueCloudBackup() {
-  const config = loadCloudBackupSettings();
-  if (config.autoBackup !== "live" || !cloudBackupIsReady(config)) return;
-  window.clearTimeout(cloudBackupTimer);
-  cloudBackupTimer = window.setTimeout(() => {
-    saveBackupToCloud(config, { silent: true });
-  }, 900);
+  return;
+}
+
+function supabaseConfig() {
+  return loadCloudBackupSettings();
+}
+
+function supabaseReady() {
+  const config = supabaseConfig();
+  return Boolean(config.url && config.anonKey && !String(config.url).includes("PASTE_SUPABASE"));
+}
+
+function supabaseTableUrl(table, query = "") {
+  const config = supabaseConfig();
+  return `${config.url}/rest/v1/${table}${query}`;
+}
+
+function supabaseTableHeaders(extra = {}) {
+  const config = supabaseConfig();
+  return {
+    apikey: config.anonKey,
+    Authorization: `Bearer ${config.anonKey}`,
+    "Content-Type": "application/json",
+    ...extra,
+  };
+}
+
+function cleanDate(value, fallback = today()) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(String(value || "")) ? value : fallback;
+}
+
+function cleanNumber(value) {
+  return Number(value || 0) || 0;
+}
+
+function payloadId(item, fallback) {
+  return String(item?.id || item?.invoiceNumber || item?.clientCode || item?.name || fallback);
+}
+
+function invoiceSubtotalValue(invoice) {
+  return (invoice.items || []).reduce((sum, item) => sum + cleanNumber(item.amount || cleanNumber(item.quantity) * cleanNumber(item.price)), 0);
+}
+
+function invoiceTotalValue(invoice) {
+  const subtotal = invoiceSubtotalValue(invoice);
+  const tax = subtotal * (cleanNumber(invoice.taxRate) / 100);
+  return Math.max(0, subtotal + tax - cleanNumber(invoice.discount) - cleanNumber(invoice.advancePaid));
+}
+
+const supabaseDirectCollections = {
+  clients: {
+    table: "clients",
+    get: () => clients,
+    set: (rows) => {
+      clients = rows;
+    },
+    toRow: (client, index) => ({
+      app_id: payloadId(client, `client-${index + 1}`),
+      client_code: client.clientCode || "",
+      name: client.name || "Client",
+      email: client.email || "",
+      phone: client.phone || "",
+      country: client.country || "",
+      billing_address: client.address || client.billingAddress || "",
+      payload: client,
+      updated_at: client.updatedAt || new Date().toISOString(),
+    }),
+  },
+  employees: {
+    table: "employees",
+    get: () => employees,
+    set: (rows) => {
+      employees = rows;
+    },
+    toRow: (employee, index) => ({
+      app_id: payloadId(employee, `employee-${index + 1}`),
+      name: employee.name || [employee.firstName, employee.lastName].filter(Boolean).join(" ") || "Employee",
+      role: employee.jobTitle || employee.role || "",
+      email: employee.workEmail || employee.email || "",
+      phone: employee.phone || "",
+      status: employee.status || "Active",
+      payload: employee,
+      updated_at: employee.updatedAt || new Date().toISOString(),
+    }),
+  },
+  services: {
+    table: "services",
+    get: () => services,
+    set: (rows) => {
+      services = rows;
+    },
+    toRow: (service, index) => ({
+      app_id: payloadId(service, `service-${index + 1}`),
+      title: service.name || service.title || "Service",
+      description: service.description || "",
+      default_amount: cleanNumber(service.price || service.defaultAmount),
+      currency: service.currency || "LKR",
+      payload: service,
+      updated_at: service.updatedAt || new Date().toISOString(),
+    }),
+  },
+  invoices: {
+    table: "invoices",
+    get: () => invoices,
+    set: (rows) => {
+      invoices = rows;
+    },
+    toRow: (invoice, index) => ({
+      app_id: payloadId(invoice, `invoice-${index + 1}`),
+      document_type: invoice.documentType || "Invoice",
+      invoice_no: invoice.invoiceNumber || `DOC-${index + 1}`,
+      client_name: invoice.customerName || "Customer",
+      issue_date: cleanDate(invoice.invoiceDate),
+      due_date: cleanDate(invoice.dueDate || invoice.invoiceDate),
+      status: invoice.status || "Unpaid",
+      currency: invoice.currency || invoice.invoiceCurrency || settings.currencyLabel || "LKR",
+      subtotal: invoiceSubtotalValue(invoice),
+      tax: invoiceSubtotalValue(invoice) * (cleanNumber(invoice.taxRate) / 100),
+      discount: cleanNumber(invoice.discount),
+      advance_paid: cleanNumber(invoice.advancePaid),
+      total: invoiceTotalValue(invoice),
+      payload: invoice,
+      updated_at: invoice.updatedAt || new Date().toISOString(),
+    }),
+  },
+  projects: {
+    table: "projects",
+    get: () => projects,
+    set: (rows) => {
+      projects = rows;
+    },
+    toRow: (project, index) => ({
+      app_id: payloadId(project, `project-${index + 1}`),
+      client_name: project.clientName || project.name || "Client",
+      project_name: project.name || project.projectName || "Project",
+      month: project.month || today().slice(0, 7),
+      status: project.paymentStatus || project.status || "Waiting",
+      currency: cleanNumber(project.valueUsd) ? "USD" : "LKR",
+      project_value: cleanNumber(project.valueLkr || project.valueUsd),
+      advance_received: cleanNumber(project.advance),
+      pay_for_work: cleanNumber(project.payForWork),
+      paid_for_work: cleanNumber(project.paidForWork),
+      note: project.note || "",
+      payload: project,
+      updated_at: project.updatedAt || new Date().toISOString(),
+    }),
+  },
+  socialMediaPosts: {
+    table: "social_media_posts",
+    get: () => socialMediaPosts,
+    set: (rows) => {
+      socialMediaPosts = rows;
+    },
+    toRow: (post, index) => ({
+      app_id: payloadId(post, `post-${index + 1}`),
+      client_name: post.clientName || "Client",
+      project_name: post.projectName || "Project",
+      posted_date: cleanDate(post.postedDate || post.date),
+      post_count: cleanNumber(post.count || post.postCount || 1) || 1,
+      platforms: Array.isArray(post.platforms) ? post.platforms : [post.platform].filter(Boolean),
+      platform_links: post.platformLinks || {},
+      note: post.note || post.remarks || "",
+      payload: post,
+      updated_at: post.updatedAt || new Date().toISOString(),
+    }),
+  },
+  financeRecords: {
+    table: "finance_records",
+    get: () => financeRecords,
+    set: (rows) => {
+      financeRecords = rows;
+    },
+    toRow: (record, index) => ({
+      app_id: payloadId(record, `finance-${index + 1}`),
+      record_date: cleanDate(record.date),
+      month: String(record.date || today()).slice(0, 7),
+      type: record.type || "expense",
+      category: record.category || "General",
+      amount: cleanNumber(record.amount),
+      status: record.status || "unpaid",
+      source_type: record.sourceType || "",
+      source_id: record.sourceId || "",
+      repeat: record.repeat || "none",
+      note: record.note || "",
+      payload: record,
+      updated_at: record.updatedAt || new Date().toISOString(),
+    }),
+  },
+  renewals: {
+    table: "renewals",
+    get: () => renewals,
+    set: (rows) => {
+      renewals = rows;
+    },
+    toRow: (renewal, index) => ({
+      app_id: payloadId(renewal, `renewal-${index + 1}`),
+      name: renewal.name || "Renewal",
+      renewal_type: renewal.type || renewal.renewalType || "Renewal",
+      renewal_date: cleanDate(renewal.date || renewal.renewalDate),
+      amount: cleanNumber(renewal.amount),
+      status: renewal.status || "Active",
+      note: renewal.note || "",
+      payload: renewal,
+      updated_at: renewal.updatedAt || new Date().toISOString(),
+    }),
+  },
+  websiteLogins: {
+    table: "website_logins",
+    get: () => websiteLogins,
+    set: (rows) => {
+      websiteLogins = rows;
+    },
+    toRow: (login, index) => ({
+      app_id: payloadId(login, `login-${index + 1}`),
+      website_name: login.websiteName || "Website",
+      website_login_url: login.websiteLoginUrl || "",
+      username: login.username || "",
+      password_encrypted: login.password || "",
+      domain_source: login.domainSource || "",
+      domain_login_url: login.domainLoginUrl || "",
+      hosting_provider: login.hostingProvider || "",
+      hosting_login_url: login.hostingLoginUrl || "",
+      domain_renewal_date: login.domainRenewalDate || null,
+      hosting_renewal_date: login.hostingRenewalDate || null,
+      note: login.note || "",
+      payload: login,
+      updated_at: login.updatedAt || new Date().toISOString(),
+    }),
+  },
+  pmNotifications: {
+    table: "notifications",
+    get: () => pmNotifications,
+    set: (rows) => {
+      pmNotifications = rows;
+    },
+    toRow: (notification, index) => ({
+      app_id: payloadId(notification, `notification-${index + 1}`),
+      type: notification.type || "Notification",
+      title: notification.title || notification.message || "Notification",
+      message: notification.message || "",
+      status: notification.status || "Unread",
+      payload: notification,
+    }),
+  },
+};
+
+const supabaseAppDataCollections = {
+  users: {
+    get: () => users,
+    set: (value) => {
+      users = hardenDefaultUserAccess((Array.isArray(value) && value.length ? value : defaultUsers()).map(normalizeUser));
+    },
+  },
+  managerHandles: {
+    get: () => managerHandles,
+    set: (value) => {
+      managerHandles = Array.isArray(value) ? value : [];
+    },
+  },
+  corrections: {
+    get: () => corrections,
+    set: (value) => {
+      corrections = Array.isArray(value) ? value : [];
+    },
+  },
+  monthlyPostReports: {
+    get: () => monthlyPostReports,
+    set: (value) => {
+      monthlyPostReports = Array.isArray(value) ? value : [];
+    },
+  },
+  projectTargets: {
+    get: () => projectTargets,
+    set: (value) => {
+      projectTargets = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    },
+  },
+};
+
+const supabaseSyncTimers = {};
+
+function syncCollectionToSupabase(collection) {
+  if (!supabaseReady()) return;
+  window.clearTimeout(supabaseSyncTimers[collection]);
+  supabaseSyncTimers[collection] = window.setTimeout(() => {
+    writeCollectionToSupabase(collection).catch((error) => {
+      console.error(error);
+      showToast(`Supabase save failed: ${collection}`);
+    });
+  }, 350);
+}
+
+function syncAllCollectionsToSupabase() {
+  Object.keys(supabaseDirectCollections).forEach(syncCollectionToSupabase);
+  Object.keys(supabaseAppDataCollections).forEach(syncCollectionToSupabase);
+  syncCollectionToSupabase("settings");
+}
+
+async function deleteSupabaseRows(table) {
+  const response = await fetch(supabaseTableUrl(table, "?app_id=not.is.null"), {
+    method: "DELETE",
+    headers: supabaseTableHeaders({ Prefer: "return=minimal" }),
+  });
+  if (!response.ok) throw new Error(await response.text());
+}
+
+async function insertSupabaseRows(table, rows) {
+  if (!rows.length) return;
+  const response = await fetch(supabaseTableUrl(table), {
+    method: "POST",
+    headers: supabaseTableHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+    body: JSON.stringify(rows),
+  });
+  if (!response.ok) throw new Error(await response.text());
+}
+
+async function writeCollectionToSupabase(collection) {
+  if (!supabaseReady()) return false;
+  if (collection === "settings") {
+    const response = await fetch(supabaseTableUrl("app_settings"), {
+      method: "POST",
+      headers: supabaseTableHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify({ id: "default", payload: settings, updated_at: new Date().toISOString() }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    return true;
+  }
+  const direct = supabaseDirectCollections[collection];
+  if (direct) {
+    const rows = direct.get().map(direct.toRow);
+    await deleteSupabaseRows(direct.table);
+    await insertSupabaseRows(direct.table, rows);
+    return true;
+  }
+  const appData = supabaseAppDataCollections[collection];
+  if (appData) {
+    const response = await fetch(supabaseTableUrl("app_data", `?collection=eq.${encodeURIComponent(collection)}`), {
+      method: "DELETE",
+      headers: supabaseTableHeaders({ Prefer: "return=minimal" }),
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const insertResponse = await fetch(supabaseTableUrl("app_data"), {
+      method: "POST",
+      headers: supabaseTableHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify({ collection, app_id: "main", payload: appData.get(), updated_at: new Date().toISOString() }),
+    });
+    if (!insertResponse.ok) throw new Error(await insertResponse.text());
+    return true;
+  }
+  return false;
+}
+
+async function readTablePayloads(table) {
+  const response = await fetch(supabaseTableUrl(table, "?select=payload,updated_at&order=updated_at.desc"), {
+    headers: supabaseTableHeaders(),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const rows = await response.json();
+  return rows.map((row) => row.payload).filter(Boolean);
+}
+
+async function readAppDataPayload(collection, fallback) {
+  const response = await fetch(supabaseTableUrl("app_data", `?collection=eq.${encodeURIComponent(collection)}&app_id=eq.main&select=payload&limit=1`), {
+    headers: supabaseTableHeaders(),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const rows = await response.json();
+  return rows[0]?.payload ?? fallback;
+}
+
+async function loadAllDataFromSupabase() {
+  if (!supabaseReady()) {
+    showToast("Supabase config missing");
+    return false;
+  }
+  try {
+    const directEntries = Object.entries(supabaseDirectCollections);
+    const directData = await Promise.all(directEntries.map(([, config]) => readTablePayloads(config.table)));
+    directEntries.forEach(([collection, config], index) => config.set(directData[index]));
+
+    const appDataEntries = Object.entries(supabaseAppDataCollections);
+    const appData = await Promise.all(appDataEntries.map(([collection, config]) => readAppDataPayload(collection, config.get())));
+    appDataEntries.forEach(([collection, config], index) => config.set(appData[index]));
+
+    const settingsResponse = await fetch(supabaseTableUrl("app_settings", "?id=eq.default&select=payload&limit=1"), {
+      headers: supabaseTableHeaders(),
+    });
+    if (settingsResponse.ok) {
+      const settingsRows = await settingsResponse.json();
+      settings = { ...defaultSettings, ...(settingsRows[0]?.payload || {}) };
+    }
+    selectedInvoiceId = invoices[0]?.id || null;
+    return true;
+  } catch (error) {
+    console.error(error);
+    showToast("Supabase data load failed");
+    return false;
+  }
+}
+
+function readOldLocalJson(key, fallback) {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function removeOldLocalData() {
+  [
+    STORAGE_KEY,
+    SETTINGS_KEY,
+    CLIENTS_KEY,
+    PROJECTS_KEY,
+    PROJECT_TARGETS_KEY,
+    FINANCE_KEY,
+    SERVICES_KEY,
+    RENEWALS_KEY,
+    WEBSITE_LOGINS_KEY,
+    EMPLOYEES_KEY,
+    USERS_KEY,
+    CURRENT_USER_KEY,
+    AUTH_SESSION_KEY,
+    MANAGER_HANDLES_KEY,
+    SOCIAL_POSTS_KEY,
+    CORRECTIONS_KEY,
+    PM_NOTIFICATIONS_KEY,
+    MONTHLY_POST_REPORTS_KEY,
+    CLOUD_BACKUP_KEY,
+  ].forEach((key) => localStorage.removeItem(key));
+}
+
+function oldLocalDataExists() {
+  return [
+    STORAGE_KEY,
+    CLIENTS_KEY,
+    PROJECTS_KEY,
+    FINANCE_KEY,
+    SERVICES_KEY,
+    RENEWALS_KEY,
+    WEBSITE_LOGINS_KEY,
+    EMPLOYEES_KEY,
+    USERS_KEY,
+    MANAGER_HANDLES_KEY,
+    SOCIAL_POSTS_KEY,
+    SETTINGS_KEY,
+  ].some((key) => localStorage.getItem(key) !== null);
+}
+
+function migrateOldLocalDataToSupabase() {
+  if (!oldLocalDataExists()) return false;
+  const supabaseAlreadyHasData = invoices.length || clients.length || projects.length || financeRecords.length || socialMediaPosts.length;
+  if (supabaseAlreadyHasData) {
+    removeOldLocalData();
+    return false;
+  }
+  invoices = readOldLocalJson(STORAGE_KEY, []);
+  clients = readOldLocalJson(CLIENTS_KEY, []);
+  projects = readOldLocalJson(PROJECTS_KEY, []);
+  projectTargets = readOldLocalJson(PROJECT_TARGETS_KEY, {});
+  financeRecords = readOldLocalJson(FINANCE_KEY, []);
+  services = readOldLocalJson(SERVICES_KEY, []);
+  renewals = readOldLocalJson(RENEWALS_KEY, []);
+  websiteLogins = readOldLocalJson(WEBSITE_LOGINS_KEY, []);
+  employees = readOldLocalJson(EMPLOYEES_KEY, []);
+  users = hardenDefaultUserAccess(readOldLocalJson(USERS_KEY, defaultUsers()).map(normalizeUser));
+  managerHandles = readOldLocalJson(MANAGER_HANDLES_KEY, []);
+  socialMediaPosts = readOldLocalJson(SOCIAL_POSTS_KEY, []);
+  corrections = readOldLocalJson(CORRECTIONS_KEY, []);
+  pmNotifications = readOldLocalJson(PM_NOTIFICATIONS_KEY, []);
+  monthlyPostReports = readOldLocalJson(MONTHLY_POST_REPORTS_KEY, []);
+  settings = { ...defaultSettings, ...readOldLocalJson(SETTINGS_KEY, {}) };
+  removeOldLocalData();
+  syncAllCollectionsToSupabase();
+  showToast("Old browser data moved to Supabase");
+  return true;
 }
 
 function addSheetDetailsToProjectsAndClients() {
-  const hasSavedProjects = localStorage.getItem(PROJECTS_KEY) !== null;
-  const hasSavedClients = localStorage.getItem(CLIENTS_KEY) !== null;
-  if (hasSavedProjects || hasSavedClients) {
-    return;
-  }
+  if (projects.length || clients.length) return;
 
   let changedProjects = false;
   let changedClients = false;
@@ -682,7 +1072,7 @@ function addSheetDetailsToProjectsAndClients() {
 }
 
 function seedDefaultServices() {
-  if (localStorage.getItem(SERVICES_KEY) !== null || services.length) return;
+  if (services.length) return;
   services = defaultServices.map((service, index) => ({
     id: `default-service-${index + 1}`,
     updatedAt: new Date().toISOString(),
@@ -942,8 +1332,6 @@ async function loginUser(username, password) {
     saveUsers();
   }
   currentUserId = user.id;
-  localStorage.setItem(AUTH_SESSION_KEY, currentUserId);
-  localStorage.setItem(CURRENT_USER_KEY, currentUserId);
   loginForm.reset();
   applyAccessControl();
   switchView(firstAllowedView());
@@ -953,7 +1341,6 @@ async function loginUser(username, password) {
 
 function logoutUser() {
   currentUserId = "";
-  localStorage.removeItem(AUTH_SESSION_KEY);
   loginForm.reset();
   applyAccessControl();
 }
@@ -1995,23 +2382,23 @@ function applyBackupData(backup) {
   if (!Array.isArray(data.invoices) || !Array.isArray(data.clients)) {
     throw new Error("Invalid backup file");
   }
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(data.invoices || []));
-  localStorage.setItem(CLIENTS_KEY, JSON.stringify(data.clients || []));
-  localStorage.setItem(PROJECTS_KEY, JSON.stringify(data.projects || []));
-  localStorage.setItem(PROJECT_TARGETS_KEY, JSON.stringify(data.projectTargets || {}));
-  localStorage.setItem(FINANCE_KEY, JSON.stringify(data.financeRecords || []));
-  localStorage.setItem(SERVICES_KEY, JSON.stringify(data.services || []));
-  localStorage.setItem(RENEWALS_KEY, JSON.stringify(data.renewals || []));
-  localStorage.setItem(WEBSITE_LOGINS_KEY, JSON.stringify(data.websiteLogins || []));
-  localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(data.employees || []));
-  localStorage.setItem(USERS_KEY, JSON.stringify(data.users || defaultUsers()));
-  localStorage.setItem(MANAGER_HANDLES_KEY, JSON.stringify(data.managerHandles || []));
-  localStorage.setItem(SOCIAL_POSTS_KEY, JSON.stringify(data.socialMediaPosts || []));
-  localStorage.setItem(CORRECTIONS_KEY, JSON.stringify(data.corrections || []));
-  localStorage.setItem(PM_NOTIFICATIONS_KEY, JSON.stringify(data.pmNotifications || []));
-  localStorage.setItem(MONTHLY_POST_REPORTS_KEY, JSON.stringify(data.monthlyPostReports || []));
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...defaultSettings, ...(data.settings || {}) }));
-  refreshStateFromStorage();
+  invoices = data.invoices || [];
+  clients = data.clients || [];
+  projects = data.projects || [];
+  projectTargets = data.projectTargets || {};
+  financeRecords = data.financeRecords || [];
+  services = data.services || [];
+  renewals = data.renewals || [];
+  websiteLogins = data.websiteLogins || [];
+  employees = data.employees || [];
+  users = hardenDefaultUserAccess((data.users || defaultUsers()).map(normalizeUser));
+  managerHandles = data.managerHandles || [];
+  socialMediaPosts = data.socialMediaPosts || [];
+  corrections = data.corrections || [];
+  pmNotifications = data.pmNotifications || [];
+  monthlyPostReports = data.monthlyPostReports || [];
+  settings = { ...defaultSettings, ...(data.settings || {}) };
+  syncAllCollectionsToSupabase();
   resetForm();
   resetClientForm();
   resetProjectForm();
@@ -6115,24 +6502,28 @@ document.getElementById("logoInput").addEventListener("change", (event) => {
   reader.readAsDataURL(file);
 });
 
-populateCountrySelects();
-populateFinanceCategories();
-addSheetDetailsToProjectsAndClients();
-seedDefaultServices();
-resetForm();
-resetClientForm();
-resetEmployeeForm();
-resetProjectForm();
-resetServiceForm();
-resetRenewalForm();
-resetWebsiteLoginForm();
-resetUserForm();
-resetManagerHandleForm();
-resetSocialPostForm();
-resetCorrectionForm();
-resetFinanceForm();
-renderAll();
-updatePreviewZoom();
-updatePreviewVisibility();
-restoreCloudOnEmptyLocalData();
-runDailyCloudBackup();
+async function startApp() {
+  populateCountrySelects();
+  populateFinanceCategories();
+  await loadAllDataFromSupabase();
+  migrateOldLocalDataToSupabase();
+  addSheetDetailsToProjectsAndClients();
+  seedDefaultServices();
+  resetForm();
+  resetClientForm();
+  resetEmployeeForm();
+  resetProjectForm();
+  resetServiceForm();
+  resetRenewalForm();
+  resetWebsiteLoginForm();
+  resetUserForm();
+  resetManagerHandleForm();
+  resetSocialPostForm();
+  resetCorrectionForm();
+  resetFinanceForm();
+  renderAll();
+  updatePreviewZoom();
+  updatePreviewVisibility();
+}
+
+startApp();
