@@ -119,6 +119,8 @@ let portalCalendarPinned = false;
 let pendingEmployeePhotoDataUrl = "";
 const visibleWebsitePasswords = new Set();
 
+let appIsStarting = true;
+
 const navTabs = document.querySelectorAll(".nav-tab");
 const views = {
   dashboard: document.getElementById("dashboardView"),
@@ -172,6 +174,7 @@ const employeeSearchInput = document.getElementById("employeeSearchInput");
 const employeeStatusFilter = document.getElementById("employeeStatusFilter");
 const appShell = document.getElementById("appShell");
 const loginScreen = document.getElementById("loginScreen");
+const appPreloader = document.getElementById("appPreloader");
 const loginForm = document.getElementById("loginForm");
 const userMenuButton = document.getElementById("userMenuButton");
 const userMenu = document.getElementById("userMenu");
@@ -976,7 +979,7 @@ function syncAllCollectionsToSupabase() {
 }
 
 async function deleteSupabaseRows(table) {
-  const response = await fetch(supabaseTableUrl(table, "?app_id=not.is.null"), {
+  const response = await fetch(supabaseTableUrl(table, "?id=not.is.null"), {
     method: "DELETE",
     headers: supabaseTableHeaders({ Prefer: "return=minimal" }),
   });
@@ -1052,6 +1055,7 @@ async function loadAllDataFromSupabase() {
     showToast("Supabase config missing");
     return false;
   }
+  let hasLoadError = false;
   try {
     const directEntries = Object.entries(supabaseDirectCollections);
     const directData = await Promise.allSettled(directEntries.map(([, config]) => readTableRows(config)));
@@ -1060,6 +1064,7 @@ async function loadAllDataFromSupabase() {
       if (result.status === "fulfilled") {
         config.set(result.value);
       } else {
+        hasLoadError = true;
         console.error(`Supabase load failed: ${collection}`, result.reason);
       }
     });
@@ -1071,6 +1076,7 @@ async function loadAllDataFromSupabase() {
       if (result.status === "fulfilled") {
         config.set(result.value);
       } else {
+        hasLoadError = true;
         console.error(`Supabase app data load failed: ${collection}`, result.reason);
       }
     });
@@ -1083,7 +1089,8 @@ async function loadAllDataFromSupabase() {
       settings = { ...defaultSettings, ...(settingsRows[0]?.payload || {}) };
     }
     selectedInvoiceId = invoices[0]?.id || null;
-    return true;
+    if (hasLoadError) showToast("Some Supabase tables could not load");
+    return !hasLoadError;
   } catch (error) {
     console.error(error);
     showToast("Supabase data load failed");
@@ -1423,6 +1430,14 @@ function firstAllowedView() {
 }
 
 function applyAccessControl() {
+  if (appIsStarting) {
+    appPreloader.classList.remove("is-hidden");
+    loginScreen.classList.add("is-loading");
+    appShell.classList.add("is-locked");
+    return;
+  }
+  appPreloader.classList.add("is-hidden");
+  loginScreen.classList.remove("is-loading");
   const loggedIn = isLoggedIn();
   appShell.classList.toggle("is-locked", !loggedIn);
   loginScreen.classList.toggle("is-hidden", loggedIn);
@@ -6664,12 +6679,19 @@ document.getElementById("logoInput").addEventListener("change", (event) => {
 });
 
 async function startApp() {
+  appIsStarting = true;
+  applyAccessControl();
   populateCountrySelects();
   populateFinanceCategories();
-  await loadAllDataFromSupabase();
-  migrateOldLocalDataToSupabase();
-  addSheetDetailsToProjectsAndClients();
-  seedDefaultServices();
+  const supabaseLoaded = await loadAllDataFromSupabase();
+  if (supabaseLoaded) {
+    migrateOldLocalDataToSupabase();
+    seedDefaultServices();
+  } else {
+    users = [];
+    currentUserId = "";
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+  }
   resetForm();
   resetClientForm();
   resetEmployeeForm();
@@ -6682,6 +6704,7 @@ async function startApp() {
   resetSocialPostForm();
   resetCorrectionForm();
   resetFinanceForm();
+  appIsStarting = false;
   renderAll();
   updatePreviewZoom();
   updatePreviewVisibility();
