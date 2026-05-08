@@ -1169,8 +1169,98 @@ h2 {
 }
 
 .employees-grid {
-  grid-template-columns: minmax(420px, 0.82fr) minmax(0, 1.18fr);
+  grid-template-columns: 1fr;
   gap: 18px;
+}
+
+.employee-list-panel {
+  min-width: 0;
+}
+
+.employee-modal .employee-modal-panel {
+  z-index: 1;
+  width: min(980px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  overflow-x: hidden;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.26);
+}
+
+.employee-modal .employee-form {
+  gap: 12px;
+}
+
+.employee-modal .employee-section-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.admin-form-source-hidden {
+  display: none !important;
+}
+
+#clientsView .admin-list-panel,
+#renewalsView .admin-list-panel,
+#loginsView .admin-list-panel,
+#usersView .panel:last-child {
+  grid-column: 1 / -1;
+}
+
+.admin-record-modal .admin-modal-panel {
+  z-index: 1;
+  width: min(880px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  overflow-x: hidden;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.26);
+}
+
+.admin-modal-body .admin-form,
+.admin-modal-body > .form-grid,
+.admin-modal-body .client-form {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  box-shadow: none;
+  border: 0;
+  padding: 0;
+}
+
+.admin-modal-body .wide,
+.admin-modal-body .access-picker,
+.admin-modal-body .save-button {
+  grid-column: 1 / -1;
+}
+
+.admin-modal-body .save-button {
+  width: min(260px, 100%);
+  margin-left: auto;
+}
+
+.modal-icon-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.modal-icon-button {
+  width: 40px;
+  height: 40px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid #dbe3ec;
+  border-radius: 12px;
+  background: #eef4fb;
+  color: #172033;
+  cursor: pointer;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.modal-icon-button:hover {
+  background: #e2ebf5;
 }
 
 .employee-form {
@@ -1311,26 +1401,46 @@ h2 {
 .employee-cell {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
+  min-width: 0;
+}
+
+.employee-name-stack,
+.employee-meta-cell {
+  display: grid;
+  gap: 3px;
   min-width: 0;
 }
 
 .employee-cell strong,
-.employee-cell span {
+.employee-cell span,
+.employee-meta-cell strong,
+.employee-meta-cell span {
   display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.employee-cell span {
+.employee-cell strong,
+.employee-meta-cell strong {
+  color: #101827;
+  font-size: 0.95rem;
+  line-height: 1.25;
+}
+
+.employee-cell span,
+.employee-meta-cell span {
   color: #64748b;
-  font-size: 0.84rem;
-  margin-top: 3px;
+  font-size: 0.78rem;
+  line-height: 1.25;
 }
 
 .employee-avatar {
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   flex: 0 0 auto;
+  object-fit: cover;
 }
 
 .employee-avatar-fallback {
@@ -1341,6 +1451,17 @@ h2 {
   font-weight: 700;
 }
 
+.employee-type-pill {
+  width: max-content;
+  max-width: 100%;
+  border-radius: 999px;
+  background: #eef4fb;
+  color: #334155 !important;
+  padding: 3px 9px;
+  font-size: 0.74rem !important;
+  font-weight: 700;
+}
+
 .employee-table {
   min-width: 0;
   table-layout: fixed;
@@ -1348,38 +1469,52 @@ h2 {
 
 .employee-table th,
 .employee-table td {
-  padding: 12px 10px;
-  white-space: normal;
+  padding: 11px 12px;
+  vertical-align: middle;
+  white-space: nowrap;
 }
 
 .employee-table th:nth-child(1),
 .employee-table td:nth-child(1) {
-  width: 32%;
+  width: 56px;
+  text-align: center;
 }
 
 .employee-table th:nth-child(2),
 .employee-table td:nth-child(2) {
-  width: 22%;
+  width: 28%;
 }
 
 .employee-table th:nth-child(3),
 .employee-table td:nth-child(3) {
-  width: 20%;
+  width: 27%;
 }
 
 .employee-table th:nth-child(4),
 .employee-table td:nth-child(4) {
-  width: 82px;
+  width: 22%;
 }
 
 .employee-table th:nth-child(5),
 .employee-table td:nth-child(5) {
   width: 92px;
+  text-align: center;
 }
 
 .employee-table th:nth-child(6),
 .employee-table td:nth-child(6) {
-  width: 82px;
+  width: 104px;
+}
+
+.employee-table th:nth-child(7),
+.employee-table td:nth-child(7) {
+  width: 96px;
+  text-align: center;
+}
+
+.employee-table .icon-actions {
+  justify-content: center;
+  flex-wrap: nowrap;
 }
 
 .admin-workspace {
@@ -1552,9 +1687,17 @@ h2 {
   background: #fbfdff;
 }
 
+.row-number-cell,
+.row-number-heading {
+  width: 56px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 700;
+}
+
 .client-table th:nth-child(1),
 .client-table td:nth-child(1) {
-  width: 86px;
+  width: 56px;
 }
 
 .client-table th:nth-child(2),
@@ -3789,6 +3932,38 @@ textarea {
   align-self: end;
 }
 
+.finance-record-modal .finance-modal-panel {
+  z-index: 1;
+  width: min(880px, calc(100vw - 32px));
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  overflow-x: hidden;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, 0.26);
+}
+
+.finance-record-modal .finance-form {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  box-shadow: none;
+  padding: 0;
+  border: 0;
+}
+
+.finance-record-modal .finance-form .wide {
+  grid-column: 1 / -1;
+}
+
+.finance-modal-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding-top: 6px;
+}
+
+.finance-modal-actions .save-button {
+  width: min(260px, 100%);
+}
+
 .pagination-controls {
   display: flex;
   justify-content: flex-end;
@@ -3857,6 +4032,22 @@ textarea {
   background: #f8fafc;
   color: #64748b;
   padding: 13px 16px;
+}
+
+#financeView table th:first-child,
+#financeView table .row-number-cell {
+  width: 56px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.client-table th:first-child,
+.client-table .row-number-cell {
+  width: 56px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 700;
 }
 
 .finance-panel > .table-wrap td {
@@ -5182,6 +5373,29 @@ textarea {
   .employee-section-grid,
   .cloud-backup-grid {
     grid-template-columns: 1fr !important;
+  }
+
+  .finance-record-modal .finance-form {
+    grid-template-columns: 1fr !important;
+  }
+
+  .employee-modal .employee-section-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .admin-modal-body .admin-form,
+  .admin-modal-body > .form-grid,
+  .admin-modal-body .client-form {
+    grid-template-columns: 1fr !important;
+  }
+
+  .finance-modal-actions {
+    flex-direction: column-reverse;
+  }
+
+  .finance-modal-actions .save-button,
+  .finance-modal-actions .secondary-action {
+    width: 100%;
   }
 
   .admin-form-panel,

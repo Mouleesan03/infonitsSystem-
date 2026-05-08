@@ -17,7 +17,7 @@ const CORRECTIONS_KEY = "infonits.corrections";
 const PM_NOTIFICATIONS_KEY = "infonits.notifications";
 const MONTHLY_POST_REPORTS_KEY = "infonits.monthlyPostReports";
 const CLOUD_BACKUP_KEY = "infonits.cloudBackup";
-const FINANCE_PAGE_SIZE = 8;
+const FINANCE_PAGE_SIZE = 7;
 const RECENT_INVOICE_PAGE_SIZE = 8;
 const CLIENT_PAGE_SIZE = 10;
 const INVOICE_PAGE_SIZE = 10;
@@ -1711,6 +1711,90 @@ function closeInvoiceModal() {
   updatePreviewVisibility();
 }
 
+function openFinanceRecordModal() {
+  resetFinanceForm();
+  const modal = document.getElementById("financeRecordModal");
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
+  document.getElementById("financeAmount").focus();
+}
+
+function closeFinanceRecordModal() {
+  const modal = document.getElementById("financeRecordModal");
+  modal.classList.remove("is-open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function openEmployeeModal() {
+  resetEmployeeForm();
+  document.getElementById("employeeModalTitle").textContent = "Add employee";
+  const modal = document.getElementById("employeeModal");
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
+  document.getElementById("employeeFirstName").focus();
+}
+
+function closeEmployeeModal() {
+  const modal = document.getElementById("employeeModal");
+  modal.classList.remove("is-open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function setupAdminFormModals() {
+  [
+    ["#clientsView .admin-form-panel", "clientForm", "clientModalBody"],
+    ["#renewalsView .admin-form-panel", "renewalForm", "renewalModalBody"],
+    ["#loginsView .admin-form-panel", "websiteLoginForm", "websiteLoginModalBody"],
+    ["#usersView .panel:first-child", "userForm", "userModalBody"],
+  ].forEach(([panelSelector, formId, bodyId]) => {
+    const panel = document.querySelector(panelSelector);
+    const form = document.getElementById(formId);
+    const body = document.getElementById(bodyId);
+    if (!panel || !form || !body || form.parentElement === body) return;
+    body.appendChild(form);
+    panel.classList.add("admin-form-source-hidden");
+  });
+}
+
+function setModalOpen(id, isOpen) {
+  const modal = document.getElementById(id);
+  if (!modal) return;
+  modal.classList.toggle("is-open", isOpen);
+  modal.setAttribute("aria-hidden", isOpen ? "false" : "true");
+}
+
+function openClientModal(mode = "add") {
+  if (mode === "add") resetClientForm();
+  document.getElementById("clientModalTitle").textContent = mode === "edit" ? "Edit customer" : "Add customer";
+  setModalOpen("clientModal", true);
+  document.getElementById("clientName").focus();
+}
+
+function openRenewalModal(mode = "add") {
+  if (mode === "add") resetRenewalForm();
+  document.getElementById("renewalModalTitle").textContent = mode === "edit" ? "Edit subscription" : "Add subscription";
+  setModalOpen("renewalModal", true);
+  document.getElementById("renewalName").focus();
+}
+
+function openWebsiteLoginModal(mode = "add") {
+  if (mode === "add") resetWebsiteLoginForm();
+  document.getElementById("websiteLoginModalTitle").textContent = mode === "edit" ? "Edit portal access" : "Add portal access";
+  setModalOpen("websiteLoginModal", true);
+  document.getElementById("websiteName").focus();
+}
+
+function openUserModal(mode = "add") {
+  if (mode === "add") resetUserForm();
+  document.getElementById("userModalTitle").textContent = mode === "edit" ? "Edit user" : "Add user";
+  setModalOpen("userModal", true);
+  document.getElementById("userName").focus();
+}
+
+function closeAdminRecordModals() {
+  ["clientModal", "renewalModal", "websiteLoginModal", "userModal"].forEach((id) => setModalOpen(id, false));
+}
+
 function populateCountrySelects() {
   const options = countries.map((country) => `<option value="${escapeAttribute(country)}">${escapeHtml(country)}</option>`).join("");
   document.getElementById("customerCountry").innerHTML = options;
@@ -2400,6 +2484,7 @@ function editClient(id) {
   document.getElementById("clientCountry").value = client.country || "Sri Lanka";
   document.getElementById("clientAddress").value = client.address;
   switchView("clients");
+  openClientModal("edit");
 }
 
 function deleteClient(id) {
@@ -2485,6 +2570,10 @@ function editEmployee(id) {
   if (employee.profilePhoto) preview.src = employee.profilePhoto;
   else preview.removeAttribute("src");
   switchView("employees");
+  document.getElementById("employeeModalTitle").textContent = "Edit employee";
+  const modal = document.getElementById("employeeModal");
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
 }
 
 function deleteEmployee(id) {
@@ -3259,8 +3348,8 @@ function renderQuotationTable() {
 
   const table = document.getElementById("quotationTable");
   table.innerHTML = filtered.length
-    ? filtered.map((invoice) => documentRow(invoice)).join("")
-    : emptyRow("No matching quotations", 7);
+    ? filtered.map((invoice, index) => documentRow(invoice, false, index + 1)).join("")
+    : emptyRow("No matching quotations", 8);
 }
 
 function documentRow(invoice, includeType = false, rowNumber = null) {
@@ -3332,8 +3421,9 @@ function renderClients() {
   table.innerHTML = pageClients.length
     ? pageClients
         .map(
-          (client) => `
+          (client, index) => `
             <tr>
+              <td class="row-number-cell">${start + index + 1}</td>
               <td>${escapeHtml(client.clientCode)}</td>
               <td>${escapeHtml(client.name)}</td>
               <td>${escapeHtml([client.email, formatPhone(client.phone)].filter(Boolean).join(" | "))}</td>
@@ -3349,7 +3439,7 @@ function renderClients() {
           `,
         )
         .join("")
-    : emptyRow("No saved clients yet", 5);
+    : emptyRow("No saved clients yet", 6);
   document.getElementById("clientPrevPage").disabled = clientPage <= 1;
   document.getElementById("clientNextPage").disabled = clientPage >= totalPages;
   document.getElementById("clientPageLabel").textContent = `Page ${clientPage} of ${totalPages}`;
@@ -3379,24 +3469,39 @@ function renderEmployees() {
 
   document.getElementById("employeeTable").innerHTML = rows.length
     ? rows
-        .map((employee) => {
+        .map((employee, index) => {
           const fullName = `${employee.firstName || ""} ${employee.lastName || ""}`.trim();
           const photo = employee.profilePhoto
             ? `<img class="employee-avatar" src="${escapeAttribute(employee.profilePhoto)}" alt="${escapeAttribute(fullName)}" />`
             : `<span class="employee-avatar employee-avatar-fallback">${escapeHtml((employee.firstName || "E").slice(0, 1))}</span>`;
+          const contactEmail = employee.workEmail || employee.personalEmail || "";
+          const contactPhone = formatPhone(employee.phone);
+          const jobTitle = [employee.department, employee.jobTitle].filter(Boolean).join(" | ");
+          const employmentType = employee.employmentType || "";
           return `
             <tr>
+              <td class="row-number-cell">${index + 1}</td>
               <td>
                 <div class="employee-cell">
                   ${photo}
-                  <div>
+                  <div class="employee-name-stack">
                     <strong>${escapeHtml(fullName)}</strong>
                     <span>${escapeHtml(employee.employeeCode || "")}</span>
                   </div>
                 </div>
               </td>
-              <td>${escapeHtml([employee.workEmail || employee.personalEmail, formatPhone(employee.phone)].filter(Boolean).join(" | "))}</td>
-              <td>${escapeHtml([employee.department, employee.jobTitle, employee.employmentType].filter(Boolean).join(" | "))}</td>
+              <td>
+                <div class="employee-meta-cell">
+                  <strong>${escapeHtml(contactEmail || "No email")}</strong>
+                  <span>${escapeHtml(contactPhone || "No phone")}</span>
+                </div>
+              </td>
+              <td>
+                <div class="employee-meta-cell">
+                  <strong>${escapeHtml(jobTitle || "Not assigned")}</strong>
+                  ${employmentType ? `<span class="employee-type-pill">${escapeHtml(employmentType)}</span>` : ""}
+                </div>
+              </td>
               <td>${statusBadge(employee.status || "Active")}</td>
               <td>${formatDate(String(employee.updatedAt || "").slice(0, 10))}</td>
               <td>
@@ -3409,7 +3514,7 @@ function renderEmployees() {
           `;
         })
         .join("")
-    : emptyRow("No employees yet", 6);
+    : emptyRow("No employees yet", 7);
 }
 
 function getSelectedUserAccess() {
@@ -3456,6 +3561,7 @@ function editUser(id) {
   document.getElementById("userStatus").value = user.status || "Active";
   populateUserAccessOptions(user.access || roleDefaultAccess[user.role] || []);
   switchView("users");
+  openUserModal("edit");
 }
 
 function deleteUser(id) {
@@ -3478,10 +3584,11 @@ function deleteUser(id) {
 function renderUsers() {
   document.getElementById("userTable").innerHTML = users.length
     ? users
-        .map((user) => {
+        .map((user, index) => {
           const accessText = user.role === "admin" ? "Full control" : `${(user.access || []).length} sections`;
           return `
             <tr>
+              <td class="row-number-cell">${index + 1}</td>
               <td><strong>${escapeHtml(user.name)}</strong><br /><span class="muted-label">${escapeHtml(user.email || "")}</span></td>
               <td>${escapeHtml(user.username || "")}</td>
               <td>${escapeHtml(roleLabels[user.role] || user.role)}</td>
@@ -3497,7 +3604,7 @@ function renderUsers() {
           `;
         })
         .join("")
-    : emptyRow("No users yet", 6);
+    : emptyRow("No users yet", 7);
 }
 
 function getManagerHandleFormData() {
@@ -4183,13 +4290,13 @@ function updateProjectTeamFromSelect(projectId, userId) {
 
 function renderProjectManagerDashboard() {
   const month = managerMonth();
-  const activeProjects = managerProjects().filter(isActiveProject);
-  const trackedProjects = activeProjects.filter(isPostTrackedProject);
+  const visibleProjects = managerProjects();
+  const trackedProjects = visibleProjects.filter(isPostTrackedProject);
   const monthPosts = socialMediaPosts.filter((post) => postMonth(post) === month);
   const posted = groupedSocialPostCount(monthPosts);
   const required = trackedProjects.length * PM_MONTHLY_POST_TARGET;
   const remaining = Math.max(0, required - posted);
-  setText("pmActiveProjects", activeProjects.length);
+  setText("pmActiveProjects", visibleProjects.length);
   setText("pmPendingPosts", remaining);
   setText("pmUploadedPosts", posted);
   setText("pmMissedPosts", 0);
@@ -4528,8 +4635,9 @@ function renderServices() {
   document.getElementById("serviceTable").innerHTML = services.length
     ? services
         .map(
-          (service) => `
+          (service, index) => `
             <tr>
+              <td class="row-number-cell">${index + 1}</td>
               <td>${escapeHtml(service.name)}</td>
               <td>${escapeHtml(service.category || "")}</td>
               <td>${escapeHtml(service.billing || "one-time")}</td>
@@ -4544,7 +4652,7 @@ function renderServices() {
           `,
         )
         .join("")
-    : emptyRow("No saved services yet", 5);
+    : emptyRow("No saved services yet", 6);
 }
 
 function getRenewalFormData() {
@@ -4579,6 +4687,7 @@ function editRenewal(id) {
   document.getElementById("renewalStatus").value = renewal.status || "Active";
   document.getElementById("renewalNote").value = renewal.note || "";
   switchView("renewals");
+  openRenewalModal("edit");
 }
 
 function deleteRenewal(id) {
@@ -4601,8 +4710,9 @@ function renderRenewals() {
   document.getElementById("renewalTable").innerHTML = rows.length
     ? rows
         .map(
-          (renewal) => `
+          (renewal, index) => `
             <tr>
+              <td class="row-number-cell">${index + 1}</td>
               <td>${escapeHtml(renewal.clientName || "")}</td>
               <td>${escapeHtml(renewal.name)}</td>
               <td>${escapeHtml(renewal.type)}</td>
@@ -4619,7 +4729,7 @@ function renderRenewals() {
           `,
         )
         .join("")
-    : emptyRow("No renewal records yet", 7);
+    : emptyRow("No renewal records yet", 8);
 }
 
 function getWebsiteLoginFormData() {
@@ -4661,6 +4771,7 @@ function editWebsiteLogin(id) {
   document.getElementById("hostingRenewalDate").value = login.hostingRenewalDate || "";
   document.getElementById("websiteLoginNote").value = login.note || "";
   switchView("logins");
+  openWebsiteLoginModal("edit");
 }
 
 function deleteWebsiteLogin(id) {
@@ -4822,8 +4933,9 @@ function renderWebsiteLogins() {
   document.getElementById("websiteLoginTable").innerHTML = rows.length
     ? rows
         .map(
-          (login) => `
+          (login, index) => `
             <tr>
+              <td class="row-number-cell">${index + 1}</td>
               <td>
                 <strong>${escapeHtml(login.websiteName)}</strong>
                 ${login.note ? `<p class="muted-cell">${escapeHtml(login.note)}</p>` : ""}
@@ -4860,7 +4972,7 @@ function renderWebsiteLogins() {
           `,
         )
         .join("")
-    : emptyRow("No website login details yet", 7);
+    : emptyRow("No website login details yet", 8);
   if (!portalCalendarPinned) portalCalendarMonth = preferredPortalCalendarMonth();
   renderPortalCalendar();
 }
@@ -5106,12 +5218,14 @@ function renderFinance() {
     .sort((a, b) => String(financeRecordDisplayDate(b, month)).localeCompare(String(financeRecordDisplayDate(a, month))));
   const totalPages = Math.max(1, Math.ceil(rows.length / FINANCE_PAGE_SIZE));
   financePage = Math.min(financePage, totalPages);
-  const visibleRows = rows.slice((financePage - 1) * FINANCE_PAGE_SIZE, financePage * FINANCE_PAGE_SIZE);
+  const start = (financePage - 1) * FINANCE_PAGE_SIZE;
+  const visibleRows = rows.slice(start, start + FINANCE_PAGE_SIZE);
   document.getElementById("financeTable").innerHTML = visibleRows.length
     ? visibleRows
         .map(
-          (record) => `
+          (record, index) => `
             <tr>
+              <td class="row-number-cell">${start + index + 1}</td>
               <td>${formatDate(financeRecordDisplayDate(record, month))}</td>
               <td><span class="finance-type ${record.type}">${financeTypeLabel(record.type)}</span></td>
               <td>${escapeHtml(record.category)}</td>
@@ -5136,7 +5250,7 @@ function renderFinance() {
           `,
         )
         .join("")
-    : emptyRow("No finance records for this month", 7);
+    : emptyRow("No finance records for this month", 8);
   document.getElementById("financePageLabel").textContent = `Page ${financePage} of ${totalPages}`;
   document.getElementById("financePrevPage").disabled = financePage <= 1;
   document.getElementById("financeNextPage").disabled = financePage >= totalPages;
@@ -5248,10 +5362,11 @@ function managerProjectsForMonth(month) {
 }
 
 function managerMonthlyReportData(month = managerMonth()) {
-  const reportProjects = managerProjectsForMonth(month).filter(isActiveProject);
+  const reportProjects = managerProjectsForMonth(month);
+  const trackedProjects = reportProjects.filter(isPostTrackedProject);
   const groupedPosts = groupedSocialPosts(socialMediaPosts.filter((post) => postMonth(post) === month));
   const clientMap = new Map();
-  reportProjects.forEach((project) => {
+  trackedProjects.forEach((project) => {
     const clientName = project.clientName || project.name || "Client";
     if (!clientMap.has(clientName)) {
       clientMap.set(clientName, { clientName, projects: [], required: 0, posted: 0, remaining: 0 });
@@ -5352,6 +5467,7 @@ function downloadPostedRecordsPdf() {
   ctx.fillText("Client Monthly Post Details", 60, 72);
   ctx.font = "400 18px Poppins, Arial, sans-serif";
   ctx.fillText(`${fieldValue("pmPostClientFilter") || "All clients"} | ${formatMonth(month)} | Generated ${formatDate(today())}`, 60, 104);
+  drawReportBrand(ctx, canvas.width, 56);
 
   const columns = [
     ["Date", 60, 130],
@@ -5440,6 +5556,7 @@ function downloadManagerMonthlyPdfReport() {
   ctx.fillText("Manager Handle Monthly Report", 70, 82);
   ctx.font = "400 20px Poppins, Arial, sans-serif";
   ctx.fillText(`${formatMonth(month)} | Generated ${formatDate(today())}`, 70, 118);
+  drawReportBrand(ctx, canvas.width, 62);
 
   let y = 220;
   ctx.fillStyle = "#172033";
@@ -5532,6 +5649,31 @@ function drawReportHeader(ctx, columns, y) {
 function drawReportRowBg(ctx, y, index) {
   ctx.fillStyle = index % 2 === 0 ? "#ffffff" : "#f8fafc";
   ctx.fillRect(60, y - 26, 1120, 40);
+}
+
+function drawReportBrand(ctx, canvasWidth, y = 48) {
+  const right = canvasWidth - 60;
+  const dot = 11;
+  const gap = 7;
+  const logoX = right - 310;
+  const logoY = y - 22;
+  const dotColors = ["#ffffff", "#ff6b2c", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#ffffff"];
+  dotColors.forEach((color, index) => {
+    const col = index % 3;
+    const row = Math.floor(index / 3);
+    ctx.fillStyle = color;
+    ctx.fillRect(logoX + col * (dot + gap), logoY + row * (dot + gap), dot, dot);
+  });
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "700 30px Poppins, Arial, sans-serif";
+  ctx.fillText(settings.businessName || "infonits", logoX + 70, y + 2);
+  ctx.font = "400 14px Poppins, Arial, sans-serif";
+  ctx.fillStyle = "rgba(255,255,255,0.82)";
+  const website = settings.businessWebsite || "www.infonits.io";
+  const email = settings.businessEmail || "hello@infonits.com";
+  ctx.fillText(`${website} | ${email}`, logoX + 70, y + 28);
+  ctx.textAlign = "left";
 }
 
 function escapeCsv(value) {
@@ -5630,6 +5772,7 @@ function downloadProjectPdf() {
   ctx.fillText(`Monthly Project Details - ${formatMonth(month)}`, 60, 76);
   ctx.font = "400 20px Poppins, Arial, sans-serif";
   ctx.fillText(`Generated ${formatDate(today())}`, 60, 108);
+  drawReportBrand(ctx, canvas.width, 56);
 
   const columns = [
     ["No", 60, 50],
@@ -5743,6 +5886,7 @@ function buildSimpleReportPdf(title, rows, subtitle) {
   ctx.fillText(title, 80, 92);
   ctx.font = "400 22px Poppins, Arial, sans-serif";
   ctx.fillText(subtitle, 80, 124);
+  drawReportBrand(ctx, canvas.width, 62);
   ctx.fillStyle = "#172033";
   ctx.font = "600 26px Poppins, Arial, sans-serif";
   ctx.fillText("Description", 80, 240);
@@ -6637,6 +6781,17 @@ document.getElementById("financeNextPage").addEventListener("click", () => {
   financePage += 1;
   renderFinance();
 });
+document.getElementById("openFinanceRecordModalButton").addEventListener("click", openFinanceRecordModal);
+document.getElementById("openEmployeeModalButton").addEventListener("click", openEmployeeModal);
+document.getElementById("openClientModalButton").addEventListener("click", () => openClientModal("add"));
+document.getElementById("openRenewalModalButton").addEventListener("click", () => openRenewalModal("add"));
+document.getElementById("openWebsiteLoginModalButton").addEventListener("click", () => openWebsiteLoginModal("add"));
+document.getElementById("openUserModalButton").addEventListener("click", () => openUserModal("add"));
+document.getElementById("clientModalClearButton").addEventListener("click", resetClientForm);
+document.getElementById("renewalModalClearButton").addEventListener("click", resetRenewalForm);
+document.getElementById("websiteLoginModalClearButton").addEventListener("click", resetWebsiteLoginForm);
+document.getElementById("userModalClearButton").addEventListener("click", resetUserForm);
+document.getElementById("financeModalClearButton").addEventListener("click", resetFinanceForm);
 document.getElementById("recentInvoicesPrevPage").addEventListener("click", () => {
   recentInvoicesPage = Math.max(1, recentInvoicesPage - 1);
   renderDashboard();
@@ -6696,6 +6851,7 @@ clientForm.addEventListener("submit", (event) => {
   resetClientForm();
   clientPage = 1;
   renderClients();
+  closeAdminRecordModals();
 });
 
 document.getElementById("resetClientButton").addEventListener("click", resetClientForm);
@@ -6840,6 +6996,7 @@ employeeForm.addEventListener("submit", (event) => {
   saveEmployees();
   resetEmployeeForm();
   renderEmployees();
+  closeEmployeeModal();
 });
 
 userForm.addEventListener("submit", async (event) => {
@@ -6879,6 +7036,7 @@ userForm.addEventListener("submit", async (event) => {
   renderUsers();
   renderManagerHandles();
   applyAccessControl();
+  closeAdminRecordModals();
 });
 
 managerHandleForm.addEventListener("submit", (event) => {
@@ -6974,6 +7132,7 @@ renewalForm.addEventListener("submit", (event) => {
   saveRenewals();
   resetRenewalForm();
   renderRenewals();
+  closeAdminRecordModals();
 });
 
 websiteLoginForm.addEventListener("submit", (event) => {
@@ -6993,6 +7152,7 @@ websiteLoginForm.addEventListener("submit", (event) => {
   saveWebsiteLogins();
   resetWebsiteLoginForm();
   renderWebsiteLogins();
+  closeAdminRecordModals();
 });
 
 projectForm.addEventListener("submit", (event) => {
@@ -7031,6 +7191,7 @@ financeForm.addEventListener("submit", (event) => {
   financeMonthFilter.value = record.date.slice(0, 7);
   financePage = 1;
   renderFinance();
+  closeFinanceRecordModal();
   showToast("Finance record saved");
 });
 
@@ -7104,10 +7265,16 @@ document.body.addEventListener("click", (event) => {
   const togglePasswordButton = event.target.closest("[data-toggle-password]");
   const portalCalendarButton = event.target.closest("[data-portal-calendar]");
   const closeInvoiceModalButton = event.target.closest("[data-close-invoice-modal]");
+  const closeFinanceModalButton = event.target.closest("[data-close-finance-modal]");
+  const closeEmployeeModalButton = event.target.closest("[data-close-employee-modal]");
+  const closeAdminModalButton = event.target.closest("[data-close-admin-modal]");
   const clientColorButton = event.target.closest("[data-client-color]");
 
   if (clientColorButton) changeClientColor(clientColorButton.dataset.clientColor);
   if (closeInvoiceModalButton) closeInvoiceModal();
+  if (closeFinanceModalButton) closeFinanceRecordModal();
+  if (closeEmployeeModalButton) closeEmployeeModal();
+  if (closeAdminModalButton) closeAdminRecordModals();
   if (selectButton) selectInvoice(selectButton.dataset.select);
   if (editButton) editInvoice(editButton.dataset.edit);
   if (monthlyButton) createMonthlyCopy(monthlyButton.dataset.monthly);
@@ -7240,6 +7407,7 @@ async function startApp() {
   applyAccessControl();
   populateCountrySelects();
   populateFinanceCategories();
+  setupAdminFormModals();
   const supabaseLoaded = await loadAllDataFromSupabase();
   if (supabaseLoaded) {
     await migrateOldLocalDataToSupabase();
