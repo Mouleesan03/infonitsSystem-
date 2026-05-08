@@ -168,24 +168,27 @@ body:not(.app-loading) .app-preloader:not(.is-hidden) {
 }
 
 .login-card {
-  width: min(520px, 100%);
+  width: min(540px, 100%);
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 24px;
-  padding: 44px 52px;
+  gap: 20px;
+  padding: 38px 46px 42px;
   border: 1px solid rgba(219, 227, 236, 0.78);
-  border-radius: 30px;
-  background: rgba(255, 255, 255, 0.82);
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 34px 110px rgba(29, 46, 99, 0.16);
   backdrop-filter: blur(18px);
 }
 
 .login-brand {
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  margin-bottom: 8px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  margin: 0 8px 4px;
+  padding-bottom: 18px;
+  border-bottom: 2px solid #e5e7eb;
+  text-align: center;
 }
 
 .login-brand p,
@@ -194,28 +197,41 @@ body:not(.app-loading) .app-preloader:not(.is-hidden) {
   margin: 0;
 }
 
-.login-brand p {
-  font-weight: 700;
-  color: #0f172a;
-  font-size: 1.16rem;
+.login-brand img {
+  width: min(300px, 82%);
+  height: auto;
+  display: block;
 }
 
 .login-brand span,
 .login-help {
-  color: var(--muted);
+  color: #1d2e63;
+}
+
+.login-brand span {
+  font-size: clamp(1rem, 1.45vw, 1.24rem);
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1;
+  text-transform: lowercase;
+}
+
+.login-title {
+  margin-top: 4px;
 }
 
 .login-title h1 {
-  font-size: 2.45rem;
+  font-size: clamp(2.55rem, 4.4vw, 3.35rem);
   line-height: 1.2;
   color: #111b34;
   letter-spacing: 0;
+  font-weight: 700;
 }
 
 .login-title::after {
   content: "";
   display: block;
-  width: 52px;
+  width: 58px;
   height: 3px;
   margin-top: 14px;
   border-radius: 999px;
@@ -224,10 +240,10 @@ body:not(.app-loading) .app-preloader:not(.is-hidden) {
 
 .login-card label {
   display: grid;
-  gap: 11px;
-  color: #243047;
+  gap: 10px;
+  color: #111b34;
   font-weight: 600;
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 
 .login-input-wrap {
@@ -239,7 +255,7 @@ body:not(.app-loading) .app-preloader:not(.is-hidden) {
   border: 1px solid #d7e0ec;
   border-radius: 14px;
   padding: 0 18px;
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 255, 255, 0.82);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
@@ -262,6 +278,7 @@ body:not(.app-loading) .app-preloader:not(.is-hidden) {
   background: transparent;
   color: #111827;
   font-weight: 500;
+  font-size: 0.96rem;
 }
 
 .login-card input::placeholder {
@@ -284,17 +301,27 @@ body:not(.app-loading) .app-preloader:not(.is-hidden) {
 }
 
 .login-card .primary-action.login-submit {
-  min-height: 64px;
-  display: flex;
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   justify-content: center;
   align-items: center;
-  gap: 128px;
-  margin-top: 2px;
-  border-radius: 13px;
+  gap: 10px;
+  margin-top: 8px;
+  border-radius: 14px;
   background: linear-gradient(135deg, #1d2e63 0%, #17265c 100%);
   box-shadow: 0 18px 34px rgba(29, 46, 99, 0.28);
-  font-size: 1.12rem;
-  font-weight: 600;
+  font-size: 1.04rem;
+  font-weight: 700;
+}
+
+.login-card .primary-action.login-submit span:first-child {
+  grid-column: 2;
+}
+
+.login-card .primary-action.login-submit span:last-child {
+  grid-column: 3;
+  justify-self: center;
 }
 
 .login-help {
@@ -307,16 +334,12 @@ body:not(.app-loading) .app-preloader:not(.is-hidden) {
   }
 
   .login-card {
-    padding: 32px 24px;
+    padding: 30px 22px;
     border-radius: 24px;
   }
 
   .login-title h1 {
-    font-size: 2rem;
-  }
-
-  .login-card .primary-action.login-submit {
-    gap: 72px;
+    font-size: 2.2rem;
   }
 }
 

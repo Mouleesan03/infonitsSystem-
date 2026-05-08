@@ -713,6 +713,39 @@ function rowPayload(row, fallback) {
 }
 
 const supabaseDirectCollections = {
+  users: {
+    table: "app_users",
+    get: () => users,
+    set: (rows) => {
+      const nextUsers = Array.isArray(rows) && rows.length ? rows : users.length ? users : defaultUsers();
+      users = hardenDefaultUserAccess(nextUsers.map(normalizeUser));
+      ensureDefaultAdminUser();
+    },
+    toRow: (user, index) => ({
+      app_id: payloadId(user, `user-${index + 1}`),
+      name: user.name || "User",
+      username: user.username || "",
+      email: user.email || "",
+      role: user.role || "project-manager",
+      status: user.status || "Active",
+      access: user.role === "admin" ? roleDefaultAccess.admin : user.access || [],
+      password_hash: user.passwordHash || "",
+      payload: user,
+      updated_at: user.updatedAt || new Date().toISOString(),
+    }),
+    fromRow: (row) =>
+      rowPayload(row, {
+        id: row.app_id || row.id,
+        name: row.name || "User",
+        username: row.username || "",
+        email: row.email || "",
+        role: row.role || "project-manager",
+        status: row.status || "Active",
+        access: Array.isArray(row.access) ? row.access : [],
+        passwordHash: row.password_hash || "",
+        updatedAt: row.updated_at || "",
+      }),
+  },
   clients: {
     table: "clients",
     get: () => clients,
@@ -1043,12 +1076,6 @@ const supabaseDirectCollections = {
 };
 
 const supabaseAppDataCollections = {
-  users: {
-    get: () => users,
-    set: (value) => {
-      users = hardenDefaultUserAccess((Array.isArray(value) && value.length ? value : defaultUsers()).map(normalizeUser));
-    },
-  },
   managerHandles: {
     get: () => managerHandles,
     set: (value) => {
@@ -1261,6 +1288,7 @@ async function loadAllDataFromSupabase() {
     return false;
   }
   let hasLoadError = false;
+  let usersLoadedFromDirectTable = false;
   try {
     const failedTables = await checkSupabaseTables();
     if (failedTables.length) {
@@ -1273,11 +1301,24 @@ async function loadAllDataFromSupabase() {
       const result = directData[index];
       if (result.status === "fulfilled") {
         config.set(result.value);
+        if (collection === "users" && result.value.length) usersLoadedFromDirectTable = true;
       } else {
         hasLoadError = true;
         console.error(`Supabase load failed: ${collection}`, result.reason);
       }
     });
+
+    if (!usersLoadedFromDirectTable) {
+      try {
+        const legacyUsers = await readAppDataPayload("users", []);
+        if (Array.isArray(legacyUsers) && legacyUsers.length) {
+          users = hardenDefaultUserAccess(legacyUsers.map(normalizeUser));
+          saveUsers();
+        }
+      } catch (error) {
+        console.warn("Legacy users fallback skipped", error);
+      }
+    }
 
     const appDataEntries = Object.entries(supabaseAppDataCollections);
     const appData = await Promise.allSettled(appDataEntries.map(([collection, config]) => readAppDataPayload(collection, config.get())));
@@ -1785,29 +1826,9 @@ async function loginUser(username, password) {
   const normalizedUsername = String(username || "").trim().toLowerCase();
   const passwordValue = String(password || "").trim();
   const passwordHash = await hashPassword(passwordValue);
-  let user = users.find((item) => {
+  const user = users.find((item) => {
     return String(item.username || "").trim().toLowerCase() === normalizedUsername && passwordMatches(item, passwordValue, passwordHash) && item.status !== "Disabled";
   });
-  if (!user && normalizedUsername === "admin" && passwordValue === "admin123") {
-    const existingAdmin = users.find((item) => item.id === "admin" || String(item.username || "").trim().toLowerCase() === "admin");
-    const repairedAdmin = {
-      ...(existingAdmin || defaultUsers()[0]),
-      id: existingAdmin?.id || "admin",
-      name: existingAdmin?.name || "Admin",
-      username: "admin",
-      passwordHash,
-      role: "admin",
-      status: "Active",
-      access: roleDefaultAccess.admin,
-      updatedAt: new Date().toISOString(),
-    };
-    users = existingAdmin
-      ? users.map((item) => (item.id === existingAdmin.id ? repairedAdmin : item))
-      : [repairedAdmin, ...users];
-    saveUsers();
-    user = repairedAdmin;
-    showToast("Admin login repaired");
-  }
   if (!user) {
     showToast(users.length ? "Invalid username or password" : "Users not loaded from Supabase");
     return false;
