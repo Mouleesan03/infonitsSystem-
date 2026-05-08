@@ -726,10 +726,12 @@ h2 {
 .text-action,
 .danger-action {
   border: 0;
-  border-radius: 10px;
+  border-radius: 12px;
   min-height: 40px;
   padding: 0 16px;
-  font-weight: 500;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0;
 }
 
 .primary-action {
@@ -743,8 +745,27 @@ h2 {
 }
 
 .secondary-action {
-  background: #e8eef4;
+  border: 1px solid #dbe5f0;
+  background: #eef3f8;
   color: var(--ink);
+}
+
+.icon-label-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.icon-label-action svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .text-action {
@@ -1120,7 +1141,8 @@ h2 {
 }
 
 .clients-grid {
-  grid-template-columns: minmax(320px, 0.72fr) minmax(0, 1fr);
+  grid-template-columns: minmax(320px, 0.58fr) minmax(0, 1fr);
+  gap: 16px;
 }
 
 .employees-grid {
@@ -1347,7 +1369,7 @@ h2 {
 .settings-panel,
 .backup-panel {
   border-color: #dce5f0;
-  box-shadow: 0 18px 38px rgba(15, 23, 42, 0.07);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
 }
 
 .admin-form-panel .panel-heading,
@@ -1355,18 +1377,18 @@ h2 {
 .settings-panel .panel-heading,
 .backup-panel .panel-heading {
   margin: -2px 0 14px;
-  padding-bottom: 12px;
+  padding-bottom: 10px;
   border-bottom: 1px solid #edf2f7;
 }
 
 .admin-form {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 13px 16px;
+  gap: 12px 14px;
 }
 
 .admin-form label {
   gap: 6px;
-  font-size: 0.9rem;
+  font-size: 0.86rem;
 }
 
 .admin-form input,
@@ -1378,11 +1400,12 @@ h2 {
   min-height: 44px;
   border-radius: 12px;
   background: #fbfdff;
+  font-size: 0.9rem;
 }
 
 .admin-form textarea,
 .settings-panel textarea {
-  min-height: 78px;
+  min-height: 76px;
 }
 
 .admin-form .save-button {
@@ -1397,6 +1420,84 @@ h2 {
 
 .admin-list-panel .filters {
   width: min(420px, 100%);
+}
+
+.client-form {
+  gap: 14px 16px;
+}
+
+.field-with-icon {
+  position: relative;
+}
+
+.field-with-icon .input-icon {
+  position: absolute;
+  left: 14px;
+  top: 34px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+  pointer-events: none;
+}
+
+.field-with-icon .input-icon svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.field-with-icon input,
+.field-with-icon select,
+.field-with-icon textarea {
+  padding-left: 42px;
+}
+
+.address-field .input-icon {
+  top: 38px;
+}
+
+.client-statement-tools {
+  width: min(520px, 100%) !important;
+  display: grid;
+  grid-template-columns: minmax(210px, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.client-statement-tools select,
+.client-statement-tools button {
+  min-height: 42px;
+}
+
+.client-statement-tools button {
+  min-width: 170px;
+}
+
+#clientsView .client-statement-tools {
+  display: flex !important;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  width: min(560px, 100%) !important;
+  min-width: 0;
+}
+
+#clientsView .client-statement-tools select {
+  flex: 1 1 260px;
+  min-width: 180px;
+}
+
+#clientsView .client-statement-tools button {
+  flex: 0 0 auto;
+  width: auto !important;
+  white-space: nowrap;
 }
 
 .admin-list-panel .filters input,
@@ -2120,6 +2221,25 @@ tr:last-child td {
   flex-wrap: wrap;
 }
 
+.pm-client-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.pm-client-color {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  display: inline-block;
+  border: 0;
+  padding: 0;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 3px rgba(15, 23, 42, 0.12);
+  cursor: pointer;
+}
+
 .pm-platform-link {
   display: inline-flex;
   align-items: center;
@@ -2284,6 +2404,95 @@ tr:last-child td {
   padding-top: 0;
 }
 
+.pm-post-tools {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.pm-post-tools select {
+  width: 260px;
+  max-width: 42vw;
+  min-height: 36px;
+  padding: 6px 10px;
+  flex: 0 1 260px;
+}
+
+.pm-post-tools .secondary-action {
+  min-height: 36px;
+  padding: 0 12px;
+  flex: 0 0 auto;
+}
+
+.pm-posted-panel .panel-heading {
+  align-items: center;
+  gap: 16px;
+}
+
+#managerView .pm-post-table {
+  min-width: 0;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.pm-post-table th:first-child,
+.pm-post-table td:first-child {
+  width: 56px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.pm-post-table th:nth-child(2),
+.pm-post-table td:nth-child(2) {
+  width: 130px;
+}
+
+.pm-post-table th:nth-child(3),
+.pm-post-table td:nth-child(3) {
+  width: 150px;
+}
+
+.pm-post-table th:nth-child(4),
+.pm-post-table td:nth-child(4) {
+  width: 220px;
+}
+
+.pm-post-table th:nth-child(5),
+.pm-post-table td:nth-child(5) {
+  width: 92px;
+  text-align: center;
+}
+
+.pm-post-table th:nth-child(6),
+.pm-post-table td:nth-child(6) {
+  width: 82px;
+  text-align: center;
+}
+
+.pm-post-table th:nth-child(8),
+.pm-post-table td:nth-child(8) {
+  width: 126px;
+  text-align: center;
+}
+
+.pm-post-table td:nth-child(7) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#invoicesView table th:first-child,
+#invoicesView table .row-number-cell {
+  width: 56px;
+  text-align: center;
+  color: #64748b;
+  font-weight: 700;
+}
+
 .pm-form .wide {
   grid-column: 1 / -1;
 }
@@ -2303,21 +2512,17 @@ tr:last-child td {
 .pm-notification {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 12px;
   padding: 12px;
   border: 1px solid #e5ebf2;
-  border-left: 4px solid var(--blue);
+  border-left: 4px solid #ef4444;
   border-radius: 12px;
   background: #f8fafc;
 }
 
-.pm-notification.Missed,
-.pm-notification.Warning {
-  border-left-color: #ef4444;
-}
-
-.pm-notification.Correction {
-  border-left-color: var(--accent);
+.pm-notification.Notified {
+  border-left-color: #16a34a;
 }
 
 .pm-notification p {
@@ -2329,6 +2534,20 @@ tr:last-child td {
 .pm-notification span {
   color: #64748b;
   font-size: 0.74rem;
+}
+
+.pm-notification-copy {
+  min-width: 0;
+}
+
+.pm-notification-actions {
+  flex: 0 0 auto;
+}
+
+.pm-notification-actions .secondary-action {
+  min-height: 34px;
+  padding: 0 12px;
+  white-space: nowrap;
 }
 
 .pm-calendar-grid {
@@ -2399,6 +2618,40 @@ tr:last-child td {
 
 .pm-calendar-chip.is-missed {
   background: #ef4444 !important;
+}
+
+.pm-calendar-dot-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.pm-calendar-dot {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 3px rgba(15, 23, 42, 0.08);
+}
+
+.pm-calendar-dot:hover::after {
+  content: attr(data-calendar-client);
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  min-width: max-content;
+  max-width: 160px;
+  transform: translateX(-50%);
+  border-radius: 8px;
+  padding: 5px 8px;
+  background: #172033;
+  color: #ffffff;
+  font-size: 0.68rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.18);
 }
 
 .pm-database-grid {
@@ -2565,11 +2818,20 @@ textarea,
 select {
   width: 100%;
   border: 1px solid #cbd5e1;
-  border-radius: 10px;
+  border-radius: 12px;
   background: white;
   color: var(--ink);
   padding: 12px 14px;
   outline: none;
+  font-size: 0.92rem;
+  font-weight: 500;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: #8b98ad;
+  font-weight: 500;
 }
 
 input:focus,
@@ -5001,6 +5263,37 @@ textarea {
     display: grid;
     grid-template-columns: 1fr;
     gap: 8px;
+  }
+
+  .client-statement-tools {
+    grid-template-columns: 1fr;
+    width: 100% !important;
+  }
+
+  .client-statement-tools button {
+    width: 100%;
+  }
+
+  #clientsView .admin-list-panel .panel-heading {
+    align-items: center;
+    flex-direction: row;
+  }
+
+  #clientsView .client-statement-tools {
+    display: flex !important;
+    flex-flow: row nowrap;
+    width: auto !important;
+  }
+
+  #clientsView .client-statement-tools select {
+    flex: 1 1 180px;
+    min-width: 150px;
+  }
+
+  #clientsView .client-statement-tools button {
+    flex: 0 0 auto;
+    width: auto !important;
+    min-width: 150px;
   }
 
   .item-row {

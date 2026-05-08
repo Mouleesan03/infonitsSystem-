@@ -22,6 +22,7 @@ const RECENT_INVOICE_PAGE_SIZE = 8;
 const CLIENT_PAGE_SIZE = 10;
 const INVOICE_PAGE_SIZE = 10;
 const PM_PROJECT_PAGE_SIZE = 6;
+const PM_POST_PAGE_SIZE = 5;
 const PM_WEEKLY_POST_TARGET = 3;
 const PM_MONTHLY_POST_TARGET = PM_WEEKLY_POST_TARGET * 4;
 const MAX_IMAGE_UPLOAD_SIZE = 2 * 1024 * 1024;
@@ -91,6 +92,7 @@ let socialMediaPosts = loadSocialMediaPosts();
 let corrections = loadCorrections();
 let pmNotifications = loadPmNotifications();
 let monthlyPostReports = loadMonthlyPostReports();
+let clientColors = {};
 let settings = loadSettings();
 let editingId = null;
 let editingClientId = null;
@@ -115,6 +117,7 @@ let recentInvoicesPage = 1;
 let clientPage = 1;
 let invoicePage = 1;
 let pmProjectPage = 1;
+let pmPostPage = 1;
 let portalCalendarMonth = today().slice(0, 7);
 let portalCalendarPinned = false;
 let pendingEmployeePhotoDataUrl = "";
@@ -1064,6 +1067,12 @@ const supabaseAppDataCollections = {
       monthlyPostReports = Array.isArray(value) ? value : [];
     },
   },
+  clientColors: {
+    get: () => clientColors,
+    set: (value) => {
+      clientColors = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+    },
+  },
   projectTargets: {
     get: () => projectTargets,
     set: (value) => {
@@ -1107,6 +1116,10 @@ function syncAllCollectionsToSupabase() {
   Object.keys(supabaseDirectCollections).forEach(syncCollectionToSupabase);
   Object.keys(supabaseAppDataCollections).forEach(syncCollectionToSupabase);
   syncCollectionToSupabase("settings");
+}
+
+function saveClientColors() {
+  syncCollectionToSupabase("clientColors");
 }
 
 async function syncAllCollectionsToSupabaseNow(options = {}) {
@@ -2851,6 +2864,7 @@ function createBackupPackage() {
       corrections,
       pmNotifications,
       monthlyPostReports,
+      clientColors,
       settings,
     },
   };
@@ -2876,6 +2890,7 @@ async function applyBackupData(backup) {
   corrections = data.corrections || [];
   pmNotifications = data.pmNotifications || [];
   monthlyPostReports = data.monthlyPostReports || [];
+  clientColors = data.clientColors && typeof data.clientColors === "object" && !Array.isArray(data.clientColors) ? data.clientColors : {};
   settings = { ...defaultSettings, ...(data.settings || {}) };
   await syncAllCollectionsToSupabaseNow({ replaceStale: true });
   resetForm();
@@ -3202,8 +3217,8 @@ function renderInvoiceTable() {
   const start = (invoicePage - 1) * INVOICE_PAGE_SIZE;
   const pageInvoices = filtered.slice(start, start + INVOICE_PAGE_SIZE);
   table.innerHTML = pageInvoices.length
-    ? pageInvoices.map((invoice) => documentRow(invoice)).join("")
-    : emptyRow("No matching invoices", 7);
+    ? pageInvoices.map((invoice, index) => documentRow(invoice, false, start + index + 1)).join("")
+    : emptyRow("No matching invoices", 8);
   document.getElementById("invoicePrevPage").disabled = invoicePage <= 1;
   document.getElementById("invoiceNextPage").disabled = invoicePage >= totalPages;
   document.getElementById("invoicePageLabel").textContent = `Page ${invoicePage} of ${totalPages}`;
@@ -3227,11 +3242,13 @@ function renderQuotationTable() {
     : emptyRow("No matching quotations", 7);
 }
 
-function documentRow(invoice, includeType = false) {
+function documentRow(invoice, includeType = false, rowNumber = null) {
   const totals = calculateTotals(invoice);
+  const numberCell = rowNumber === null ? "" : `<td class="row-number-cell">${rowNumber}</td>`;
   const typeCell = includeType ? `<td>${escapeHtml(invoice.documentType || "Invoice")}</td>` : "";
   return `
     <tr>
+      ${numberCell}
       <td>${escapeHtml(invoice.invoiceNumber)}</td>
       ${typeCell}
       <td>${escapeHtml(invoice.customerName)}</td>
@@ -3571,6 +3588,24 @@ function isManagerProject(project = {}) {
   return text.includes("social media") || /\bsm\b/.test(text) || text.includes("maintenance") || text.includes("maintainance");
 }
 
+function assignedTeamUser(project = {}) {
+  const id =
+    project.assignedTeamId ||
+    project.assignedDesignerId ||
+    project.assignedDeveloperId ||
+    users.find((user) => user.name === project.assignedDesigner || user.name === project.assignedDeveloper)?.id ||
+    "";
+  return users.find((user) => user.id === id) || null;
+}
+
+function isPostTrackedProject(project = {}) {
+  const text = `${project.name || ""} ${project.note || ""}`.toLowerCase();
+  const team = assignedTeamUser(project);
+  const isDeveloperWork = team?.role === "developer" || project.assignedTeamRole === "developer";
+  const isSocialWork = text.includes("social media") || /\bsm\b/.test(text);
+  return isSocialWork && !isDeveloperWork;
+}
+
 function managerMonth() {
   return fieldValue("pmMonthFilter", today().slice(0, 7)) || today().slice(0, 7);
 }
@@ -3710,7 +3745,7 @@ function pastWeekRange() {
   return { start, end };
 }
 
-function addPmNotificationOnce(type, title, message, sourceId, assignedTo = "project-manager") {
+function addPmNotificationOnce(type, title, message, sourceId, assignedTo = "project-manager", extra = {}) {
   if (pmNotifications.some((item) => item.sourceId === sourceId)) return;
   pmNotifications.unshift({
     id: createId(),
@@ -3721,17 +3756,46 @@ function addPmNotificationOnce(type, title, message, sourceId, assignedTo = "pro
     assignedTo,
     status: "Unread",
     createdAt: new Date().toISOString(),
+    ...extra,
   });
   savePmNotifications();
 }
 
 function updatePmNotifications() {
-  pmNotifications = pmNotifications.filter((note) => ["Weekly warning", "Team notify"].includes(note.type || ""));
+  pmNotifications = pmNotifications.filter((note) => ["Weekly missed post", "Team notify"].includes(note.type || ""));
   savePmNotifications();
 }
 
 function visiblePmNotifications() {
-  return pmNotifications.filter((note) => note.type === "Weekly warning");
+  return pmNotifications.filter((note) => note.type === "Weekly missed post");
+}
+
+function notifyDesignerForMissedPost(notificationId) {
+  const note = pmNotifications.find((item) => item.id === notificationId);
+  if (!note) return;
+  if (!note.designerId) {
+    showToast("Assign a designer before notifying");
+    return;
+  }
+  addPmNotificationOnce(
+    "Team notify",
+    "Missed post alert",
+    `${note.clientName || "Client"} - ${note.projectName || "Project"} is missing ${note.missing || 0} post${Number(note.missing || 0) === 1 ? "" : "s"} this week.`,
+    `designer-alert-${note.id}-${note.designerId}`,
+    note.designerId,
+    {
+      projectId: note.projectId || "",
+      clientName: note.clientName || "",
+      projectName: note.projectName || "",
+      missing: note.missing || 0,
+      required: note.required || PM_WEEKLY_POST_TARGET,
+      posted: note.posted || 0,
+    },
+  );
+  note.status = "Notified";
+  savePmNotifications();
+  renderPmNotifications();
+  showToast(`Alert sent to ${note.designerName || "designer"}`);
 }
 
 function projectAssignedDesigner(project = {}) {
@@ -3744,9 +3808,10 @@ function projectAssignedDesigner(project = {}) {
 function updateWeeklyProjectNotifications() {
   const { start, end } = pastWeekRange();
   const weekKey = start.toISOString().slice(0, 10);
-  pmNotifications = pmNotifications.filter((note) => note.type !== "Weekly warning");
+  pmNotifications = pmNotifications.filter((note) => !["Weekly warning", "Weekly missed post"].includes(note.type || ""));
   managerProjects()
     .filter(isActiveProject)
+    .filter(isPostTrackedProject)
     .forEach((project) => {
       const weeklyPosts = socialMediaPosts.filter((post) => {
         const postedDate = post.uploadDate || post.scheduledDate || "";
@@ -3758,15 +3823,23 @@ function updateWeeklyProjectNotifications() {
       if (!missing) return;
       const clientName = project.clientName || project.name || "Client";
       const projectName = project.name || "Project";
-      const message = `${clientName} - ${projectName} missed ${missing} post${missing === 1 ? "" : "s"} in the past week. Required ${PM_WEEKLY_POST_TARGET}, posted ${uploaded}.`;
-      addPmNotificationOnce("Weekly warning", "Missed posts", message, `weekly-pm-${project.id}-${weekKey}`, "project-manager");
       const designer = projectAssignedDesigner(project);
       addPmNotificationOnce(
-        "Weekly warning",
-        "Designer missed post reminder",
-        designer ? `${designer.name}: ${message}` : `Designer not assigned: ${message}`,
-        `weekly-designer-${project.id}-${designer?.id || "none"}-${weekKey}`,
-        designer?.id || "designer",
+        "Weekly missed post",
+        "Missed posts this week",
+        `${clientName} - ${projectName} missed ${missing} post${missing === 1 ? "" : "s"} this week. Required ${PM_WEEKLY_POST_TARGET}, posted ${uploaded}.`,
+        `weekly-missed-${project.id}-${weekKey}`,
+        "project-manager",
+        {
+          projectId: project.id,
+          projectName,
+          clientName,
+          missing,
+          required: PM_WEEKLY_POST_TARGET,
+          posted: uploaded,
+          designerId: designer?.id || "",
+          designerName: designer?.name || "",
+        },
       );
     });
   savePmNotifications();
@@ -3893,6 +3966,7 @@ function deleteSocialPost(id) {
   socialMediaPosts = socialMediaPosts.filter((item) => item.id !== id);
   deleteSupabaseRecord("socialMediaPosts", id);
   saveSocialMediaPosts();
+  pmPostPage = 1;
   renderProjectManagerWorkspace();
   showToast("Post deleted");
 }
@@ -3952,6 +4026,23 @@ function socialPostGroupPlatforms(posts = []) {
     .join("");
 }
 
+function filteredSocialPostGroups() {
+  const clientFilter = fieldValue("pmPostClientFilter");
+  return groupedSocialPosts()
+    .filter((group) => !clientFilter || group.clientName === clientFilter)
+    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+}
+
+function renderPostClientFilter() {
+  const select = document.getElementById("pmPostClientFilter");
+  if (!select) return;
+  const selected = select.value;
+  const names = [...new Set(groupedSocialPosts().map((group) => group.clientName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  select.innerHTML = [`<option value="">All clients</option>`]
+    .concat(names.map((name) => `<option value="${escapeAttribute(name)}" ${name === selected ? "selected" : ""}>${escapeHtml(name)}</option>`))
+    .join("");
+}
+
 function deleteSocialPostGroup(encodedKey) {
   const key = decodeURIComponent(encodedKey || "");
   const group = groupedSocialPosts().find((item) => item.key === key);
@@ -3960,6 +4051,7 @@ function deleteSocialPostGroup(encodedKey) {
   socialMediaPosts = socialMediaPosts.filter((post) => !ids.has(post.id));
   group.posts.forEach((post) => deleteSupabaseRecord("socialMediaPosts", post.id));
   saveSocialMediaPosts();
+  pmPostPage = 1;
   renderProjectManagerWorkspace();
   showToast("Posted record deleted");
 }
@@ -4071,9 +4163,10 @@ function updateProjectTeamFromSelect(projectId, userId) {
 function renderProjectManagerDashboard() {
   const month = managerMonth();
   const activeProjects = managerProjects().filter(isActiveProject);
+  const trackedProjects = activeProjects.filter(isPostTrackedProject);
   const monthPosts = socialMediaPosts.filter((post) => postMonth(post) === month);
   const posted = groupedSocialPostCount(monthPosts);
-  const required = activeProjects.length * PM_MONTHLY_POST_TARGET;
+  const required = trackedProjects.length * PM_MONTHLY_POST_TARGET;
   const remaining = Math.max(0, required - posted);
   setText("pmActiveProjects", activeProjects.length);
   setText("pmPendingPosts", remaining);
@@ -4093,23 +4186,21 @@ function renderProjectManagerProjects() {
   const visibleRows = rows.slice(start, start + PM_PROJECT_PAGE_SIZE);
   document.getElementById("pmProjectTable").innerHTML = rows.length
     ? visibleRows.map((project) => {
-        const teamId =
-          project.assignedTeamId ||
-          project.assignedDesignerId ||
-          project.assignedDeveloperId ||
-          users.find((user) => user.name === project.assignedDesigner || user.name === project.assignedDeveloper)?.id ||
-          "";
-        const posted = socialMediaPosts.filter((post) => post.projectId === project.id && postMonth(post) === managerMonth());
+        const team = assignedTeamUser(project);
+        const teamId = team?.id || "";
+        const tracksPosts = isPostTrackedProject(project);
+        const posted = tracksPosts ? socialMediaPosts.filter((post) => post.projectId === project.id && postMonth(post) === managerMonth()) : [];
         const postedCount = groupedSocialPostCount(posted);
         const remaining = Math.max(0, PM_MONTHLY_POST_TARGET - postedCount);
+        const clientName = project.clientName || project.name || "";
         return `
           <tr>
-            <td>${escapeHtml(project.clientName || project.name || "")}</td>
+            <td><span class="pm-client-cell">${clientColorDot(clientName)}${escapeHtml(clientName)}</span></td>
             <td><strong>${escapeHtml(project.name || "")}</strong></td>
             <td><div class="pm-platform-list">${platformButtons(project.id)}</div></td>
             <td><div class="pm-team-cell">${teamSelect(teamId, project.id)}</div></td>
-            <td>${postedCount} / ${PM_MONTHLY_POST_TARGET}</td>
-            <td>${remaining}</td>
+            <td>${tracksPosts ? `${postedCount} / ${PM_MONTHLY_POST_TARGET}` : `<span class="muted-label">Not tracked</span>`}</td>
+            <td>${tracksPosts ? remaining : `<span class="muted-label">-</span>`}</td>
           </tr>
         `;
       }).join("")
@@ -4122,11 +4213,16 @@ function renderProjectManagerProjects() {
 function renderSocialMediaPosts() {
   const table = document.getElementById("socialPostTable");
   if (!table) return;
-  const rows = groupedSocialPosts()
-    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  renderPostClientFilter();
+  const rows = filteredSocialPostGroups();
+  const totalPages = Math.max(1, Math.ceil(rows.length / PM_POST_PAGE_SIZE));
+  pmPostPage = Math.min(pmPostPage, totalPages);
+  const start = (pmPostPage - 1) * PM_POST_PAGE_SIZE;
+  const visibleRows = rows.slice(start, start + PM_POST_PAGE_SIZE);
   table.innerHTML = rows.length
-    ? rows.map((group) => `
+    ? visibleRows.map((group, index) => `
         <tr>
+          <td>${start + index + 1}</td>
           <td>${formatDate(group.date)}</td>
           <td>${escapeHtml(group.clientName || "")}</td>
           <td>${escapeHtml(group.projectName || "")}</td>
@@ -4139,12 +4235,15 @@ function renderSocialMediaPosts() {
           </div></td>
         </tr>
       `).join("")
-    : emptyRow("No posted records for this month", 7);
+    : emptyRow("No posted records for this month", 8);
+  document.getElementById("pmPostPrevPage").disabled = pmPostPage <= 1;
+  document.getElementById("pmPostNextPage").disabled = pmPostPage >= totalPages;
+  document.getElementById("pmPostPageLabel").textContent = `Page ${pmPostPage} of ${totalPages}`;
 }
 
 function monthlyPostRows() {
   const month = managerMonth();
-  const clientNames = [...new Set([...managerProjects().map((project) => project.clientName || project.name), ...socialMediaPosts.map((post) => post.clientName)].filter(Boolean))];
+  const clientNames = [...new Set([...managerProjects().filter(isPostTrackedProject).map((project) => project.clientName || project.name), ...socialMediaPosts.map((post) => post.clientName)].filter(Boolean))];
   return clientNames.map((clientName) => {
     const posts = socialMediaPosts.filter((post) => post.clientName === clientName && postMonth(post) === month);
     const uploaded = groupedSocialPostCount(posts);
@@ -4173,7 +4272,7 @@ function renderMonthlyPostTracking() {
 
 function renderWeeklyPostTracking() {
   const { start, end } = currentWeekRange();
-  const clientNames = [...new Set([...managerProjects().map((project) => project.clientName || project.name), ...socialMediaPosts.map((post) => post.clientName)].filter(Boolean))];
+  const clientNames = [...new Set([...managerProjects().filter(isPostTrackedProject).map((project) => project.clientName || project.name), ...socialMediaPosts.map((post) => post.clientName)].filter(Boolean))];
   const rows = clientNames.map((clientName) => {
     const posts = socialMediaPosts.filter((post) => {
       const due = new Date(`${post.uploadDate || post.scheduledDate || ""}T00:00:00`);
@@ -4181,9 +4280,6 @@ function renderWeeklyPostTracking() {
     });
     const uploaded = groupedSocialPostCount(posts);
     const missing = Math.max(0, PM_WEEKLY_POST_TARGET - uploaded);
-    if (missing > 0) {
-      addPmNotificationOnce("Weekly warning", "Weekly posts missing", `${clientName} is missing ${missing} post${missing === 1 ? "" : "s"} this week.`, `weekly-missing-${clientName}-${today().slice(0, 7)}-${start.toISOString().slice(0, 10)}`);
-    }
     return { clientName, required: PM_WEEKLY_POST_TARGET, uploaded, missing, status: missing ? "Warning" : "On track" };
   });
   document.getElementById("weeklyPostTable").innerHTML = rows.length
@@ -4200,9 +4296,37 @@ function renderWeeklyPostTracking() {
 }
 
 function clientCalendarColor(clientName = "") {
+  const saved = clientColors[String(clientName || "").trim()];
+  if (/^#[0-9a-f]{6}$/i.test(saved || "")) return saved;
   const colors = ["#2563eb", "#7c3aed", "#0f766e", "#db2777", "#ea580c", "#16a34a", "#0891b2", "#4f46e5", "#be123c", "#9333ea"];
   const seed = [...String(clientName || "Client")].reduce((sum, char) => sum + char.charCodeAt(0), 0);
   return colors[seed % colors.length];
+}
+
+function clientColorDot(clientName = "") {
+  return `<button class="pm-client-color" style="background:${clientCalendarColor(clientName)}" title="Change ${escapeAttribute(clientName || "client")} color" aria-label="Change ${escapeAttribute(clientName || "client")} color" type="button" data-client-color="${escapeAttribute(clientName)}"></button>`;
+}
+
+function changeClientColor(clientName = "") {
+  const name = String(clientName || "").trim();
+  if (!name) return;
+  const picker = document.createElement("input");
+  picker.type = "color";
+  picker.value = clientCalendarColor(name);
+  picker.style.position = "fixed";
+  picker.style.left = "-100px";
+  picker.style.top = "0";
+  document.body.appendChild(picker);
+  picker.addEventListener("input", () => {
+    clientColors = { ...clientColors, [name]: picker.value };
+    saveClientColors();
+    renderProjectManagerWorkspace();
+  });
+  picker.addEventListener("change", () => {
+    picker.remove();
+    showToast(`${name} color updated`);
+  });
+  picker.click();
 }
 
 function renderPostCalendar() {
@@ -4231,14 +4355,14 @@ function renderPostCalendar() {
       const posted = postsByDate.get(dateKey) || [];
       const chips = posted
         .map((group) => {
-          const label = `${group.clientName || "Client"} (${group.count})`;
-          return `<span class="pm-calendar-chip" style="background:${clientCalendarColor(group.clientName)}" title="${escapeAttribute(`${group.clientName || ""} - ${group.projectName || ""}`)}">${escapeHtml(label)}</span>`;
+          const label = `${group.clientName || "Client"} (${group.count}) - ${group.projectName || ""}`;
+          return `<span class="pm-calendar-dot" style="background:${clientCalendarColor(group.clientName)}" title="${escapeAttribute(label)}" data-calendar-client="${escapeAttribute(group.clientName || "Client")}"></span>`;
         })
         .join("");
       return `
         <div class="pm-calendar-day">
           <div class="pm-calendar-date"><span>${day}</span>${chips ? `<small>${posted.length}</small>` : ""}</div>
-          ${chips || ""}
+          ${chips ? `<div class="pm-calendar-dot-list">${chips}</div>` : ""}
         </div>
       `;
     }),
@@ -4273,19 +4397,18 @@ function renderPmNotifications() {
   const notes = visiblePmNotifications();
   list.innerHTML = notes.length
     ? notes.slice(0, 8).map((note) => `
-        <article class="pm-notification ${escapeAttribute(note.type || "")}">
-          <div>
-            <strong>${escapeHtml(note.title || note.type || "Notification")}</strong>
-            <p>${escapeHtml(note.message || "")}</p>
-            <span>${escapeHtml(note.assignedTo || "project-manager")} | ${new Date(note.createdAt || Date.now()).toLocaleString()}</span>
+        <article class="pm-notification ${escapeAttribute(note.status === "Notified" ? "Notified" : "Missed")}">
+          <div class="pm-notification-copy">
+            <strong>${escapeHtml(note.clientName || "Client")}</strong>
+            <p>${escapeHtml(note.projectName || "Project")} missed <b>${formatNumber(note.missing || 0)}</b> post${Number(note.missing || 0) === 1 ? "" : "s"} this week.</p>
+            <span>Required ${formatNumber(note.required || PM_WEEKLY_POST_TARGET)} · Posted ${formatNumber(note.posted || 0)} · Designer: ${escapeHtml(note.designerName || "Not assigned")}</span>
           </div>
-          <div class="action-row icon-actions">
-            <button class="icon-action invoice" title="Notify designer" aria-label="Notify designer" type="button" data-notify-role="designer">D</button>
-            <button class="icon-action next" title="Notify developer" aria-label="Notify developer" type="button" data-notify-role="developer">V</button>
+          <div class="pm-notification-actions">
+            <button class="secondary-action" type="button" data-notify-designer="${escapeAttribute(note.id)}">${note.status === "Notified" ? "Notify again" : "Notify designer"}</button>
           </div>
         </article>
       `).join("")
-    : `<p class="muted-label">No notifications right now.</p>`;
+    : `<p class="muted-label">No missed posts this week.</p>`;
 }
 
 function renderPmDatabaseTables() {
@@ -5147,6 +5270,102 @@ function managerMonthlyReportData(month = managerMonth()) {
     remaining: clientRows.reduce((sum, row) => sum + row.remaining, 0),
   };
   return { summary, clientRows, postRows };
+}
+
+function postedRecordExportRows() {
+  return filteredSocialPostGroups().map((group) => ({
+    date: group.date,
+    clientName: group.clientName || "",
+    projectName: group.projectName || "",
+    count: group.count,
+    platforms: group.posts.map((post) => post.platform).filter(Boolean).join(" | "),
+    links: group.posts.map((post) => [post.platform, post.link].filter(Boolean).join(": ")).filter(Boolean).join(" | "),
+    note: group.remarks || "",
+  }));
+}
+
+function postedRecordExportName() {
+  const client = fieldValue("pmPostClientFilter");
+  return client ? safeFilename(client) : "all-clients";
+}
+
+function downloadPostedRecordsCsv() {
+  const month = managerMonth();
+  const rows = postedRecordExportRows();
+  if (!rows.length) {
+    showToast("No posted records to export");
+    return;
+  }
+  const lines = [
+    ["Client monthly post details"],
+    ["Month", formatMonth(month)],
+    ["Client", fieldValue("pmPostClientFilter") || "All clients"],
+    ["Generated", formatDate(today())],
+    [],
+    ["Date", "Client", "Project", "Post count", "Platforms", "Post links", "Remarks"],
+    ...rows.map((row) => [row.date, row.clientName, row.projectName, row.count, row.platforms, row.links, row.note]),
+  ].map((line) => line.map(escapeCsv).join(","));
+  saveBlob(`\uFEFF${lines.join("\n")}`, `infonits-posts-${postedRecordExportName()}-${month}.csv`, "text/csv;charset=utf-8");
+  showToast("Posted records CSV downloaded");
+}
+
+function downloadPostedRecordsPdf() {
+  const month = managerMonth();
+  const rows = postedRecordExportRows();
+  if (!rows.length) {
+    showToast("No posted records to export");
+    return;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = 1240;
+  canvas.height = Math.max(900, 260 + rows.length * 54);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#1d2e63";
+  ctx.fillRect(0, 0, canvas.width, 126);
+  ctx.fillStyle = "#ff6b2c";
+  ctx.fillRect(0, 126, canvas.width, 7);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "600 34px Poppins, Arial, sans-serif";
+  ctx.fillText("Client Monthly Post Details", 60, 72);
+  ctx.font = "400 18px Poppins, Arial, sans-serif";
+  ctx.fillText(`${fieldValue("pmPostClientFilter") || "All clients"} | ${formatMonth(month)} | Generated ${formatDate(today())}`, 60, 104);
+
+  const columns = [
+    ["Date", 60, 130],
+    ["Client", 200, 170],
+    ["Project", 380, 230],
+    ["Count", 625, 80],
+    ["Platforms", 720, 150],
+    ["Remarks", 890, 285],
+  ];
+  let y = 185;
+  ctx.fillStyle = "#eef2f7";
+  ctx.fillRect(50, y - 30, 1140, 44);
+  ctx.fillStyle = "#172033";
+  ctx.font = "600 17px Poppins, Arial, sans-serif";
+  columns.forEach(([label, x, width]) => drawFitText(ctx, label, x, y, width));
+  y += 44;
+  ctx.font = "500 16px Poppins, Arial, sans-serif";
+  rows.forEach((row, index) => {
+    ctx.fillStyle = index % 2 === 0 ? "#ffffff" : "#f8fafc";
+    ctx.fillRect(50, y - 28, 1140, 42);
+    ctx.fillStyle = "#334155";
+    const values = [formatShortDate(row.date), row.clientName, row.projectName, row.count, row.platforms, row.note];
+    columns.forEach(([, x, width], columnIndex) => drawFitText(ctx, values[columnIndex], x, y, width));
+    y += 54;
+  });
+  const total = rows.reduce((sum, row) => sum + Number(row.count || 0), 0);
+  ctx.fillStyle = "#1d2e63";
+  ctx.fillRect(50, y - 26, 1140, 44);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "600 17px Poppins, Arial, sans-serif";
+  drawFitText(ctx, "Total posts", 60, y, 160);
+  drawFitText(ctx, formatNumber(total), 625, y, 80);
+  const pdf = buildImagePdf(canvas.toDataURL("image/jpeg", 0.98), canvas.width, canvas.height);
+  saveBlob(pdf, `infonits-posts-${postedRecordExportName()}-${month}.pdf`, "application/pdf");
+  showToast("Posted records PDF downloaded");
 }
 
 function downloadManagerMonthlyReport() {
@@ -6348,6 +6567,7 @@ projectStatusFilter.addEventListener("change", renderProjects);
 projectUsdRate.addEventListener("input", convertProjectUsdToLkr);
 pmMonthFilter.addEventListener("change", () => {
   pmProjectPage = 1;
+  pmPostPage = 1;
   renderProjectManagerWorkspace();
 });
 document.getElementById("pmProjectPrevPage").addEventListener("click", () => {
@@ -6358,6 +6578,20 @@ document.getElementById("pmProjectNextPage").addEventListener("click", () => {
   pmProjectPage += 1;
   renderProjectManagerWorkspace();
 });
+document.getElementById("pmPostPrevPage").addEventListener("click", () => {
+  pmPostPage = Math.max(1, pmPostPage - 1);
+  renderProjectManagerWorkspace();
+});
+document.getElementById("pmPostNextPage").addEventListener("click", () => {
+  pmPostPage += 1;
+  renderProjectManagerWorkspace();
+});
+document.getElementById("pmPostClientFilter").addEventListener("change", () => {
+  pmPostPage = 1;
+  renderSocialMediaPosts();
+});
+document.getElementById("downloadPmPostCsvButton").addEventListener("click", downloadPostedRecordsCsv);
+document.getElementById("downloadPmPostPdfButton").addEventListener("click", downloadPostedRecordsPdf);
 document.getElementById("saveProjectTargetButton").addEventListener("click", saveCurrentProjectMonthSettings);
 toggleProjectFormButton.addEventListener("click", toggleProjectForm);
 document.getElementById("projectValueUsd").addEventListener("input", convertProjectUsdToLkr);
@@ -6678,6 +6912,7 @@ socialPostForm.addEventListener("submit", (event) => {
     showToast(`${posts.length} platform record${posts.length === 1 ? "" : "s"} saved`);
   }
   saveSocialMediaPosts();
+  pmPostPage = 1;
   resetSocialPostForm();
   renderProjectManagerWorkspace();
 });
@@ -6825,7 +7060,7 @@ document.body.addEventListener("click", (event) => {
   const postDeleteGroupButton = event.target.closest("[data-post-delete-group]");
   const correctionEditButton = event.target.closest("[data-correction-edit]");
   const correctionDeleteButton = event.target.closest("[data-correction-delete]");
-  const notifyRoleButton = event.target.closest("[data-notify-role]");
+  const notifyDesignerButton = event.target.closest("[data-notify-designer]");
   const pmAssignDesignerButton = event.target.closest("[data-pm-assign-designer]");
   const pmAssignDeveloperButton = event.target.closest("[data-pm-assign-developer]");
   const pmViewProjectButton = event.target.closest("[data-pm-view-project]");
@@ -6848,7 +7083,9 @@ document.body.addEventListener("click", (event) => {
   const togglePasswordButton = event.target.closest("[data-toggle-password]");
   const portalCalendarButton = event.target.closest("[data-portal-calendar]");
   const closeInvoiceModalButton = event.target.closest("[data-close-invoice-modal]");
+  const clientColorButton = event.target.closest("[data-client-color]");
 
+  if (clientColorButton) changeClientColor(clientColorButton.dataset.clientColor);
   if (closeInvoiceModalButton) closeInvoiceModal();
   if (selectButton) selectInvoice(selectButton.dataset.select);
   if (editButton) editInvoice(editButton.dataset.edit);
@@ -6875,22 +7112,7 @@ document.body.addEventListener("click", (event) => {
   if (postDeleteGroupButton) deleteSocialPostGroup(postDeleteGroupButton.dataset.postDeleteGroup);
   if (correctionEditButton) editCorrection(correctionEditButton.dataset.correctionEdit);
   if (correctionDeleteButton) deleteCorrection(correctionDeleteButton.dataset.correctionDelete);
-  if (notifyRoleButton) {
-    const role = notifyRoleButton.dataset.notifyRole;
-    pmNotifications.unshift({
-      id: createId(),
-      type: "Team notify",
-      title: `Notify ${roleLabels[role] || role}`,
-      message: `Project manager notified ${roleLabels[role] || role} to check pending work.`,
-      sourceId: `manual-${role}-${Date.now()}`,
-      assignedTo: role,
-      status: "Unread",
-      createdAt: new Date().toISOString(),
-    });
-    savePmNotifications();
-    renderProjectManagerWorkspace();
-    showToast(`${roleLabels[role] || role} notified`);
-  }
+  if (notifyDesignerButton) notifyDesignerForMissedPost(notifyDesignerButton.dataset.notifyDesigner);
   if (pmAssignDesignerButton) assignProjectTeamMember(pmAssignDesignerButton.dataset.pmAssignDesigner, "designer");
   if (pmAssignDeveloperButton) assignProjectTeamMember(pmAssignDeveloperButton.dataset.pmAssignDeveloper, "developer");
   if (pmViewProjectButton) editProject(pmViewProjectButton.dataset.pmViewProject);

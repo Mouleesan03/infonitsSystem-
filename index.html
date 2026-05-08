@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Infonits Invoice Manager</title>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20260507-qa-fix" />
+    <link rel="stylesheet" href="styles.css?v=20260508-posted-records" />
   </head>
   <body class="app-loading">
     <section class="app-preloader" id="appPreloader" aria-live="polite">
@@ -375,6 +375,7 @@
               <table>
                 <thead>
                   <tr>
+                    <th>No.</th>
                     <th>Invoice</th>
                     <th>Customer</th>
                     <th>Date</th>
@@ -724,7 +725,7 @@
                 <button class="secondary-action" id="pmProjectNextPage" type="button">Next</button>
               </div>
             </section>
-            <section class="panel">
+            <section class="panel pm-posted-panel">
               <div class="panel-heading">
                 <h2>Add posted update</h2>
                 <button class="secondary-action" id="resetSocialPostButton" type="button">Clear</button>
@@ -750,12 +751,19 @@
             <section class="panel">
               <div class="panel-heading">
                 <h2>Posted records</h2>
-                <span class="muted-label">One row per posted update</span>
+                <div class="pm-post-tools">
+                  <select id="pmPostClientFilter">
+                    <option value="">All clients</option>
+                  </select>
+                  <button class="secondary-action" id="downloadPmPostCsvButton" type="button">CSV</button>
+                  <button class="secondary-action" id="downloadPmPostPdfButton" type="button">PDF</button>
+                </div>
               </div>
               <div class="table-wrap pm-table-wrap">
-                <table class="pm-table">
+                <table class="pm-table pm-post-table">
                   <thead>
                     <tr>
+                      <th>No.</th>
                       <th>Date</th>
                       <th>Client</th>
                       <th>Project</th>
@@ -767,6 +775,11 @@
                   </thead>
                   <tbody id="socialPostTable"></tbody>
                 </table>
+              </div>
+              <div class="pagination-controls pm-pagination">
+                <button class="secondary-action" id="pmPostPrevPage" type="button">Prev</button>
+                <span id="pmPostPageLabel">Page 1 of 1</span>
+                <button class="secondary-action" id="pmPostNextPage" type="button">Next</button>
               </div>
             </section>
             <section class="panel pm-alert-panel">
@@ -1120,37 +1133,48 @@
                 <h2>Manage clients</h2>
                 <button class="secondary-action" id="resetClientButton" type="button">Clear</button>
               </div>
-              <form class="form-grid admin-form" id="clientForm">
-                <label>
+              <form class="form-grid admin-form client-form polished-form" id="clientForm">
+                <label class="field-with-icon user-field">
                   Client name
-                  <input id="clientName" required />
+                  <span class="input-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM4 21a8 8 0 0 1 16 0" /></svg></span>
+                  <input id="clientName" placeholder="Enter client name" required />
                 </label>
-                <label>
+                <label class="field-with-icon email-field">
                   Email
-                  <input id="clientEmail" type="email" />
+                  <span class="input-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4V6Zm0 2 8 6 8-6" /></svg></span>
+                  <input id="clientEmail" type="email" placeholder="Enter email" />
                 </label>
-                <label>
+                <label class="field-with-icon phone-field">
                   Phone
-                  <input id="clientPhone" />
+                  <span class="input-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M6 4h4l2 5-3 2a12 12 0 0 0 4 4l2-3 5 2v4c0 1-1 2-2 2A16 16 0 0 1 4 6c0-1 1-2 2-2Z" /></svg></span>
+                  <input id="clientPhone" placeholder="Enter phone number" />
                 </label>
-                <label>
+                <label class="field-with-icon globe-field">
                   Country
+                  <span class="input-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18" /></svg></span>
                   <select id="clientCountry"></select>
                 </label>
-                <label class="wide">
+                <label class="wide field-with-icon address-field">
                   Billing address
-                  <textarea id="clientAddress" rows="3"></textarea>
+                  <span class="input-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 21s7-5 7-11a7 7 0 0 0-14 0c0 6 7 11 7 11Zm0-8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" /></svg></span>
+                  <textarea id="clientAddress" rows="3" placeholder="Enter billing address"></textarea>
                 </label>
-                <button class="primary-action save-button" type="submit">Save client</button>
+                <button class="primary-action save-button icon-label-action" type="submit">
+                  <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0M4 20a8 8 0 0 1 16 0M18 4v6M15 7h6" /></svg>
+                  Save client
+                </button>
               </form>
             </section>
 
             <section class="panel admin-list-panel">
               <div class="panel-heading">
                 <h2>Client list</h2>
-                <div class="filters">
+                <div class="filters client-statement-tools">
                   <select id="statementClientSelect"></select>
-                  <button class="secondary-action" id="downloadClientStatementButton" type="button">Client statement</button>
+                  <button class="secondary-action icon-label-action" id="downloadClientStatementButton" type="button">
+                    <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7V3Zm7 1v4h4M9 12h6M9 16h6" /></svg>
+                    Client statement
+                  </button>
                 </div>
               </div>
               <div class="table-wrap">
@@ -1611,7 +1635,7 @@
       </section>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="supabase-config.js?v=20260507-qa-fix"></script>
-    <script src="app.js?v=20260507-qa-fix"></script>
+    <script src="supabase-config.js?v=20260508-posted-records"></script>
+    <script src="app.js?v=20260508-posted-records"></script>
   </body>
 </html>
