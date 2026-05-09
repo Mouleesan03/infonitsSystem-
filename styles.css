@@ -470,7 +470,7 @@ button {
 }
 
 .workspace {
-  padding: clamp(18px, 1.6vw, 26px);
+  padding: clamp(14px, 1.25vw, 20px);
   min-width: 0;
 }
 
@@ -479,8 +479,8 @@ button {
   justify-content: space-between;
   align-items: center;
   gap: 12px;
-  margin: 0 0 18px;
-  padding: 0 0 12px;
+  margin: 0 0 12px;
+  padding: 0 0 10px;
   border-bottom: 1px solid rgba(148, 163, 184, 0.22);
   background: transparent;
 }
@@ -492,9 +492,9 @@ button {
 .topbar-title h1 {
   margin: 0;
   color: #172033;
-  font-size: clamp(1.5rem, 2vw, 2rem);
+  font-size: 20px;
   line-height: 1.12;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .topbar-title p {
@@ -512,7 +512,7 @@ button {
 
 .topbar-search {
   width: clamp(240px, 28vw, 380px);
-  min-height: 38px;
+  min-height: 34px;
   margin-left: auto;
   border-radius: 12px;
   background: #ffffff;
@@ -520,9 +520,9 @@ button {
 
 .topbar-actions > .secondary-action,
 .topbar-actions > .primary-action {
-  min-height: 38px;
+  min-height: 34px;
   border-radius: 10px;
-  padding: 0 14px;
+  padding: 0 12px;
   font-weight: 600;
   box-shadow: none;
 }
@@ -977,6 +977,501 @@ h2 {
 .dashboard-main .pagination-controls {
   margin-top: auto;
   padding-top: 12px;
+}
+
+#dashboardView {
+  display: none;
+}
+
+#dashboardView.active {
+  display: grid;
+  gap: 10px;
+}
+
+.dashboard-metric-grid {
+  grid-template-columns: repeat(7, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 0;
+}
+
+.dashboard-metric-grid .metric {
+  min-height: 68px;
+  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-areas: "icon copy";
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid #e8eef6;
+  border-radius: 12px;
+  align-items: center;
+  background: #ffffff;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.045);
+}
+
+.dashboard-metric-grid .metric-icon {
+  width: 38px;
+  height: 38px;
+  border-radius: 11px;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.16);
+}
+
+.dashboard-metric-grid .metric-icon svg {
+  width: 19px;
+  height: 19px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.metric-purple .metric-icon {
+  background: #7c3aed;
+}
+
+.metric-cyan .metric-icon {
+  background: #06b6d4;
+}
+
+.metric-copy {
+ grid-area: copy;
+  min-width: 0;
+  width: 100%;
+  display: flex;
+  gap: 5px;
+  align-content: center;
+  justify-items: start;
+  text-align: left;
+  flex-direction: column;
+}
+
+.metric-copy span {
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-copy strong {
+  color: #172033;
+  font-size: clamp(0.88rem, 0.95vw, 1rem);
+  font-weight: 650;
+  line-height: 1.1;
+  justify-self: start;
+  text-align: left;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.metric-copy small {
+  display: none;
+}
+
+.dashboard-insight-grid {
+  display: grid;
+  grid-template-columns: minmax(390px, 1.45fr) minmax(280px, 1fr) minmax(310px, 1.05fr) minmax(260px, 0.95fr);
+  gap: 10px;
+}
+
+.compact-heading {
+  min-height: 25px;
+  margin-bottom: 6px;
+}
+
+.compact-heading h2 {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.dashboard-chart-card,
+.dashboard-status-card,
+.dashboard-activity-card,
+.dashboard-overdue-card,
+.dashboard-list-card,
+.dashboard-table-card {
+  padding: 10px;
+  border-radius: 12px;
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.05);
+}
+
+.dashboard-bar-chart {
+  height: 132px;
+  display: grid;
+  grid-template-columns: 62px minmax(0, 1fr);
+  
+  overflow: hidden;
+  padding: 4px 0 0;
+}
+
+.dashboard-chart-axis {
+   display: grid;
+  grid-template-rows: repeat(6, 1fr);
+  align-items: center;
+  padding: 0 0 18px;
+  justify-items: start;
+}
+
+.dashboard-chart-axis span {
+  color: #334155;
+  font-size: 0.62rem;
+  font-weight: 500;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.dashboard-chart-plot {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.dashboard-chart-gridlines {
+  position: absolute;
+  inset: 0 0 18px;
+  display: grid;
+  grid-template-rows: repeat(6, 1fr);
+}
+
+.dashboard-chart-gridlines i {
+  border-top: 1px dashed #dbe4ef;
+}
+
+.dashboard-chart-bars {
+  position: relative;
+  z-index: 1;
+  height: 100%;
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-items: end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dashboard-bar-item {
+  height: 100%;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) 18px;
+  align-items: end;
+  gap: 5px;
+}
+
+.dashboard-bar-item span {
+  width: min(100%, 22px);
+  display: block;
+  justify-self: center;
+  border-radius: 7px 7px 2px 2px;
+  background: linear-gradient(180deg, #bcd3ff, #78a6ff);
+  box-shadow: 0 5px 10px rgba(37, 99, 235, 0.14);
+}
+
+.dashboard-bar-item.is-current span {
+  background: linear-gradient(180deg, #4f8dff, #2563eb);
+  box-shadow: 0 6px 12px rgba(37, 99, 235, 0.28);
+}
+
+.dashboard-bar-item small {
+  color: var(--muted);
+  font-size: 0.64rem;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.status-overview {
+  min-height: 124px;
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.status-ring {
+  width: 98px;
+  height: 98px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  position: relative;
+}
+
+.status-ring::after {
+  content: "";
+  position: absolute;
+  inset: 24px;
+  border-radius: 50%;
+  background: #ffffff;
+}
+
+.status-ring span {
+  position: relative;
+  z-index: 1;
+  color: #172033;
+  font-size: 0.96rem;
+  font-weight: 600;
+}
+
+.status-legend {
+  display: grid;
+  gap: 7px;
+}
+
+.status-legend div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  color: #334155;
+  font-size: 0.76rem;
+  font-weight: 500;
+}
+
+.status-legend strong {
+  font-weight: 600;
+}
+
+.status-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-legend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.dashboard-activity-card .activity-list {
+  max-height: 124px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.dashboard-activity-item {
+  min-height: 24px;
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  border-bottom: 1px solid #edf2f7;
+  padding: 4px 0;
+}
+
+.dashboard-activity-item i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+.dashboard-activity-item strong,
+.dashboard-activity-item span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-activity-item strong {
+  color: #172033;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.dashboard-activity-item span,
+.dashboard-activity-item small {
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.compact-table-wrap table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.compact-table-wrap th,
+.compact-table-wrap td {
+  padding: 6px 8px;
+  font-size: 0.74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-overdue-card .compact-table-wrap th:nth-child(1),
+.dashboard-overdue-card .compact-table-wrap td:nth-child(1) {
+  width: 118px;
+}
+
+.dashboard-overdue-card .compact-table-wrap th:nth-child(3),
+.dashboard-overdue-card .compact-table-wrap td:nth-child(3),
+.dashboard-overdue-card .compact-table-wrap th:nth-child(5),
+.dashboard-overdue-card .compact-table-wrap td:nth-child(5) {
+  width: 92px;
+}
+
+.danger-text {
+  color: #ef4444;
+  font-weight: 600;
+}
+
+.mini-action {
+  min-height: 28px;
+  border-radius: 8px;
+  padding: 0 10px;
+  font-size: 0.72rem;
+}
+
+.dashboard-mini-list,
+.dashboard-progress-list {
+  display: grid;
+  gap: 5px;
+}
+
+.dashboard-mini-row {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  min-height: 26px;
+  border-bottom: 1px solid #edf2f7;
+}
+
+.dashboard-mini-row span {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: #eef4ff;
+  color: #1d2e63;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.dashboard-mini-row strong {
+  overflow: hidden;
+  color: #172033;
+  font-size: 0.76rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dashboard-mini-row em {
+  color: #334155;
+  font-size: 0.72rem;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.dashboard-progress-row {
+  display: grid;
+  gap: 4px;
+  min-height: 30px;
+}
+
+.dashboard-progress-row div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: #172033;
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.dashboard-progress-row span {
+  color: var(--muted);
+}
+
+.dashboard-progress-row b {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5ebf2;
+}
+
+.dashboard-progress-row i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #2563eb);
+}
+
+.dashboard-filter-pills {
+  display: inline-flex;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.dashboard-filter-pills button {
+  min-height: 26px;
+  border: 0;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  padding: 0 12px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+.dashboard-filter-pills button.is-active {
+  background: #1d2e63;
+  color: #ffffff;
+}
+
+#dashboardView .dashboard-table-card {
+  min-height: 0;
+}
+
+#dashboardView .dashboard-table-card .pagination-controls {
+  margin-top: 8px;
+}
+
+#dashboardView .dashboard-table-card .compact-table-wrap td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  font-size: 0.76rem;
+}
+
+#dashboardView .dashboard-table-card .compact-table-wrap th {
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+#dashboardView .dashboard-table-card th:nth-child(1),
+#dashboardView .dashboard-table-card td:nth-child(1) {
+  width: 48px;
+}
+
+#dashboardView .dashboard-table-card th:nth-child(2),
+#dashboardView .dashboard-table-card td:nth-child(2) {
+  width: 145px;
+}
+
+#dashboardView .dashboard-table-card th:nth-child(4),
+#dashboardView .dashboard-table-card td:nth-child(4),
+#dashboardView .dashboard-table-card th:nth-child(5),
+#dashboardView .dashboard-table-card td:nth-child(5) {
+  width: 130px;
+}
+
+#dashboardView .dashboard-table-card th:nth-child(6),
+#dashboardView .dashboard-table-card td:nth-child(6) {
+  width: 132px;
+}
+
+#dashboardView .dashboard-table-card th:nth-child(7),
+#dashboardView .dashboard-table-card td:nth-child(7) {
+  width: 120px;
+}
+
+#dashboardView .dashboard-table-card th:nth-child(8),
+#dashboardView .dashboard-table-card td:nth-child(8) {
+  width: 82px;
+  text-align: center;
 }
 
 .dashboard-breakdown,
@@ -1749,52 +2244,88 @@ h2 {
 
 .website-login-table th,
 .website-login-table td {
-  padding: 12px 8px;
-  overflow-wrap: anywhere;
+  padding: 9px 10px;
+  vertical-align: middle;
+  overflow: hidden;
 }
 
 .website-login-table th:nth-child(1),
 .website-login-table td:nth-child(1) {
-  width: 14%;
+  width: 56px;
+  text-align: center;
 }
 
 .website-login-table th:nth-child(2),
 .website-login-table td:nth-child(2) {
-  width: 14%;
+  width: 30%;
 }
 
 .website-login-table th:nth-child(3),
 .website-login-table td:nth-child(3) {
-  width: 15%;
+  width: 24%;
 }
 
 .website-login-table th:nth-child(4),
 .website-login-table td:nth-child(4) {
-  width: 13%;
+  width: 24%;
 }
 
 .website-login-table th:nth-child(5),
 .website-login-table td:nth-child(5) {
-  width: 14%;
-}
-
-.website-login-table th:nth-child(6),
-.website-login-table td:nth-child(6) {
-  width: 14%;
-}
-
-.website-login-table th:nth-child(7),
-.website-login-table td:nth-child(7) {
-  width: 16%;
+  width: 180px;
+  text-align: center;
 }
 
 #loginsView .admin-list-panel .table-wrap {
   overflow-x: hidden;
 }
 
+#loginsView .admin-list-panel .pagination-controls {
+  margin-top: 12px;
+}
+
+.website-name-cell,
+.portal-login-cell,
+.renewal-mini-cell {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.website-name-cell strong,
+.website-name-cell span,
+.renewal-mini-cell span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.website-name-cell strong {
+  color: #101827;
+  font-size: 0.9rem;
+}
+
+.website-name-cell span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.renewal-mini-cell span {
+  color: #172033;
+  font-size: 0.8rem;
+}
+
+.renewal-mini-cell strong {
+  display: inline-block;
+  width: 58px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
 #loginsView .credential-cell {
   max-width: 100%;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
 }
 
@@ -1805,13 +2336,14 @@ h2 {
 }
 
 #loginsView .icon-actions {
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
+  justify-content: center;
 }
 
 #loginsView .icon-action {
-  width: 29px;
-  height: 29px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
 }
 
@@ -1821,172 +2353,140 @@ h2 {
 }
 
 #loginsView .icon-action.compact {
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
 }
 
-.portal-calendar-card {
+.portal-link-actions {
+  min-width: 160px;
+}
+
+.portal-renewal-alerts {
   display: grid;
   gap: 10px;
   margin-bottom: 14px;
-  border: 1px solid #e5ecf5;
+  border: 1px solid #dfe8f4;
   border-radius: 16px;
-  background: #fbfdff;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
   padding: 12px;
 }
 
-.portal-calendar-heading {
+.portal-renewal-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
 }
 
-.portal-calendar-heading h3 {
+.portal-renewal-heading h3 {
   margin: 0;
   color: #172033;
   font-size: 0.96rem;
 }
 
-.portal-calendar-heading p {
+.portal-renewal-heading p {
   margin: 3px 0 0;
   color: var(--muted);
   font-size: 0.82rem;
 }
 
-.portal-calendar-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex: 0 0 auto;
-}
-
-.portal-calendar-controls .secondary-action {
-  width: 34px;
-  min-height: 34px;
-  padding: 0;
-  font-size: 1.1rem;
-}
-
-#portalCalendarLabel {
-  min-width: 122px;
-  color: #172033;
-  font-size: 0.9rem;
-  font-weight: 600;
-  text-align: center;
-}
-
-.portal-calendar-weekdays,
-.portal-calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 5px;
-}
-
-.portal-calendar-weekdays span {
-  color: var(--muted);
-  font-size: 0.72rem;
-  font-weight: 700;
-  text-align: center;
-  text-transform: uppercase;
-}
-
-.portal-calendar-day {
-  min-height: 42px;
-  display: grid;
-  align-content: space-between;
-  justify-items: center;
-  border: 1px solid #e7edf5;
-  border-radius: 10px;
-  background: #ffffff;
-  padding: 5px 3px;
-  color: #172033;
-  font-size: 0.82rem;
-  font-weight: 600;
-}
-
-.portal-calendar-day.is-empty {
-  visibility: hidden;
-}
-
-.portal-calendar-day.is-today {
-  border-color: #2563eb;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-}
-
-.portal-calendar-day.has-event {
-  background: #fff7ed;
-  border-color: #fed7aa;
-}
-
-.portal-calendar-dots {
-  display: inline-flex;
-  gap: 3px;
-  min-height: 6px;
-}
-
-.portal-calendar-dots i {
-  width: 6px;
-  height: 6px;
+#portalRenewalAlertCount {
   border-radius: 999px;
+  background: #fff3e8;
+  color: #c2410c;
+  padding: 7px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
 }
 
-.portal-calendar-dots i.reminder {
-  background: #f59e0b;
-}
-
-.portal-calendar-dots i.expiry {
-  background: #ef4444;
-}
-
-.portal-calendar-list {
+.portal-renewal-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 7px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
-.portal-calendar-event,
-.portal-calendar-empty {
-  min-height: 42px;
-  border-radius: 12px;
+.portal-renewal-alert,
+.portal-renewal-empty {
+  min-height: 58px;
+  border-radius: 14px;
   background: #ffffff;
   border: 1px solid #e5ecf5;
-  padding: 8px 10px;
+  padding: 10px;
 }
 
-.portal-calendar-event {
-  display: grid;
-  grid-template-columns: 72px minmax(74px, 0.55fr) minmax(0, 1fr);
-  gap: 8px;
+.portal-renewal-alert {
+  display: flex;
   align-items: center;
-}
-
-.portal-calendar-event span {
-  color: var(--muted);
-  font-size: 0.78rem;
-}
-
-.portal-calendar-event strong {
-  font-size: 0.82rem;
-}
-
-.portal-calendar-event small {
-  color: #334155;
-  font-size: 0.8rem;
-}
-
-.portal-calendar-event.reminder {
+  gap: 10px;
   border-left: 4px solid #f59e0b;
 }
 
-.portal-calendar-event.expiry {
-  border-left: 4px solid #ef4444;
+.portal-renewal-alert.overdue,
+.portal-renewal-alert.due-today {
+  border-left-color: #ef4444;
 }
 
-.portal-calendar-empty {
+.portal-renewal-alert.urgent {
+  border-left-color: #fb923c;
+}
+
+.portal-renewal-alert.soon {
+  border-left-color: #2563eb;
+}
+
+.portal-renewal-icon {
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 10px;
+  background: #eef4ff;
+  color: #1d2e63;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.portal-renewal-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.portal-renewal-copy strong,
+.portal-renewal-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.portal-renewal-copy strong {
+  color: #101827;
+  font-size: 0.86rem;
+}
+
+.portal-renewal-copy span {
+  color: var(--muted);
+  font-size: 0.76rem;
+}
+
+.portal-renewal-badge {
+  flex: 0 0 auto;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #334155;
+  padding: 5px 8px;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.portal-renewal-empty {
   grid-column: 1 / -1;
   color: var(--muted);
   font-size: 0.86rem;
+  display: flex;
+  align-items: center;
 }
 
 .settings-panel {
@@ -2103,7 +2603,7 @@ h2 {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .invoice-list-heading {
@@ -3968,13 +4468,27 @@ textarea {
   display: flex;
   justify-content: flex-end;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
+  padding-top: 4px;
 }
 
 .pagination-controls span {
   color: #64748b;
-  font-size: 0.9rem;
+  font-size: 0.76rem;
   font-weight: 500;
+}
+
+.pagination-controls .secondary-action {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  justify-content: center;
+  border-radius: 9px;
+  padding: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1;
 }
 
 .pagination-controls button:disabled {
@@ -5007,21 +5521,18 @@ textarea {
     width: 100%;
   }
 
-  .portal-calendar-heading {
+  .portal-renewal-heading {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .portal-calendar-controls {
-    justify-content: space-between;
-  }
-
-  .portal-calendar-list {
+  .portal-renewal-list {
     grid-template-columns: 1fr;
   }
 
-  .portal-calendar-event {
-    grid-template-columns: 1fr;
+  .portal-renewal-alert {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .topbar-actions button {
@@ -5588,13 +6099,11 @@ textarea {
     gap: 8px;
   }
 
-  .pm-calendar-grid,
-  .portal-calendar-grid {
+  .pm-calendar-grid {
     gap: 4px;
   }
 
-  .calendar-day,
-  .portal-calendar-day {
+  .calendar-day {
     min-height: 64px;
     padding: 6px;
     font-size: 0.7rem;

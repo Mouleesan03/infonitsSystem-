@@ -18,11 +18,12 @@ const PM_NOTIFICATIONS_KEY = "infonits.notifications";
 const MONTHLY_POST_REPORTS_KEY = "infonits.monthlyPostReports";
 const CLOUD_BACKUP_KEY = "infonits.cloudBackup";
 const FINANCE_PAGE_SIZE = 7;
-const RECENT_INVOICE_PAGE_SIZE = 8;
+const RECENT_INVOICE_PAGE_SIZE = 6;
 const CLIENT_PAGE_SIZE = 10;
 const INVOICE_PAGE_SIZE = 10;
 const PM_PROJECT_PAGE_SIZE = 6;
 const PM_POST_PAGE_SIZE = 5;
+const WEBSITE_LOGIN_PAGE_SIZE = 8;
 const PM_WEEKLY_POST_TARGET = 3;
 const PM_MONTHLY_POST_TARGET = PM_WEEKLY_POST_TARGET * 4;
 const MAX_IMAGE_UPLOAD_SIZE = 2 * 1024 * 1024;
@@ -40,6 +41,7 @@ const defaultSettings = {
   bankBranch: "Jaffna",
   showPaymentDetails: "yes",
   contactPhone: "+94 77 607 9157",
+  designWhatsappGroupUrl: "",
   logoDataUrl: "assets/infonits-logo.jpg",
   autoProjectFinance: "no",
   aiMode: "local",
@@ -114,12 +116,12 @@ let previewHidden = true;
 let projectFormVisible = false;
 let financePage = 1;
 let recentInvoicesPage = 1;
+let dashboardInvoiceFilter = "All";
 let clientPage = 1;
 let invoicePage = 1;
 let pmProjectPage = 1;
 let pmPostPage = 1;
-let portalCalendarMonth = today().slice(0, 7);
-let portalCalendarPinned = false;
+let websiteLoginPage = 1;
 let pendingEmployeePhotoDataUrl = "";
 const visibleWebsitePasswords = new Set();
 
@@ -158,7 +160,7 @@ const itemsContainer = document.getElementById("itemsContainer");
 const searchInput = document.getElementById("searchInput");
 const statusFilter = document.getElementById("statusFilter");
 const dashboardSearchInput = document.getElementById("dashboardSearchInput");
-const aiPromptInput = document.getElementById("aiPromptInput");
+const aiPromptInput = document.querySelector("#aiPromptInput");
 const quotationSearchInput = document.getElementById("quotationSearchInput");
 const quotationStatusFilter = document.getElementById("quotationStatusFilter");
 const invoiceMonthFilter = document.getElementById("invoiceMonthFilter");
@@ -1540,6 +1542,25 @@ function compactMoney(value, currency = settings.currencyLabel) {
   return money(value, currency);
 }
 
+function shortMoney(value, currency = settings.currencyLabel) {
+  const number = Number(value || 0);
+  const sign = number < 0 ? "-" : "";
+  const absolute = Math.abs(number);
+  const prefix = currencyPrefix(currency);
+  if (absolute >= 1000000) return `${sign}${prefix} ${formatNumber(absolute / 1000000, 1)}M`;
+  if (absolute >= 1000) return `${sign}${prefix} ${formatNumber(Math.round(absolute / 1000))}K`;
+  return `${sign}${prefix} ${formatNumber(absolute)}`.trim();
+}
+
+function shortAmount(value) {
+  const number = Number(value || 0);
+  const sign = number < 0 ? "-" : "";
+  const absolute = Math.abs(number);
+  if (absolute >= 1000000) return `${sign}${formatNumber(absolute / 1000000, 1)}M`;
+  if (absolute >= 1000) return `${sign}${formatNumber(Math.round(absolute / 1000))}K`;
+  return `${sign}${formatNumber(absolute)}`;
+}
+
 function formatPercent(value) {
   return `${Number(value || 0).toLocaleString("en-LK", {
     minimumFractionDigits: Number(value || 0) % 1 === 0 ? 0 : 2,
@@ -1869,6 +1890,7 @@ function applyAccessControl() {
   document.getElementById("newInvoiceButton").hidden = !userCanAccess("create");
   document.getElementById("newQuotationButton").hidden = !userCanAccess("quotations");
   document.getElementById("newProjectButton").hidden = !userCanAccess("projects");
+  document.getElementById("newCustomerButton").hidden = !userCanAccess("clients");
   document.getElementById("editProfileButton").hidden = !userCanAccess("users");
   renderActiveUserBadge();
   if (!userCanAccess(activeView)) switchView(firstAllowedView());
@@ -2191,6 +2213,7 @@ function startNewDocument(type = "Invoice") {
 }
 
 function createDocumentFromPrompt() {
+  if (!aiPromptInput) return;
   const prompt = aiPromptInput.value.trim();
   if (!prompt) {
     addAiMessage("bot", "Please type what you want to create.");
@@ -2281,7 +2304,8 @@ function fillDocumentDraft(draft) {
 }
 
 function addAiMessage(role, text) {
-  const log = document.getElementById("aiChatLog");
+  const log = document.querySelector("#aiChatLog");
+  if (!log) return;
   log.insertAdjacentHTML("beforeend", `<div class="ai-message ai-message-${role}">${escapeHtml(text)}</div>`);
   log.scrollTop = log.scrollHeight;
 }
@@ -3204,6 +3228,7 @@ function toggleProjectForm() {
 
 function renderDashboard() {
   const invoiceDocs = invoices.filter((invoice) => (invoice.documentType || "Invoice") === "Invoice");
+  const now = today();
   const totals = invoiceDocs.reduce(
     (summary, invoice) => {
       const invoiceTotal = invoiceTotalInLkr(invoice);
@@ -3211,21 +3236,40 @@ function renderDashboard() {
       summary.billed += invoiceTotal;
       if (invoice.status === "Paid") {
         summary.paid += invoiceTotal;
+      } else if (invoice.status === "Overdue" || (invoice.dueDate && invoice.dueDate < now)) {
+        summary.overdue += invoiceTotal;
+        summary.pending += invoiceTotal;
       } else {
         summary.pending += invoiceTotal;
       }
       return summary;
     },
-    { count: 0, billed: 0, paid: 0, pending: 0 },
+    { count: 0, billed: 0, paid: 0, pending: 0, overdue: 0 },
   );
 
   document.getElementById("totalInvoices").textContent = formatNumber(totals.count);
   document.getElementById("totalBilled").textContent = compactMoney(totals.billed);
   document.getElementById("totalPaid").textContent = compactMoney(totals.paid);
   document.getElementById("totalPending").textContent = compactMoney(totals.pending);
+  document.getElementById("dashboardOverdueTotal").textContent = compactMoney(totals.overdue);
+  document.getElementById("dashboardActiveProjects").textContent = formatNumber(projectsForMonth(today().slice(0, 7)).filter(isActiveProject).length);
+  document.getElementById("dashboardTotalCustomers").textContent = formatNumber(clients.length);
+  const paidPercent = totals.billed ? (totals.paid / totals.billed) * 100 : 0;
+  const pendingPercent = totals.billed ? (totals.pending / totals.billed) * 100 : 0;
+  const overdueCount = invoiceDocs.filter((invoice) => invoice.status === "Overdue" || (invoice.status !== "Paid" && invoice.dueDate && invoice.dueDate < now)).length;
+  document.getElementById("dashboardPaidHelper").textContent = `${formatNumber(paidPercent, 1)}% of billed`;
+  document.getElementById("dashboardPendingHelper").textContent = `${formatNumber(pendingPercent, 1)}% of billed`;
+  document.getElementById("dashboardOverdueHelper").textContent = `${formatNumber(overdueCount)} invoices`;
+
+  renderDashboardRevenue(invoiceDocs);
+  renderDashboardStatus(invoiceDocs);
+  renderDashboardActivity(invoiceDocs);
+  renderDashboardTopCustomers(invoiceDocs);
 
   const table = document.getElementById("recentInvoicesTable");
-  const recent = [...invoiceDocs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const recent = [...invoiceDocs]
+    .filter((invoice) => dashboardInvoiceFilter === "All" || invoice.status === dashboardInvoiceFilter)
+    .sort((a, b) => String(b.updatedAt || b.invoiceDate).localeCompare(String(a.updatedAt || a.invoiceDate)));
   const totalPages = Math.max(1, Math.ceil(recent.length / RECENT_INVOICE_PAGE_SIZE));
   recentInvoicesPage = Math.min(recentInvoicesPage, totalPages);
   const start = (recentInvoicesPage - 1) * RECENT_INVOICE_PAGE_SIZE;
@@ -3236,13 +3280,16 @@ function renderDashboard() {
           const totals = calculateTotals(invoice);
           return `
             <tr>
-              <td>${start + index + 1}</td>
+              <td class="row-number-cell">${start + index + 1}</td>
               <td><button class="text-action" type="button" data-select="${invoice.id}">${invoice.invoiceNumber}</button></td>
               <td>${escapeHtml(invoice.customerName)}</td>
+              <td>${formatDate(invoice.invoiceDate)}</td>
+              <td>${formatDate(invoice.dueDate)}</td>
               <td>${invoiceStatusSelect(invoice)}</td>
               <td>${money(totals.total, invoiceCurrency(invoice))}</td>
               <td>
                 <div class="action-row icon-actions">
+                  <button class="icon-action info" title="View invoice" aria-label="View invoice" type="button" data-select="${invoice.id}">${iconView()}</button>
                   <button class="icon-action edit" title="Edit invoice" aria-label="Edit invoice" type="button" data-edit="${invoice.id}">${iconEdit()}</button>
                 </div>
               </td>
@@ -3250,12 +3297,125 @@ function renderDashboard() {
           `;
         })
         .join("")
-    : emptyRow("No invoices yet", 6);
+    : emptyRow("No invoices yet", 8);
   document.getElementById("recentInvoicesPrevPage").disabled = recentInvoicesPage <= 1;
   document.getElementById("recentInvoicesNextPage").disabled = recentInvoicesPage >= totalPages;
   document.getElementById("recentInvoicesPageLabel").textContent = `Page ${recentInvoicesPage} of ${totalPages}`;
+  document.querySelectorAll("[data-dashboard-invoice-filter]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.dashboardInvoiceFilter === dashboardInvoiceFilter);
+  });
 
   renderDashboardSearch();
+}
+
+function renderDashboardRevenue(invoiceDocs) {
+  const chart = document.getElementById("dashboardRevenueChart");
+  if (!chart) return;
+  const year = today().slice(0, 4);
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const currentMonthIndex = Number(today().slice(5, 7)) - 1;
+  const monthly = Array.from({ length: 12 }, (_, index) => {
+    const month = `${year}-${String(index + 1).padStart(2, "0")}`;
+    return invoiceDocs
+      .filter((invoice) => String(invoice.invoiceDate || "").startsWith(month))
+      .reduce((sum, invoice) => sum + invoiceTotalInLkr(invoice), 0);
+  });
+  const max = Math.max(...monthly, 1);
+  const scaleMax = Math.max(250000, Math.ceil(max / 50000) * 50000);
+  const axisLabels = [scaleMax, scaleMax * 0.8, scaleMax * 0.6, scaleMax * 0.4, scaleMax * 0.2, 0];
+  chart.innerHTML = `
+    <div class="dashboard-chart-axis">
+      ${axisLabels.map((value) => `<span>${shortAmount(value)}</span>`).join("")}
+    </div>
+    <div class="dashboard-chart-plot">
+      <div class="dashboard-chart-gridlines" aria-hidden="true">${axisLabels.map(() => "<i></i>").join("")}</div>
+      <div class="dashboard-chart-bars">
+        ${monthly
+          .map((amount, index) => `
+            <div class="dashboard-bar-item${index === currentMonthIndex ? " is-current" : ""}" title="${escapeAttribute(`${monthLabels[index]}: ${compactMoney(amount, "LKR")}`)}">
+              <span style="height:${Math.max(5, Math.round((amount / scaleMax) * 100))}%"></span>
+              <small>${monthLabels[index]}</small>
+            </div>
+          `)
+          .join("")}
+      </div>
+    </div>
+  `;
+}
+
+function renderDashboardStatus(invoiceDocs) {
+  const ring = document.getElementById("dashboardStatusRing");
+  const total = document.getElementById("dashboardStatusTotal");
+  const legend = document.getElementById("dashboardStatusLegend");
+  if (!ring || !total || !legend) return;
+  const statuses = [
+    ["Paid", "#22c55e"],
+    ["Sent", "#2563eb"],
+    ["Unpaid", "#f59e0b"],
+    ["Overdue", "#ef4444"],
+  ];
+  const counts = statuses.map(([status, color]) => ({
+    status,
+    color,
+    count: invoiceDocs.filter((invoice) => invoice.status === status).length,
+  }));
+  const sum = Math.max(1, invoiceDocs.length);
+  let cursor = 0;
+  const segments = counts.map((item) => {
+    const start = cursor;
+    cursor += (item.count / sum) * 100;
+    return `${item.color} ${start}% ${cursor}%`;
+  });
+  ring.style.background = `conic-gradient(${segments.join(", ")})`;
+  total.textContent = formatNumber(invoiceDocs.length);
+  legend.innerHTML = counts
+    .map((item) => `
+      <div><span><i style="background:${item.color}"></i>${escapeHtml(item.status)}</span><strong>${formatNumber(item.count)}</strong></div>
+    `)
+    .join("");
+}
+
+function renderDashboardActivity(invoiceDocs) {
+  const list = document.getElementById("dashboardActivityList");
+  if (!list) return;
+  const activity = [...invoiceDocs]
+    .sort((a, b) => String(b.updatedAt || b.invoiceDate).localeCompare(String(a.updatedAt || a.invoiceDate)))
+    .slice(0, 5)
+    .map((invoice) => ({
+      color: invoice.status === "Paid" ? "#22c55e" : invoice.status === "Overdue" ? "#ef4444" : invoice.status === "Sent" ? "#2563eb" : "#f59e0b",
+      title: invoice.status === "Paid" ? "Payment received" : invoice.status === "Overdue" ? "Invoice overdue" : invoice.status === "Sent" ? "Invoice sent" : "Invoice updated",
+      detail: `${invoice.invoiceNumber} - ${invoice.customerName}`,
+      time: formatDate(invoice.invoiceDate),
+    }));
+  list.innerHTML = activity.length
+    ? activity.map((item) => `
+        <div class="dashboard-activity-item">
+          <i style="background:${item.color}"></i>
+          <div><strong>${escapeHtml(item.title)}</strong><span>${escapeHtml(item.detail)}</span></div>
+          <small>${escapeHtml(item.time || "")}</small>
+        </div>
+      `).join("")
+    : `<p class="muted-label">No activity yet.</p>`;
+}
+
+function renderDashboardTopCustomers(invoiceDocs) {
+  const list = document.getElementById("dashboardTopCustomers");
+  if (!list) return;
+  const totals = invoiceDocs.reduce((map, invoice) => {
+    const name = invoice.customerName || "Customer";
+    map.set(name, (map.get(name) || 0) + invoiceTotalInLkr(invoice));
+    return map;
+  }, new Map());
+  const rows = [...totals.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4);
+  list.innerHTML = rows.length
+    ? rows.map(([name, amount]) => `
+        <div class="dashboard-mini-row">
+          <span>${escapeHtml(name.slice(0, 1).toUpperCase())}</span>
+          <strong>${escapeHtml(name)}</strong>
+          <em>${compactMoney(amount, "LKR")}</em>
+        </div>
+      `).join("")
+    : `<p class="muted-label">No customers yet.</p>`;
 }
 
 function renderDashboardSearch() {
@@ -3898,6 +4058,34 @@ function visiblePmNotifications() {
   return pmNotifications.filter((note) => note.type === "Weekly missed post");
 }
 
+function missedPostWhatsappMessage(note) {
+  return [
+    "Missed post reminder",
+    `Client: ${note.clientName || "Client"}`,
+    `Project: ${note.projectName || "Project"}`,
+    `Missing: ${formatNumber(note.missing || 0)} post${Number(note.missing || 0) === 1 ? "" : "s"} this week`,
+    `Required: ${formatNumber(note.required || PM_WEEKLY_POST_TARGET)}`,
+    `Posted: ${formatNumber(note.posted || 0)}`,
+    `Designer: ${note.designerName || "Not assigned"}`,
+  ].join("\n");
+}
+
+async function copyTextToClipboard(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  const input = document.createElement("textarea");
+  input.value = text;
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  const copied = document.execCommand("copy");
+  input.remove();
+  return copied;
+}
+
 function notifyDesignerForMissedPost(notificationId) {
   const note = pmNotifications.find((item) => item.id === notificationId);
   if (!note) return;
@@ -3905,6 +4093,7 @@ function notifyDesignerForMissedPost(notificationId) {
     showToast("Assign a designer before notifying");
     return;
   }
+  const message = missedPostWhatsappMessage(note);
   addPmNotificationOnce(
     "Team notify",
     "Missed post alert",
@@ -3923,7 +4112,11 @@ function notifyDesignerForMissedPost(notificationId) {
   note.status = "Notified";
   savePmNotifications();
   renderPmNotifications();
-  showToast(`Alert sent to ${note.designerName || "designer"}`);
+  copyTextToClipboard(message).catch(() => null);
+  const groupUrl = normalizeOpenUrl(settings.designWhatsappGroupUrl || "");
+  const whatsappUrl = groupUrl || `https://wa.me/?text=${encodeURIComponent(message)}`;
+  window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+  showToast(groupUrl ? "Message copied. Paste it in the WhatsApp group." : "WhatsApp message opened");
 }
 
 function projectAssignedDesigner(project = {}) {
@@ -3936,6 +4129,11 @@ function projectAssignedDesigner(project = {}) {
 function updateWeeklyProjectNotifications() {
   const { start, end } = pastWeekRange();
   const weekKey = start.toISOString().slice(0, 10);
+  const previousWeeklyNotes = new Map(
+    pmNotifications
+      .filter((note) => note.type === "Weekly missed post" && note.sourceId)
+      .map((note) => [note.sourceId, note]),
+  );
   pmNotifications = pmNotifications.filter((note) => !["Weekly warning", "Weekly missed post"].includes(note.type || ""));
   managerProjects()
     .filter(isActiveProject)
@@ -3952,13 +4150,18 @@ function updateWeeklyProjectNotifications() {
       const clientName = project.clientName || project.name || "Client";
       const projectName = project.name || "Project";
       const designer = projectAssignedDesigner(project);
+      const sourceId = `weekly-missed-${project.id}-${weekKey}`;
+      const previousNote = previousWeeklyNotes.get(sourceId);
       addPmNotificationOnce(
         "Weekly missed post",
         "Missed posts this week",
         `${clientName} - ${projectName} missed ${missing} post${missing === 1 ? "" : "s"} this week. Required ${PM_WEEKLY_POST_TARGET}, posted ${uploaded}.`,
-        `weekly-missed-${project.id}-${weekKey}`,
+        sourceId,
         "project-manager",
         {
+          id: previousNote?.id || createId(),
+          status: previousNote?.status || "Unread",
+          createdAt: previousNote?.createdAt || new Date().toISOString(),
           projectId: project.id,
           projectName,
           clientName,
@@ -4837,92 +5040,61 @@ function toggleWebsitePassword(id) {
   renderWebsiteLogins();
 }
 
-function portalRenewalEvents() {
+function daysUntil(dateString) {
+  if (!dateString) return null;
+  const start = new Date(`${today()}T00:00:00`);
+  const end = new Date(`${dateString}T00:00:00`);
+  return Math.ceil((end - start) / 86400000);
+}
+
+function portalRenewalItems() {
   return websiteLogins.flatMap((login) => {
     const websiteName = login.websiteName || "Website";
-    const events = [];
+    const items = [];
     if (login.domainRenewalDate) {
-      events.push({ date: addDays(login.domainRenewalDate, -20), kind: "reminder", type: "Domain", websiteName });
-      events.push({ date: login.domainRenewalDate, kind: "expiry", type: "Domain", websiteName });
+      items.push({ date: login.domainRenewalDate, type: "Domain", websiteName, provider: login.domainSource || "" });
     }
     if (login.hostingRenewalDate) {
-      events.push({ date: addDays(login.hostingRenewalDate, -20), kind: "reminder", type: "Hosting", websiteName });
-      events.push({ date: login.hostingRenewalDate, kind: "expiry", type: "Hosting", websiteName });
+      items.push({ date: login.hostingRenewalDate, type: "Hosting", websiteName, provider: login.hostingProvider || "" });
     }
-    return events;
+    return items;
   });
 }
 
-function portalCalendarTitle(monthValue) {
-  return formatMonth(monthValue);
+function renewalUrgency(days) {
+  if (days < 0) return { className: "overdue", label: `${Math.abs(days)} day${Math.abs(days) === 1 ? "" : "s"} overdue` };
+  if (days === 0) return { className: "due-today", label: "Due today" };
+  if (days <= 7) return { className: "urgent", label: `${days} day${days === 1 ? "" : "s"} left` };
+  return { className: "soon", label: `${days} days left` };
 }
 
-function preferredPortalCalendarMonth() {
-  const events = portalRenewalEvents().sort((a, b) => String(a.date).localeCompare(String(b.date)));
-  const upcoming = events.find((event) => event.date >= today());
-  return String(upcoming?.date || events[0]?.date || today()).slice(0, 7);
-}
+function renderPortalRenewalAlerts() {
+  const list = document.getElementById("portalRenewalAlerts");
+  const count = document.getElementById("portalRenewalAlertCount");
+  if (!list || !count) return;
+  const reminders = portalRenewalItems()
+    .map((item) => ({ ...item, days: daysUntil(item.date) }))
+    .filter((item) => item.days !== null && item.days <= 30)
+    .sort((a, b) => a.days - b.days || a.websiteName.localeCompare(b.websiteName));
 
-function renderPortalCalendar() {
-  const grid = document.getElementById("portalCalendarGrid");
-  const list = document.getElementById("portalCalendarEvents");
-  const label = document.getElementById("portalCalendarLabel");
-  if (!grid || !list || !label) return;
-
-  label.textContent = portalCalendarTitle(portalCalendarMonth);
-  const [year, month] = portalCalendarMonth.split("-").map(Number);
-  const firstDay = new Date(year, month - 1, 1);
-  const daysInMonth = new Date(year, month, 0).getDate();
-  const monthEvents = portalRenewalEvents()
-    .filter((event) => String(event.date || "").startsWith(portalCalendarMonth))
-    .sort((a, b) => String(a.date).localeCompare(String(b.date)) || a.kind.localeCompare(b.kind));
-  const eventsByDate = monthEvents.reduce((map, event) => {
-    if (!map.has(event.date)) map.set(event.date, []);
-    map.get(event.date).push(event);
-    return map;
-  }, new Map());
-
-  const blanks = Array.from({ length: firstDay.getDay() }, () => `<div class="portal-calendar-day is-empty"></div>`);
-  const days = Array.from({ length: daysInMonth }, (_, index) => {
-    const day = index + 1;
-    const date = `${portalCalendarMonth}-${String(day).padStart(2, "0")}`;
-    const events = eventsByDate.get(date) || [];
-    const classes = ["portal-calendar-day", date === today() ? "is-today" : "", events.length ? "has-event" : ""].filter(Boolean).join(" ");
-    return `
-      <div class="${classes}">
-        <span>${day}</span>
-        ${
-          events.length
-            ? `<div class="portal-calendar-dots">${events
-                .slice(0, 3)
-                .map((event) => `<i class="${event.kind}" title="${escapeAttribute(`${event.websiteName} ${event.type} ${event.kind}`)}"></i>`)
-                .join("")}</div>`
-            : ""
-        }
-      </div>
-    `;
-  });
-  grid.innerHTML = [...blanks, ...days].join("");
-
-  list.innerHTML = monthEvents.length
-    ? monthEvents
-        .map(
-          (event) => `
-            <div class="portal-calendar-event ${event.kind}">
-              <span>${formatDate(event.date)}</span>
-              <strong>${escapeHtml(event.kind === "reminder" ? "Reminder" : "Expiry")}</strong>
-              <small>${escapeHtml(event.websiteName)} • ${escapeHtml(event.type)}</small>
+  count.textContent = `${reminders.length} due`;
+  list.innerHTML = reminders.length
+    ? reminders
+        .map((item) => {
+          const urgency = renewalUrgency(item.days);
+          return `
+            <div class="portal-renewal-alert ${urgency.className}">
+              <div class="portal-renewal-icon">${item.type === "Domain" ? "D" : "H"}</div>
+              <div class="portal-renewal-copy">
+                <strong>${escapeHtml(item.websiteName)} ${escapeHtml(item.type)}</strong>
+                <span>${escapeHtml([item.provider, formatDate(item.date)].filter(Boolean).join(" • "))}</span>
+              </div>
+              <span class="portal-renewal-badge">${escapeHtml(urgency.label)}</span>
             </div>
-          `,
-        )
+          `;
+        })
         .join("")
-    : `<div class="portal-calendar-empty">No domain or hosting renewals in this month.</div>`;
-}
-
-function shiftPortalCalendar(months) {
-  portalCalendarPinned = true;
-  portalCalendarMonth = addMonths(`${portalCalendarMonth}-01`, months).slice(0, 7);
-  renderPortalCalendar();
+    : `<div class="portal-renewal-empty">No renewals due in the next 30 days.</div>`;
 }
 
 function renderWebsiteLogins() {
@@ -4930,40 +5102,46 @@ function renderWebsiteLogins() {
   const rows = websiteLogins.filter((login) =>
     `${login.websiteName} ${login.username} ${login.domainSource} ${login.hostingProvider}`.toLowerCase().includes(query),
   );
+  const totalPages = Math.max(1, Math.ceil(rows.length / WEBSITE_LOGIN_PAGE_SIZE));
+  websiteLoginPage = Math.min(websiteLoginPage, totalPages);
+  const start = (websiteLoginPage - 1) * WEBSITE_LOGIN_PAGE_SIZE;
+  const visibleRows = rows.slice(start, start + WEBSITE_LOGIN_PAGE_SIZE);
   document.getElementById("websiteLoginTable").innerHTML = rows.length
-    ? rows
+    ? visibleRows
         .map(
           (login, index) => `
             <tr>
-              <td class="row-number-cell">${index + 1}</td>
+              <td class="row-number-cell">${start + index + 1}</td>
               <td>
-                <strong>${escapeHtml(login.websiteName)}</strong>
-                ${login.note ? `<p class="muted-cell">${escapeHtml(login.note)}</p>` : ""}
-              </td>
-              <td>
-                <div class="credential-cell">
-                  <span>${escapeHtml(login.username || "")}</span>
-                  <button class="icon-action compact" title="Copy username" aria-label="Copy username" type="button" data-copy-login="${login.id}" data-copy-field="username">${iconCopy()}</button>
+                <div class="website-name-cell">
+                  <strong>${escapeHtml(login.websiteName)}</strong>
+                  <span>${escapeHtml(login.note || "")}</span>
                 </div>
               </td>
               <td>
-                <div class="credential-cell">
-                  <span>${login.password ? (visibleWebsitePasswords.has(login.id) ? escapeHtml(login.password) : "••••••••") : ""}</span>
-                  <button class="icon-action compact" title="Show or hide password" aria-label="Show or hide password" type="button" data-toggle-password="${login.id}">${iconEye()}</button>
-                  <button class="icon-action compact" title="Copy password" aria-label="Copy password" type="button" data-copy-login="${login.id}" data-copy-field="password">${iconCopy()}</button>
+                <div class="portal-login-cell">
+                  <div class="credential-cell">
+                    <span>${escapeHtml(login.username || "")}</span>
+                    <button class="icon-action compact" title="Copy username" aria-label="Copy username" type="button" data-copy-login="${login.id}" data-copy-field="username">${iconCopy()}</button>
+                  </div>
+                  <div class="credential-cell">
+                    <span>${login.password ? (visibleWebsitePasswords.has(login.id) ? escapeHtml(login.password) : "••••••••") : ""}</span>
+                    <button class="icon-action compact" title="Show or hide password" aria-label="Show or hide password" type="button" data-toggle-password="${login.id}">${iconEye()}</button>
+                    <button class="icon-action compact" title="Copy password" aria-label="Copy password" type="button" data-copy-login="${login.id}" data-copy-field="password">${iconCopy()}</button>
+                  </div>
                 </div>
               </td>
-              <td>${escapeHtml(login.domainSource || "")}</td>
-              <td>${escapeHtml(login.hostingProvider || "")}</td>
               <td>
-                <span>Domain: ${formatDate(login.domainRenewalDate)}</span><br />
-                <span>Hosting: ${formatDate(login.hostingRenewalDate)}</span>
+                <div class="renewal-mini-cell">
+                  <span><strong>Domain</strong>${formatDate(login.domainRenewalDate) || "-"}</span>
+                  <span><strong>Hosting</strong>${formatDate(login.hostingRenewalDate) || "-"}</span>
+                </div>
               </td>
               <td>
-                <div class="action-row icon-actions">
-                  <button class="icon-action info" title="Open website login" aria-label="Open website login" type="button" data-open-url="${escapeAttribute(login.websiteLoginUrl || "")}">${iconExternal()}</button>
-                  <button class="icon-action invoice" title="Open domain login" aria-label="Open domain login" type="button" data-open-url="${escapeAttribute(login.domainLoginUrl || "")}">${iconGlobe()}</button>
-                  <button class="icon-action next" title="Open hosting login" aria-label="Open hosting login" type="button" data-open-url="${escapeAttribute(login.hostingLoginUrl || "")}">${iconServer()}</button>
+                <div class="action-row icon-actions portal-link-actions">
+                  <button class="icon-action info" title="Open website URL" aria-label="Open website URL" type="button" data-open-url="${escapeAttribute(login.websiteLoginUrl || "")}">${iconExternal()}</button>
+                  <button class="icon-action invoice" title="Open domain URL" aria-label="Open domain URL" type="button" data-open-url="${escapeAttribute(login.domainLoginUrl || "")}">${iconGlobe()}</button>
+                  <button class="icon-action next" title="Open hosting URL" aria-label="Open hosting URL" type="button" data-open-url="${escapeAttribute(login.hostingLoginUrl || "")}">${iconServer()}</button>
                   <button class="icon-action edit" title="Edit login" aria-label="Edit login" type="button" data-login-edit="${login.id}">${iconEdit()}</button>
                   <button class="icon-action delete" title="Delete login" aria-label="Delete login" type="button" data-login-delete="${login.id}">${iconDelete()}</button>
                 </div>
@@ -4972,9 +5150,11 @@ function renderWebsiteLogins() {
           `,
         )
         .join("")
-    : emptyRow("No website login details yet", 8);
-  if (!portalCalendarPinned) portalCalendarMonth = preferredPortalCalendarMonth();
-  renderPortalCalendar();
+    : emptyRow("No website login details yet", 5);
+  document.getElementById("websiteLoginPrevPage").disabled = websiteLoginPage <= 1;
+  document.getElementById("websiteLoginNextPage").disabled = websiteLoginPage >= totalPages;
+  document.getElementById("websiteLoginPageLabel").textContent = `Page ${websiteLoginPage} of ${totalPages}`;
+  renderPortalRenewalAlerts();
 }
 
 function renderProjects() {
@@ -6146,6 +6326,7 @@ function renderSettings() {
   document.getElementById("bankBranch").value = settings.bankBranch;
   document.getElementById("showPaymentDetails").value = settings.showPaymentDetails;
   document.getElementById("contactPhone").value = settings.contactPhone;
+  document.getElementById("designWhatsappGroupUrl").value = settings.designWhatsappGroupUrl || "";
   document.getElementById("autoProjectFinance").value = settings.autoProjectFinance || "no";
   document.getElementById("aiMode").value = settings.aiMode || "local";
   document.getElementById("aiApiKey").value = settings.aiApiKey || "";
@@ -6663,18 +6844,29 @@ document.querySelectorAll("[data-view-target]").forEach((button) => {
 
 document.getElementById("newInvoiceButton").addEventListener("click", () => startNewDocument("Invoice"));
 document.getElementById("newQuotationButton").addEventListener("click", () => startNewDocument("Quotation"));
+document.getElementById("newCustomerButton").addEventListener("click", () => {
+  switchView("clients");
+  openClientModal("add");
+});
 document.getElementById("newProjectButton").addEventListener("click", () => {
   resetProjectForm();
   showProjectForm();
   switchView("projects");
 });
-document.getElementById("aiCreateDraftButton").addEventListener("click", createDocumentFromPrompt);
+document.querySelectorAll("[data-dashboard-invoice-filter]").forEach((button) => {
+  button.addEventListener("click", () => {
+    dashboardInvoiceFilter = button.dataset.dashboardInvoiceFilter;
+    recentInvoicesPage = 1;
+    renderDashboard();
+  });
+});
+document.getElementById("aiCreateDraftButton")?.addEventListener("click", createDocumentFromPrompt);
 document.getElementById("exportBackupButton").addEventListener("click", exportBackup);
 document.getElementById("importBackupInput").addEventListener("change", (event) => importBackup(event.target.files[0]));
 document.getElementById("cloudBackupButton").addEventListener("click", backupToCloud);
 document.getElementById("cloudRestoreButton").addEventListener("click", restoreFromCloud);
 document.getElementById("cloudAutoBackup").addEventListener("change", cloudBackupConfigFromForm);
-aiPromptInput.addEventListener("keydown", (event) => {
+aiPromptInput?.addEventListener("keydown", (event) => {
   if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
     createDocumentFromPrompt();
   }
@@ -6869,7 +7061,18 @@ document.getElementById("refreshPmNotificationsButton").addEventListener("click"
   showToast("Project manager notifications refreshed");
 });
 renewalSearchInput.addEventListener("input", renderRenewals);
-websiteLoginSearchInput.addEventListener("input", renderWebsiteLogins);
+websiteLoginSearchInput.addEventListener("input", () => {
+  websiteLoginPage = 1;
+  renderWebsiteLogins();
+});
+document.getElementById("websiteLoginPrevPage").addEventListener("click", () => {
+  websiteLoginPage = Math.max(1, websiteLoginPage - 1);
+  renderWebsiteLogins();
+});
+document.getElementById("websiteLoginNextPage").addEventListener("click", () => {
+  websiteLoginPage += 1;
+  renderWebsiteLogins();
+});
 employeeSearchInput.addEventListener("input", renderEmployees);
 employeeStatusFilter.addEventListener("change", renderEmployees);
 managerHandleSearchInput.addEventListener("input", renderManagerHandles);
@@ -7151,6 +7354,7 @@ websiteLoginForm.addEventListener("submit", (event) => {
   }
   saveWebsiteLogins();
   resetWebsiteLoginForm();
+  websiteLoginPage = 1;
   renderWebsiteLogins();
   closeAdminRecordModals();
 });
@@ -7263,7 +7467,6 @@ document.body.addEventListener("click", (event) => {
   const openUrlButton = event.target.closest("[data-open-url]");
   const copyLoginButton = event.target.closest("[data-copy-login]");
   const togglePasswordButton = event.target.closest("[data-toggle-password]");
-  const portalCalendarButton = event.target.closest("[data-portal-calendar]");
   const closeInvoiceModalButton = event.target.closest("[data-close-invoice-modal]");
   const closeFinanceModalButton = event.target.closest("[data-close-finance-modal]");
   const closeEmployeeModalButton = event.target.closest("[data-close-employee-modal]");
@@ -7329,7 +7532,6 @@ document.body.addEventListener("click", (event) => {
   if (openUrlButton) openSavedLogin(openUrlButton.dataset.openUrl);
   if (copyLoginButton) copyLoginField(copyLoginButton.dataset.copyLogin, copyLoginButton.dataset.copyField);
   if (togglePasswordButton) toggleWebsitePassword(togglePasswordButton.dataset.togglePassword);
-  if (portalCalendarButton) shiftPortalCalendar(Number(portalCalendarButton.dataset.portalCalendar || 0));
 });
 
 document.body.addEventListener("change", (event) => {
@@ -7374,6 +7576,7 @@ document.getElementById("saveSettingsButton").addEventListener("click", () => {
     bankBranch: document.getElementById("bankBranch").value.trim(),
     showPaymentDetails: document.getElementById("showPaymentDetails").value,
     contactPhone: formatPhone(document.getElementById("contactPhone").value),
+    designWhatsappGroupUrl: document.getElementById("designWhatsappGroupUrl").value.trim(),
     autoProjectFinance: document.getElementById("autoProjectFinance").value,
     aiMode: document.getElementById("aiMode").value,
     aiApiKey: document.getElementById("aiApiKey").value.trim(),

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Infonits Invoice Manager</title>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20260509-employee-list" />
+    <link rel="stylesheet" href="styles.css?v=20260510-chart-axis-clean" />
   </head>
   <body class="app-loading">
     <section class="app-preloader" id="appPreloader" aria-live="polite">
@@ -76,14 +76,6 @@
           <button class="nav-tab" data-view="settings" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12a7 7 0 0 0-.1-1.1l2-1.5-2-3.4-2.4 1a7 7 0 0 0-1.9-1.1L14.2 3h-4.4l-.4 2.9A7 7 0 0 0 7.5 7l-2.4-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.1l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 1.9 1.1l.4 2.9h4.4l.4-2.9a7 7 0 0 0 1.9-1.1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1.1Z" /></svg></span>Settings</button>
         </nav>
 
-        <section class="ai-panel sidebar-ai-panel">
-          <h2>AI Assistant</h2>
-          <div class="ai-chat-log is-compact" id="aiChatLog"></div>
-          <div class="ai-chat-controls">
-            <textarea id="aiPromptInput" rows="2" placeholder="Invoice for client, service, amount"></textarea>
-            <button class="primary-action" id="aiCreateDraftButton" type="button">Create draft</button>
-          </div>
-        </section>
       </aside>
 
       <main class="workspace">
@@ -94,6 +86,7 @@
           </div>
           <div class="topbar-actions">
             <input class="topbar-search" id="dashboardSearchInput" placeholder="Search invoices and quotations" />
+            <button class="secondary-action" id="newCustomerButton" type="button">+ Add customer</button>
             <button class="secondary-action" id="newProjectButton" type="button">+ Add project</button>
             <button class="secondary-action" id="newQuotationButton" type="button">+ New quotation</button>
             <button class="primary-action" id="newInvoiceButton" type="button">+ New invoice</button>
@@ -132,67 +125,79 @@
             </div>
           </section>
 
-          <div class="metric-grid">
-            <article class="metric metric-blue">
-              <div class="metric-icon" aria-hidden="true">#</div>
-              <div class="metric-label">
-                <span>Total invoices</span>
-              </div>
-              <strong id="totalInvoices">0</strong>
-            </article>
-            <article class="metric metric-orange">
-              <div class="metric-icon" aria-hidden="true">LKR</div>
-              <div class="metric-label">
-                <span>Total billed</span>
-              </div>
-              <strong id="totalBilled">Rs. 0</strong>
-            </article>
-            <article class="metric metric-teal">
-              <div class="metric-icon" aria-hidden="true">OK</div>
-              <div class="metric-label">
-                <span>Paid</span>
-              </div>
-              <strong id="totalPaid">Rs. 0</strong>
-            </article>
-            <article class="metric metric-red">
-              <div class="metric-icon" aria-hidden="true">!</div>
-              <div class="metric-label">
-                <span>Pending</span>
-              </div>
-              <strong id="totalPending">Rs. 0</strong>
-            </article>
+          <div class="metric-grid dashboard-metric-grid">
+            <article class="metric metric-blue"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7V3Zm7 1v4h4M9 12h6M9 16h6" /></svg></div><div class="metric-copy"><span>Total invoices</span><strong id="totalInvoices">0</strong><small id="dashboardInvoiceHelper">View all invoices</small></div></article>
+            <article class="metric metric-orange"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4 7h16v10H4V7Zm2 3h4m6 0h2M8 17v2m8-2v2M8 5V3m8 2V3" /></svg></div><div class="metric-copy"><span>Total billed</span><strong id="totalBilled">Rs. 0</strong><small id="dashboardBilledHelper">This month</small></div></article>
+            <article class="metric metric-teal"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5M21 12a9 9 0 1 1-3-6.7" /></svg></div><div class="metric-copy"><span>Paid</span><strong id="totalPaid">Rs. 0</strong><small id="dashboardPaidHelper">0% of billed</small></div></article>
+            <article class="metric metric-red"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 8v5m0 4h.01M10.3 4.3 2.8 17.3A2 2 0 0 0 4.5 20h15a2 2 0 0 0 1.7-2.7L13.7 4.3a2 2 0 0 0-3.4 0Z" /></svg></div><div class="metric-copy"><span>Pending</span><strong id="totalPending">Rs. 0</strong><small id="dashboardPendingHelper">0% of billed</small></div></article>
+            <article class="metric metric-purple"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 3v4M17 3v4M4 9h16M5 5h14v16H5Zm7 8v4m-2-2h4" /></svg></div><div class="metric-copy"><span>Overdue</span><strong id="dashboardOverdueTotal">Rs. 0</strong><small id="dashboardOverdueHelper">0 invoices</small></div></article>
+            <article class="metric metric-cyan"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2M4 7h16v12H4V7Zm0 5h16" /></svg></div><div class="metric-copy"><span>Projects</span><strong id="dashboardActiveProjects">0</strong><small>In progress</small></div></article>
+            <article class="metric metric-blue"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0M4 20a8 8 0 0 1 16 0M19 8a3 3 0 0 1 0 6M21 20a6 6 0 0 0-3-5" /></svg></div><div class="metric-copy"><span>Customers</span><strong id="dashboardTotalCustomers">0</strong><small>All customers</small></div></article>
           </div>
 
-          <div class="dashboard-layout">
-            <div class="dashboard-main">
-              <section class="panel dashboard-table-card">
-                <div class="panel-heading">
-                  <h2>Recent invoices</h2>
-                  <button class="text-action" data-view-target="invoices" type="button">View all</button>
-                </div>
-                <div class="table-wrap">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th class="row-number-heading">No.</th>
-                        <th>Invoice</th>
-                        <th>Customer</th>
-                        <th>Status</th>
-                        <th>Total</th>
-                        <th>Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody id="recentInvoicesTable"></tbody>
-                  </table>
-                </div>
-                <div class="pagination-controls">
-                  <button class="secondary-action" id="recentInvoicesPrevPage" type="button">Prev</button>
-                  <span id="recentInvoicesPageLabel">Page 1 of 1</span>
-                  <button class="secondary-action" id="recentInvoicesNextPage" type="button">Next</button>
-                </div>
-              </section>
-            </div>
+          <div class="dashboard-insight-grid">
+            <section class="panel dashboard-chart-card">
+              <div class="panel-heading compact-heading">
+                <h2>Monthly revenue</h2>
+                <span class="muted-label">This year</span>
+              </div>
+              <div class="dashboard-bar-chart" id="dashboardRevenueChart"></div>
+            </section>
+            <section class="panel dashboard-status-card">
+              <div class="panel-heading compact-heading"><h2>Invoice status</h2></div>
+              <div class="status-overview">
+                <div class="status-ring" id="dashboardStatusRing"><span id="dashboardStatusTotal">0</span></div>
+                <div class="status-legend" id="dashboardStatusLegend"></div>
+              </div>
+            </section>
+            <section class="panel dashboard-activity-card">
+              <div class="panel-heading compact-heading">
+                <h2>Recent activity</h2>
+                <button class="text-action" data-view-target="invoices" type="button">View all</button>
+              </div>
+              <div class="activity-list" id="dashboardActivityList"></div>
+            </section>
+            <section class="panel dashboard-list-card">
+              <div class="panel-heading compact-heading"><h2>Top customers</h2><span class="muted-label">This year</span></div>
+              <div class="dashboard-mini-list" id="dashboardTopCustomers"></div>
+            </section>
           </div>
+
+          <section class="panel dashboard-table-card">
+            <div class="panel-heading compact-heading">
+              <h2>Recent invoices</h2>
+              <div class="dashboard-filter-pills">
+                <button class="is-active" data-dashboard-invoice-filter="All" type="button">All</button>
+                <button data-dashboard-invoice-filter="Paid" type="button">Paid</button>
+                <button data-dashboard-invoice-filter="Sent" type="button">Sent</button>
+                <button data-dashboard-invoice-filter="Unpaid" type="button">Pending</button>
+                <button data-dashboard-invoice-filter="Overdue" type="button">Overdue</button>
+              </div>
+              <button class="text-action" data-view-target="invoices" type="button">View all invoices</button>
+            </div>
+            <div class="table-wrap compact-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th class="row-number-heading">No.</th>
+                    <th>Invoice</th>
+                    <th>Customer</th>
+                    <th>Date</th>
+                    <th>Due date</th>
+                    <th>Status</th>
+                    <th>Total</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="recentInvoicesTable"></tbody>
+              </table>
+            </div>
+            <div class="pagination-controls">
+              <button class="secondary-action" id="recentInvoicesPrevPage" type="button" aria-label="Previous page">‹</button>
+              <span id="recentInvoicesPageLabel">Page 1 of 1</span>
+              <button class="secondary-action" id="recentInvoicesNextPage" type="button" aria-label="Next page">›</button>
+            </div>
+          </section>
         </section>
 
         <section class="view" id="createView">
@@ -386,9 +391,9 @@
               </table>
             </div>
             <div class="pagination-controls">
-              <button class="secondary-action" id="invoicePrevPage" type="button">Prev</button>
+              <button class="secondary-action" id="invoicePrevPage" type="button" aria-label="Previous page">‹</button>
               <span id="invoicePageLabel">Page 1 of 1</span>
-              <button class="secondary-action" id="invoiceNextPage" type="button">Next</button>
+              <button class="secondary-action" id="invoiceNextPage" type="button" aria-label="Next page">›</button>
             </div>
           </section>
         </section>
@@ -720,9 +725,9 @@
                 </table>
               </div>
               <div class="pagination-controls pm-pagination">
-                <button class="secondary-action" id="pmProjectPrevPage" type="button">Prev</button>
+                <button class="secondary-action" id="pmProjectPrevPage" type="button" aria-label="Previous page">‹</button>
                 <span id="pmProjectPageLabel">Page 1 of 1</span>
-                <button class="secondary-action" id="pmProjectNextPage" type="button">Next</button>
+                <button class="secondary-action" id="pmProjectNextPage" type="button" aria-label="Next page">›</button>
               </div>
             </section>
             <section class="panel pm-posted-panel">
@@ -777,9 +782,9 @@
                 </table>
               </div>
               <div class="pagination-controls pm-pagination">
-                <button class="secondary-action" id="pmPostPrevPage" type="button">Prev</button>
+                <button class="secondary-action" id="pmPostPrevPage" type="button" aria-label="Previous page">‹</button>
                 <span id="pmPostPageLabel">Page 1 of 1</span>
-                <button class="secondary-action" id="pmPostNextPage" type="button">Next</button>
+                <button class="secondary-action" id="pmPostNextPage" type="button" aria-label="Next page">›</button>
               </div>
             </section>
             <section class="panel pm-alert-panel">
@@ -878,29 +883,15 @@
                   <button class="primary-action report-download-button" id="openWebsiteLoginModalButton" type="button">+ Add access</button>
                 </div>
               </div>
-              <div class="portal-calendar-card">
-                <div class="portal-calendar-heading">
+              <div class="portal-renewal-alerts">
+                <div class="portal-renewal-heading">
                   <div>
-                    <h3>Renewal calendar</h3>
-                    <p>Reminder shows 20 days before domain or hosting expiry.</p>
+                    <h3>Renewal reminders</h3>
+                    <p>Shows domain and hosting items due within 1 month.</p>
                   </div>
-                  <div class="portal-calendar-controls">
-                    <button class="secondary-action" id="portalCalendarPrev" type="button" aria-label="Previous month" data-portal-calendar="-1">‹</button>
-                    <span id="portalCalendarLabel">Month</span>
-                    <button class="secondary-action" id="portalCalendarNext" type="button" aria-label="Next month" data-portal-calendar="1">›</button>
-                  </div>
+                  <span id="portalRenewalAlertCount">0 due</span>
                 </div>
-                <div class="portal-calendar-weekdays">
-                  <span>Sun</span>
-                  <span>Mon</span>
-                  <span>Tue</span>
-                  <span>Wed</span>
-                  <span>Thu</span>
-                  <span>Fri</span>
-                  <span>Sat</span>
-                </div>
-                <div class="portal-calendar-grid" id="portalCalendarGrid"></div>
-                <div class="portal-calendar-list" id="portalCalendarEvents"></div>
+                <div class="portal-renewal-list" id="portalRenewalAlerts"></div>
               </div>
               <div class="table-wrap">
                 <table class="admin-table website-login-table">
@@ -908,16 +899,18 @@
                     <tr>
                       <th class="row-number-heading">No.</th>
                       <th>Website</th>
-                      <th>Username</th>
-                      <th>Password</th>
-                      <th>Domain</th>
-                      <th>Hosting</th>
+                      <th>Login</th>
                       <th>Renewals</th>
                       <th>Actions</th>
                     </tr>
                   </thead>
                   <tbody id="websiteLoginTable"></tbody>
                 </table>
+              </div>
+              <div class="pagination-controls">
+                <button class="secondary-action" id="websiteLoginPrevPage" type="button" aria-label="Previous page">‹</button>
+                <span id="websiteLoginPageLabel">Page 1 of 1</span>
+                <button class="secondary-action" id="websiteLoginNextPage" type="button" aria-label="Next page">›</button>
               </div>
             </section>
           </div>
@@ -1079,9 +1072,9 @@
               </table>
             </div>
             <div class="pagination-controls">
-              <button class="secondary-action" id="financePrevPage" type="button">Prev</button>
+              <button class="secondary-action" id="financePrevPage" type="button" aria-label="Previous page">‹</button>
               <span id="financePageLabel">Page 1 of 1</span>
-              <button class="secondary-action" id="financeNextPage" type="button">Next</button>
+              <button class="secondary-action" id="financeNextPage" type="button" aria-label="Next page">›</button>
             </div>
           </section>
         </section>
@@ -1154,9 +1147,9 @@
                 </table>
               </div>
               <div class="pagination-controls">
-                <button class="secondary-action" id="clientPrevPage" type="button">Prev</button>
+                <button class="secondary-action" id="clientPrevPage" type="button" aria-label="Previous page">‹</button>
                 <span id="clientPageLabel">Page 1 of 1</span>
-                <button class="secondary-action" id="clientNextPage" type="button">Next</button>
+                <button class="secondary-action" id="clientNextPage" type="button" aria-label="Next page">›</button>
               </div>
             </section>
           </div>
@@ -1355,6 +1348,10 @@
                   <label>
                     WhatsApp / phone
                     <input id="contactPhone" />
+                  </label>
+                  <label class="wide">
+                    Design WhatsApp group link
+                    <input id="designWhatsappGroupUrl" placeholder="https://chat.whatsapp.com/..." />
                   </label>
                 </div>
               </div>
@@ -1646,7 +1643,7 @@
       </section>
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
-    <script src="supabase-config.js?v=20260509-employee-list"></script>
-    <script src="app.js?v=20260509-employee-list"></script>
+    <script src="supabase-config.js?v=20260510-chart-axis-clean"></script>
+    <script src="app.js?v=20260510-chart-axis-clean"></script>
   </body>
 </html>
