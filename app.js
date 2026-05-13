@@ -17,12 +17,15 @@ const CORRECTIONS_KEY = "infonits.corrections";
 const PM_NOTIFICATIONS_KEY = "infonits.notifications";
 const MONTHLY_POST_REPORTS_KEY = "infonits.monthlyPostReports";
 const CLOUD_BACKUP_KEY = "infonits.cloudBackup";
+const SIDEBAR_COLLAPSED_KEY = "infonits.sidebarCollapsed";
+const ACTIVE_VIEW_KEY = "infonits.activeView";
 const FINANCE_PAGE_SIZE = 7;
-const RECENT_INVOICE_PAGE_SIZE = 6;
+const RECENT_INVOICE_PAGE_SIZE = 7;
 const CLIENT_PAGE_SIZE = 10;
 const INVOICE_PAGE_SIZE = 10;
 const PM_PROJECT_PAGE_SIZE = 6;
 const PM_POST_PAGE_SIZE = 5;
+const PM_NOTIFICATION_PAGE_SIZE = 4;
 const WEBSITE_LOGIN_PAGE_SIZE = 8;
 const PM_WEEKLY_POST_TARGET = 3;
 const PM_MONTHLY_POST_TARGET = PM_WEEKLY_POST_TARGET * 4;
@@ -50,6 +53,7 @@ const defaultSettings = {
 
 const accessSections = [
   { id: "dashboard", label: "Dashboard" },
+  { id: "calendar", label: "Calendar" },
   { id: "create", label: "Create Invoice" },
   { id: "clients", label: "Customers" },
   { id: "employees", label: "Employees" },
@@ -74,9 +78,9 @@ const roleLabels = {
 
 const roleDefaultAccess = {
   admin: accessSections.map((section) => section.id),
-  "project-manager": ["dashboard", "clients", "invoices", "quotations", "projects", "manager", "renewals"],
-  designer: ["dashboard", "projects", "manager", "services"],
-  developer: ["dashboard", "create", "clients", "employees", "services", "invoices", "quotations", "projects", "manager", "renewals"],
+  "project-manager": ["dashboard", "calendar", "clients", "invoices", "quotations", "projects", "manager", "renewals"],
+  designer: ["dashboard", "calendar", "projects", "manager", "services"],
+  developer: ["dashboard", "calendar", "create", "clients", "employees", "services", "invoices", "quotations", "projects", "manager", "renewals"],
 };
 
 let invoices = loadInvoices();
@@ -111,7 +115,8 @@ let linkedProjectId = null;
 let currentUserId = sessionStorage.getItem(AUTH_SESSION_KEY) || "";
 let activeUserSnapshot = null;
 let selectedInvoiceId = invoices[0]?.id || null;
-let previewZoom = 0.8;
+let previewZoom = 0.95;
+let previewFitMode = "page";
 let previewHidden = true;
 let projectFormVisible = false;
 let financePage = 1;
@@ -121,6 +126,7 @@ let clientPage = 1;
 let invoicePage = 1;
 let pmProjectPage = 1;
 let pmPostPage = 1;
+let pmNotificationPage = 1;
 let websiteLoginPage = 1;
 let pendingEmployeePhotoDataUrl = "";
 const visibleWebsitePasswords = new Set();
@@ -128,8 +134,11 @@ const visibleWebsitePasswords = new Set();
 let appIsStarting = true;
 
 const navTabs = document.querySelectorAll(".nav-tab");
+const navGroups = document.querySelectorAll("[data-nav-group]");
+const navGroupToggles = document.querySelectorAll(".nav-group-toggle");
 const views = {
   dashboard: document.getElementById("dashboardView"),
+  calendar: document.getElementById("calendarView"),
   create: document.getElementById("createView"),
   clients: document.getElementById("clientsView"),
   employees: document.getElementById("employeesView"),
@@ -179,6 +188,7 @@ const websiteLoginSearchInput = document.getElementById("websiteLoginSearchInput
 const employeeSearchInput = document.getElementById("employeeSearchInput");
 const employeeStatusFilter = document.getElementById("employeeStatusFilter");
 const appShell = document.getElementById("appShell");
+const sidebarToggleButton = document.getElementById("sidebarToggleButton");
 const loginScreen = document.getElementById("loginScreen");
 const appPreloader = document.getElementById("appPreloader");
 const loginForm = document.getElementById("loginForm");
@@ -187,13 +197,17 @@ const userMenu = document.getElementById("userMenu");
 const activeUserInitial = document.getElementById("activeUserInitial");
 const activeUserName = document.getElementById("activeUserName");
 const activeUserRole = document.getElementById("activeUserRole");
+const sidebarDateTime = document.getElementById("sidebarDateTime");
 const managerHandleSearchInput = document.getElementById("managerHandleSearchInput");
 const pmMonthFilter = document.getElementById("pmMonthFilter");
+const calendarMonthFilter = document.getElementById("calendarMonthFilter");
 const statementClientSelect = document.getElementById("statementClientSelect");
 const clientSelect = document.getElementById("clientSelect");
 const previewScale = document.getElementById("previewScale");
 const previewZoomLabel = document.getElementById("previewZoomLabel");
 const invoiceModal = document.getElementById("invoiceModal");
+
+let sidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "yes";
 
 const countries = [
   "Sri Lanka",
@@ -1561,6 +1575,12 @@ function shortAmount(value) {
   return `${sign}${formatNumber(absolute)}`;
 }
 
+function titleCase(value) {
+  return String(value || "")
+    .replace(/[-_]/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 function formatPercent(value) {
   return `${Number(value || 0).toLocaleString("en-LK", {
     minimumFractionDigits: Number(value || 0) % 1 === 0 ? 0 : 2,
@@ -1711,8 +1731,39 @@ function showToast(message) {
 
 function updatePreviewZoom() {
   previewScale.style.transform = `scale(${previewZoom})`;
-  previewScale.style.width = `${100 / previewZoom}%`;
   previewZoomLabel.textContent = formatPercent(Math.round(previewZoom * 100));
+  document.getElementById("previewFitPageButton")?.classList.toggle("is-active", previewFitMode === "page");
+  document.getElementById("previewFitWidthButton")?.classList.toggle("is-active", previewFitMode === "width");
+  document.getElementById("previewActualSizeButton")?.classList.toggle("is-active", previewFitMode === "actual");
+}
+
+function fitInvoicePreviewToViewport() {
+  const viewport = document.querySelector(".preview-viewport");
+  const paper = document.getElementById("invoicePreview");
+  if (!viewport || !paper) return;
+  const baseA4Width = 794;
+  const baseA4Height = 1123;
+  const paperWidth = baseA4Width;
+  const paperHeight = baseA4Height;
+  if (!paperWidth || !paperHeight) return;
+  const availableWidth = Math.max(0, viewport.clientWidth - 8);
+  const availableHeight = Math.max(0, viewport.clientHeight - 8);
+  if (!availableWidth || !availableHeight) return;
+  const fitZoom = previewFitMode === "width"
+    ? Math.min(availableWidth / paperWidth, 1)
+    : Math.min(availableWidth / paperWidth, availableHeight / paperHeight, 1);
+  previewZoom = Math.max(0.4, Math.min(1, Number(fitZoom.toFixed(3))));
+  updatePreviewZoom();
+}
+
+function setPreviewMode(mode = "page") {
+  previewFitMode = mode;
+  if (mode === "actual") {
+    previewZoom = 1;
+    updatePreviewZoom();
+    return;
+  }
+  fitInvoicePreviewToViewport();
 }
 
 function updatePreviewVisibility() {
@@ -1723,8 +1774,13 @@ function updatePreviewVisibility() {
 function openInvoiceModal(id) {
   selectedInvoiceId = id;
   previewHidden = false;
+  previewFitMode = "page";
   renderPreview();
   updatePreviewVisibility();
+  window.requestAnimationFrame(() => {
+    fitInvoicePreviewToViewport();
+    window.setTimeout(fitInvoicePreviewToViewport, 40);
+  });
 }
 
 function closeInvoiceModal() {
@@ -1761,19 +1817,33 @@ function closeEmployeeModal() {
   modal.setAttribute("aria-hidden", "true");
 }
 
+function openSocialPostModal() {
+  const modal = document.getElementById("socialPostModal");
+  modal.classList.add("is-open");
+  modal.setAttribute("aria-hidden", "false");
+  document.getElementById("postClient").focus();
+}
+
+function closeSocialPostModal() {
+  const modal = document.getElementById("socialPostModal");
+  modal.classList.remove("is-open");
+  modal.setAttribute("aria-hidden", "true");
+}
+
 function setupAdminFormModals() {
   [
     ["#clientsView .admin-form-panel", "clientForm", "clientModalBody"],
     ["#renewalsView .admin-form-panel", "renewalForm", "renewalModalBody"],
     ["#loginsView .admin-form-panel", "websiteLoginForm", "websiteLoginModalBody"],
     ["#usersView .panel:first-child", "userForm", "userModalBody"],
+    ["#projectsView .project-form", "projectForm", "projectModalBody"],
   ].forEach(([panelSelector, formId, bodyId]) => {
     const panel = document.querySelector(panelSelector);
     const form = document.getElementById(formId);
     const body = document.getElementById(bodyId);
     if (!panel || !form || !body || form.parentElement === body) return;
     body.appendChild(form);
-    panel.classList.add("admin-form-source-hidden");
+    if (panel !== form) panel.classList.add("admin-form-source-hidden");
   });
 }
 
@@ -1812,8 +1882,14 @@ function openUserModal(mode = "add") {
   document.getElementById("userName").focus();
 }
 
+function openProjectModal(mode = "add") {
+  document.getElementById("projectModalTitle").textContent = mode === "edit" ? "Edit project" : "Add project";
+  setModalOpen("projectModal", true);
+  document.getElementById("projectName").focus();
+}
+
 function closeAdminRecordModals() {
-  ["clientModal", "renewalModal", "websiteLoginModal", "userModal"].forEach((id) => setModalOpen(id, false));
+  ["clientModal", "renewalModal", "websiteLoginModal", "userModal", "projectModal"].forEach((id) => setModalOpen(id, false));
 }
 
 function populateCountrySelects() {
@@ -1850,11 +1926,20 @@ function userCanAccess(viewName) {
   const user = currentUser();
   if (!user) return false;
   if (user.role === "admin") return true;
+  if (viewName === "calendar") {
+    return (user.access || []).includes("calendar") || (user.access || []).includes("manager");
+  }
   return (user.access || []).includes(viewName);
 }
 
 function firstAllowedView() {
   return accessSections.find((section) => views[section.id] && userCanAccess(section.id))?.id || "dashboard";
+}
+
+function savedActiveView() {
+  const saved = sessionStorage.getItem(ACTIVE_VIEW_KEY) || localStorage.getItem(ACTIVE_VIEW_KEY) || "";
+  if (!saved || !views[saved]) return "";
+  return saved;
 }
 
 function applyAccessControl() {
@@ -1875,14 +1960,10 @@ function applyAccessControl() {
   navTabs.forEach((tab) => {
     tab.hidden = !userCanAccess(tab.dataset.view);
   });
-  document.querySelectorAll(".nav-section-label").forEach((label) => {
-    let sibling = label.nextElementSibling;
-    let hasVisibleItem = false;
-    while (sibling && !sibling.classList.contains("nav-section-label")) {
-      if (sibling.classList.contains("nav-tab") && !sibling.hidden) hasVisibleItem = true;
-      sibling = sibling.nextElementSibling;
-    }
-    label.hidden = !hasVisibleItem;
+  navGroups.forEach((group) => {
+    const groupTabs = group.querySelectorAll(".nav-tab");
+    const hasVisibleItem = Array.from(groupTabs).some((tab) => !tab.hidden);
+    group.hidden = !hasVisibleItem;
   });
   document.querySelectorAll("[data-view-target]").forEach((button) => {
     button.hidden = !userCanAccess(button.dataset.viewTarget);
@@ -1910,7 +1991,8 @@ function openAuthenticatedApp() {
   loginScreen.classList.remove("is-loading");
   loginScreen.classList.add("is-hidden");
   appShell.classList.remove("is-locked");
-  switchView(firstAllowedView());
+  const targetView = savedActiveView();
+  switchView(targetView && userCanAccess(targetView) ? targetView : firstAllowedView());
   applyAccessControl();
 }
 
@@ -1956,6 +2038,9 @@ function logoutUser() {
   currentUserId = "";
   activeUserSnapshot = null;
   sessionStorage.removeItem(AUTH_SESSION_KEY);
+  sessionStorage.removeItem(ACTIVE_VIEW_KEY);
+  localStorage.removeItem(ACTIVE_VIEW_KEY);
+  document.body.dataset.activeView = "dashboard";
   loginForm.reset();
   applyAccessControl();
 }
@@ -1969,6 +2054,9 @@ function switchView(viewName) {
     showToast("This user cannot access that section");
     viewName = firstAllowedView();
   }
+  document.body.dataset.activeView = viewName;
+  sessionStorage.setItem(ACTIVE_VIEW_KEY, viewName);
+  localStorage.setItem(ACTIVE_VIEW_KEY, viewName);
   Object.entries(views).forEach(([name, element]) => {
     element.classList.toggle("active", name === viewName);
   });
@@ -1976,6 +2064,44 @@ function switchView(viewName) {
   navTabs.forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.view === viewName);
   });
+
+  const activeTab = Array.from(navTabs).find((tab) => tab.dataset.view === viewName);
+  const activeGroup = activeTab?.closest("[data-nav-group]");
+  if (activeGroup) {
+    activeGroup.classList.add("is-open");
+    const toggle = activeGroup.querySelector(".nav-group-toggle");
+    if (toggle) toggle.setAttribute("aria-expanded", "true");
+  }
+}
+
+function applySidebarState() {
+  if (!appShell) return;
+  appShell.classList.toggle("sidebar-collapsed", sidebarCollapsed);
+  if (!sidebarToggleButton) return;
+  const label = sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar";
+  sidebarToggleButton.setAttribute("aria-label", label);
+  sidebarToggleButton.setAttribute("title", label);
+}
+
+function toggleSidebar() {
+  sidebarCollapsed = !sidebarCollapsed;
+  localStorage.setItem(SIDEBAR_COLLAPSED_KEY, sidebarCollapsed ? "yes" : "no");
+  applySidebarState();
+}
+
+function updateSidebarDateTime() {
+  if (!sidebarDateTime) return;
+  const now = new Date();
+  const datePart = now.toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "2-digit",
+  });
+  const timePart = now.toLocaleTimeString(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+  sidebarDateTime.textContent = `${datePart} · ${timePart}`;
 }
 
 function calculateTotals(invoice) {
@@ -3209,20 +3335,19 @@ function convertProjectUsdToLkr() {
 function showProjectForm() {
   projectFormVisible = true;
   projectForm.classList.remove("is-hidden");
-  toggleProjectFormButton.textContent = editingProjectId ? "Edit project" : "Hide form";
+  openProjectModal(editingProjectId ? "edit" : "add");
+  toggleProjectFormButton.textContent = "+ Add project";
 }
 
 function hideProjectForm() {
   projectFormVisible = false;
-  projectForm.classList.add("is-hidden");
+  setModalOpen("projectModal", false);
   toggleProjectFormButton.textContent = "+ Add project";
 }
 
 function toggleProjectForm() {
-  if (projectFormVisible) {
-    resetProjectForm();
-    return;
-  }
+  if (projectFormVisible) return hideProjectForm();
+  resetProjectForm();
   showProjectForm();
 }
 
@@ -3378,15 +3503,30 @@ function renderDashboardStatus(invoiceDocs) {
 function renderDashboardActivity(invoiceDocs) {
   const list = document.getElementById("dashboardActivityList");
   if (!list) return;
-  const activity = [...invoiceDocs]
-    .sort((a, b) => String(b.updatedAt || b.invoiceDate).localeCompare(String(a.updatedAt || a.invoiceDate)))
-    .slice(0, 5)
-    .map((invoice) => ({
-      color: invoice.status === "Paid" ? "#22c55e" : invoice.status === "Overdue" ? "#ef4444" : invoice.status === "Sent" ? "#2563eb" : "#f59e0b",
-      title: invoice.status === "Paid" ? "Payment received" : invoice.status === "Overdue" ? "Invoice overdue" : invoice.status === "Sent" ? "Invoice sent" : "Invoice updated",
-      detail: `${invoice.invoiceNumber} - ${invoice.customerName}`,
-      time: formatDate(invoice.invoiceDate),
-    }));
+  const invoiceActivity = invoiceDocs.map((invoice) => ({
+    sortDate: invoice.updatedAt || invoice.invoiceDate || "",
+    color: invoice.status === "Paid" ? "#22c55e" : invoice.status === "Overdue" ? "#ef4444" : invoice.status === "Sent" ? "#2563eb" : "#f59e0b",
+    title: invoice.status === "Paid" ? "Payment received" : invoice.status === "Overdue" ? "Invoice overdue" : invoice.status === "Sent" ? "Invoice sent" : "Invoice updated",
+    detail: `${invoice.invoiceNumber} - ${invoice.customerName}`,
+    time: formatDate(invoice.invoiceDate),
+  }));
+  const financeActivity = financeRecords.map((record) => ({
+    sortDate: record.updatedAt || record.date || "",
+    color: record.type === "income" ? "#22c55e" : record.type === "expense" ? "#ef4444" : record.type === "loan" ? "#f59e0b" : "#2563eb",
+    title: `${titleCase(record.type || "Finance")} recorded`,
+    detail: `${record.category || "Finance"} - ${money(record.amount, "LKR")}`,
+    time: formatDate(record.date),
+  }));
+  const projectActivity = projects.map((project) => ({
+    sortDate: project.updatedAt || `${project.month || ""}-01`,
+    color: project.paymentStatus === "Paid" || project.paymentStatus === "Completed" ? "#22c55e" : "#06b6d4",
+    title: "Project updated",
+    detail: `${project.clientName || "Client"} - ${project.name || "Project"}`,
+    time: formatMonth(project.month),
+  }));
+  const activity = [...invoiceActivity, ...financeActivity, ...projectActivity]
+    .sort((a, b) => String(b.sortDate).localeCompare(String(a.sortDate)))
+    .slice(0, 3);
   list.innerHTML = activity.length
     ? activity.map((item) => `
         <div class="dashboard-activity-item">
@@ -4059,14 +4199,22 @@ function visiblePmNotifications() {
 }
 
 function missedPostWhatsappMessage(note) {
+  const missing = Number(note.missing || 0);
+  const required = Number(note.required || PM_WEEKLY_POST_TARGET);
+  const posted = Number(note.posted || 0);
   return [
-    "Missed post reminder",
-    `Client: ${note.clientName || "Client"}`,
-    `Project: ${note.projectName || "Project"}`,
-    `Missing: ${formatNumber(note.missing || 0)} post${Number(note.missing || 0) === 1 ? "" : "s"} this week`,
-    `Required: ${formatNumber(note.required || PM_WEEKLY_POST_TARGET)}`,
-    `Posted: ${formatNumber(note.posted || 0)}`,
-    `Designer: ${note.designerName || "Not assigned"}`,
+    "*MISSED POST REMINDER*",
+    "",
+    `*Client:* ${note.clientName || "Client"}`,
+    `*Project:* ${note.projectName || "Project"}`,
+    `*Designer:* ${note.designerName || "Not assigned"}`,
+    "",
+    `*This Week Summary*`,
+    `- Required: ${formatNumber(required)}`,
+    `- Posted: ${formatNumber(posted)}`,
+    `- Missing: ${formatNumber(missing)} post${missing === 1 ? "" : "s"}`,
+    "",
+    "Please upload the pending posts today and confirm once completed.",
   ].join("\n");
 }
 
@@ -4086,7 +4234,7 @@ async function copyTextToClipboard(text) {
   return copied;
 }
 
-function notifyDesignerForMissedPost(notificationId) {
+async function notifyDesignerForMissedPost(notificationId) {
   const note = pmNotifications.find((item) => item.id === notificationId);
   if (!note) return;
   if (!note.designerId) {
@@ -4112,11 +4260,21 @@ function notifyDesignerForMissedPost(notificationId) {
   note.status = "Notified";
   savePmNotifications();
   renderPmNotifications();
-  copyTextToClipboard(message).catch(() => null);
-  const groupUrl = normalizeOpenUrl(settings.designWhatsappGroupUrl || "");
-  const whatsappUrl = groupUrl || `https://wa.me/?text=${encodeURIComponent(message)}`;
-  window.open(whatsappUrl, "_blank", "noopener,noreferrer");
-  showToast(groupUrl ? "Message copied. Paste it in the WhatsApp group." : "WhatsApp message opened");
+  const copied = await ensureMessageCopied(message);
+  showToast(copied ? "Message copied. Paste it in WhatsApp group." : "Copy prompt shown. Paste in WhatsApp group.");
+}
+
+async function ensureMessageCopied(message) {
+  const text = String(message || "").trim();
+  if (!text) return false;
+  try {
+    const copied = await copyTextToClipboard(text);
+    if (copied) return true;
+  } catch {
+    // fall through to prompt fallback
+  }
+  window.prompt("Copy this message and paste in WhatsApp:", text);
+  return false;
 }
 
 function projectAssignedDesigner(project = {}) {
@@ -4289,6 +4447,7 @@ function editSocialPost(id) {
   setFieldValue("postRemarks", post.remarks || "");
   setFieldValue("postAttachment", post.attachment || "");
   switchView("manager");
+  openSocialPostModal();
 }
 
 function deleteSocialPost(id) {
@@ -4499,10 +4658,11 @@ function renderProjectManagerDashboard() {
   const posted = groupedSocialPostCount(monthPosts);
   const required = trackedProjects.length * PM_MONTHLY_POST_TARGET;
   const remaining = Math.max(0, required - posted);
+  const missedPosts = visiblePmNotifications().reduce((sum, note) => sum + Number(note.missing || 0), 0);
   setText("pmActiveProjects", visibleProjects.length);
   setText("pmPendingPosts", remaining);
   setText("pmUploadedPosts", posted);
-  setText("pmMissedPosts", 0);
+  setText("pmMissedPosts", missedPosts);
   setText("pmPendingCorrections", 0);
   setText("pmDesignerPending", 0);
   setText("pmDeveloperPending", 0);
@@ -4660,10 +4820,102 @@ function changeClientColor(clientName = "") {
   picker.click();
 }
 
-function renderPostCalendar() {
-  const calendar = document.querySelector("#postCalendarGrid");
+function nthWeekdayOfMonth(year, monthIndex, weekday, nth) {
+  const firstDay = new Date(year, monthIndex, 1);
+  const offset = (weekday - firstDay.getDay() + 7) % 7;
+  return 1 + offset + (nth - 1) * 7;
+}
+
+function lastWeekdayOfMonth(year, monthIndex, weekday) {
+  const lastDate = new Date(year, monthIndex + 1, 0);
+  const offset = (lastDate.getDay() - weekday + 7) % 7;
+  return lastDate.getDate() - offset;
+}
+
+function holidayEventsForYear(year) {
+  const mayMotherDay = nthWeekdayOfMonth(year, 4, 0, 2);
+  const juneFatherDay = nthWeekdayOfMonth(year, 5, 0, 3);
+  const novBlackFriday = lastWeekdayOfMonth(year, 10, 5);
+  const novCyberMonday = novBlackFriday + 3;
+  return [
+    { date: `${year}-01-01`, name: "New Year's Day" },
+    { date: `${year}-01-24`, name: "International Day of Education" },
+    { date: `${year}-01-26`, name: "India Republic Day" },
+    { date: `${year}-02-04`, name: "World Cancer Day" },
+    { date: `${year}-02-14`, name: "Valentine's Day" },
+    { date: `${year}-03-08`, name: "International Women's Day" },
+    { date: `${year}-03-20`, name: "International Day of Happiness" },
+    { date: `${year}-03-22`, name: "World Water Day" },
+    { date: `${year}-04-07`, name: "World Health Day" },
+    { date: `${year}-04-22`, name: "Earth Day" },
+    { date: `${year}-04-23`, name: "World Book Day" },
+    { date: `${year}-05-01`, name: "Labour Day" },
+    { date: `${year}-05-${String(mayMotherDay).padStart(2, "0")}`, name: "Mother's Day" },
+    { date: `${year}-05-15`, name: "International Day of Families" },
+    { date: `${year}-06-05`, name: "World Environment Day" },
+    { date: `${year}-06-${String(juneFatherDay).padStart(2, "0")}`, name: "Father's Day" },
+    { date: `${year}-06-21`, name: "International Yoga Day" },
+    { date: `${year}-06-30`, name: "Social Media Day" },
+    { date: `${year}-07-01`, name: "Canada Day" },
+    { date: `${year}-07-04`, name: "US Independence Day" },
+    { date: `${year}-07-30`, name: "International Friendship Day" },
+    { date: `${year}-08-12`, name: "International Youth Day" },
+    { date: `${year}-08-15`, name: "India Independence Day" },
+    { date: `${year}-08-19`, name: "World Photography Day" },
+    { date: `${year}-09-05`, name: "International Day of Charity" },
+    { date: `${year}-09-08`, name: "International Literacy Day" },
+    { date: `${year}-09-21`, name: "International Day of Peace" },
+    { date: `${year}-09-27`, name: "World Tourism Day" },
+    { date: `${year}-10-01`, name: "International Coffee Day" },
+    { date: `${year}-10-02`, name: "Gandhi Jayanti" },
+    { date: `${year}-10-10`, name: "World Mental Health Day" },
+    { date: `${year}-10-16`, name: "World Food Day" },
+    { date: `${year}-10-31`, name: "Halloween" },
+    { date: `${year}-11-11`, name: "Remembrance Day" },
+    { date: `${year}-11-14`, name: "Children's Day" },
+    { date: `${year}-11-19`, name: "International Men's Day" },
+    { date: `${year}-11-${String(novBlackFriday).padStart(2, "0")}`, name: "Black Friday" },
+    { date: `${year}-11-${String(novCyberMonday).padStart(2, "0")}`, name: "Cyber Monday" },
+    { date: `${year}-12-01`, name: "World AIDS Day" },
+    { date: `${year}-12-03`, name: "International Day of Persons with Disabilities" },
+    { date: `${year}-12-10`, name: "Human Rights Day" },
+    { date: `${year}-12-24`, name: "Christmas Eve" },
+    { date: `${year}-12-25`, name: "Christmas Day" },
+    { date: `${year}-12-31`, name: "New Year's Eve" },
+  ];
+}
+
+function daysBetweenIso(fromDate, toDate) {
+  const from = new Date(`${fromDate}T00:00:00`);
+  const to = new Date(`${toDate}T00:00:00`);
+  return Math.round((to.getTime() - from.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+function renderCalendarReminders(month) {
+  const list = document.getElementById("calendarReminderList");
+  if (!list) return;
+  const [year] = String(month || "").split("-").map(Number);
+  const holidayEvents = holidayEventsForYear(year).filter((event) => String(event.date).startsWith(month));
+  const todayDate = today();
+  const reminders = holidayEvents
+    .map((event) => ({ ...event, daysLeft: daysBetweenIso(todayDate, event.date) }))
+    .filter((event) => event.daysLeft >= 0 && event.daysLeft <= 4)
+    .sort((a, b) => a.daysLeft - b.daysLeft);
+  list.innerHTML = reminders.length
+    ? reminders
+      .map((event) => `<div class="pm-calendar-reminder-item"><strong>${escapeHtml(event.name)}</strong> on ${escapeHtml(formatDate(event.date))} (${event.daysLeft} day${event.daysLeft === 1 ? "" : "s"} left)</div>`)
+      .join("")
+    : `<div class="pm-calendar-reminder-item">No holiday reminders in the next 4 days.</div>`;
+}
+
+function renderCalendarGrid(calendarId, monthValue) {
+  const calendar = document.querySelector(`#${calendarId}`);
   if (!calendar) return;
-  const month = managerMonth();
+  const month = monthValue || managerMonth();
+  if (!month) {
+    calendar.innerHTML = "";
+    return;
+  }
   const [year, monthNumber] = month.split("-").map(Number);
   const firstDay = new Date(year, monthNumber - 1, 1);
   const daysInMonth = new Date(year, monthNumber, 0).getDate();
@@ -4676,6 +4928,28 @@ function renderPostCalendar() {
     list.push(group);
     postsByDate.set(group.date, list);
   });
+  const renewalsByDate = new Map();
+  const todayValue = today();
+  renewals
+    .filter((item) => {
+      const expiryDate = String(item.expiryDate || "");
+      if (!expiryDate || !expiryDate.startsWith(month)) return false;
+      if (expiryDate < todayValue) return false;
+      const status = String(item.status || "").toLowerCase();
+      return status !== "renewed";
+    })
+    .forEach((item) => {
+      const list = renewalsByDate.get(item.expiryDate) || [];
+      list.push(item);
+      renewalsByDate.set(item.expiryDate, list);
+    });
+  const holidayEvents = holidayEventsForYear(year).filter((event) => String(event.date || "").startsWith(month));
+  const holidaysByDate = new Map();
+  holidayEvents.forEach((event) => {
+    const list = holidaysByDate.get(event.date) || [];
+    list.push(event);
+    holidaysByDate.set(event.date, list);
+  });
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const cells = [
     ...weekdays.map((day) => `<div class="pm-calendar-weekday">${day}</div>`),
@@ -4684,21 +4958,47 @@ function renderPostCalendar() {
       const day = index + 1;
       const dateKey = `${month}-${String(day).padStart(2, "0")}`;
       const posted = postsByDate.get(dateKey) || [];
-      const chips = posted
+      const dueRenewals = renewalsByDate.get(dateKey) || [];
+      const holidays = holidaysByDate.get(dateKey) || [];
+      const postChips = posted
         .map((group) => {
-          const label = `${group.clientName || "Client"} (${group.count}) - ${group.projectName || ""}`;
-          return `<span class="pm-calendar-dot" style="background:${clientCalendarColor(group.clientName)}" title="${escapeAttribute(label)}" data-calendar-client="${escapeAttribute(group.clientName || "Client")}"></span>`;
+          const clientName = group.clientName || "Client";
+          const label = `${clientName} (${group.count})`;
+          return `<span class="pm-calendar-chip-tag" style="background:${clientCalendarColor(clientName)}" title="${escapeAttribute(`${label} - ${group.projectName || ""}`)}">${escapeHtml(label)}</span>`;
         })
         .join("");
+      const renewalChips = dueRenewals
+        .map((renewal) => {
+          const clientName = renewal.clientName || "Client";
+          const label = `${clientName} (Renewal)`;
+          return `<span class="pm-calendar-chip-tag is-renewal-chip" title="${escapeAttribute(`${label} - ${renewal.name || renewal.type || "Item"}`)}">${escapeHtml(label)}</span>`;
+        })
+        .join("");
+      const holidayChips = holidays
+        .map((event) => `<span class="pm-calendar-chip-tag is-holiday-chip" title="${escapeAttribute(event.name)}">${escapeHtml(event.name)}</span>`)
+        .join("");
+      const totalItems = posted.length + dueRenewals.length + holidays.length;
       return `
         <div class="pm-calendar-day">
-          <div class="pm-calendar-date"><span>${day}</span>${chips ? `<small>${posted.length}</small>` : ""}</div>
-          ${chips ? `<div class="pm-calendar-dot-list">${chips}</div>` : ""}
+          <div class="pm-calendar-date"><span>${day}</span>${totalItems ? `<small>${totalItems}</small>` : ""}</div>
+          ${totalItems ? `<div class="pm-calendar-chip-list">${holidayChips}${renewalChips}${postChips}</div>` : ""}
         </div>
       `;
     }),
   ];
   calendar.innerHTML = cells.join("");
+  if (calendarId === "unifiedCalendarGrid") renderCalendarReminders(month);
+}
+
+function renderPostCalendar() {
+  renderCalendarGrid("postCalendarGrid", managerMonth());
+}
+
+function renderUnifiedCalendarView() {
+  if (calendarMonthFilter && !calendarMonthFilter.value) {
+    calendarMonthFilter.value = managerMonth();
+  }
+  renderCalendarGrid("unifiedCalendarGrid", calendarMonthFilter?.value || managerMonth());
 }
 
 function renderCorrections() {
@@ -4726,8 +5026,12 @@ function renderPmNotifications() {
   const list = document.getElementById("pmNotificationList");
   if (!list) return;
   const notes = visiblePmNotifications();
+  const totalPages = Math.max(1, Math.ceil(notes.length / PM_NOTIFICATION_PAGE_SIZE));
+  pmNotificationPage = Math.min(pmNotificationPage, totalPages);
+  const start = (pmNotificationPage - 1) * PM_NOTIFICATION_PAGE_SIZE;
+  const visibleNotes = notes.slice(start, start + PM_NOTIFICATION_PAGE_SIZE);
   list.innerHTML = notes.length
-    ? notes.slice(0, 8).map((note) => `
+    ? visibleNotes.map((note) => `
         <article class="pm-notification ${escapeAttribute(note.status === "Notified" ? "Notified" : "Missed")}">
           <div class="pm-notification-copy">
             <strong>${escapeHtml(note.clientName || "Client")}</strong>
@@ -4735,11 +5039,19 @@ function renderPmNotifications() {
             <span>Required ${formatNumber(note.required || PM_WEEKLY_POST_TARGET)} · Posted ${formatNumber(note.posted || 0)} · Designer: ${escapeHtml(note.designerName || "Not assigned")}</span>
           </div>
           <div class="pm-notification-actions">
-            <button class="secondary-action" type="button" data-notify-designer="${escapeAttribute(note.id)}">${note.status === "Notified" ? "Notify again" : "Notify designer"}</button>
+            <button class="secondary-action pm-notify-button" type="button" data-notify-designer="${escapeAttribute(note.id)}" aria-label="${escapeAttribute(note.status === "Notified" ? "Notify again" : "Notify designer")}" title="${escapeAttribute(note.status === "Notified" ? "Notify again" : "Notify designer")}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0a3 3 0 0 1-6 0m6 0H9" /></svg>
+            </button>
           </div>
         </article>
       `).join("")
     : `<p class="muted-label">No missed posts this week.</p>`;
+  const prevButton = document.getElementById("pmNotificationPrevPage");
+  const nextButton = document.getElementById("pmNotificationNextPage");
+  const pageLabel = document.getElementById("pmNotificationPageLabel");
+  if (prevButton) prevButton.disabled = pmNotificationPage <= 1;
+  if (nextButton) nextButton.disabled = pmNotificationPage >= totalPages;
+  if (pageLabel) pageLabel.textContent = `Page ${pmNotificationPage} of ${totalPages}`;
 }
 
 function renderPmDatabaseTables() {
@@ -6311,6 +6623,11 @@ function renderPreview() {
       <span>${escapeHtml(settings.businessWebsite)} | ${escapeHtml(settings.businessEmail)}${settings.contactPhone ? ` | ${escapeHtml(formatPhone(settings.contactPhone))}` : ""}</span>
     </div>
   `;
+  if (!previewHidden) {
+    window.requestAnimationFrame(() => {
+      fitInvoicePreviewToViewport();
+    });
+  }
 }
 
 function renderSettings() {
@@ -6762,6 +7079,7 @@ function formatShortDate(dateString) {
 
 function renderAll() {
   renderDashboard();
+  renderUnifiedCalendarView();
   renderClients();
   renderEmployees();
   renderServices();
@@ -6838,6 +7156,16 @@ navTabs.forEach((tab) => {
   tab.addEventListener("click", () => switchView(tab.dataset.view));
 });
 
+navGroupToggles.forEach((toggle) => {
+  toggle.addEventListener("click", () => {
+    const group = toggle.closest("[data-nav-group]");
+    if (!group) return;
+    const willOpen = !group.classList.contains("is-open");
+    group.classList.toggle("is-open", willOpen);
+    toggle.setAttribute("aria-expanded", String(willOpen));
+  });
+});
+
 document.querySelectorAll("[data-view-target]").forEach((button) => {
   button.addEventListener("click", () => switchView(button.dataset.viewTarget));
 });
@@ -6872,12 +7200,22 @@ aiPromptInput?.addEventListener("keydown", (event) => {
   }
 });
 document.getElementById("zoomInButton").addEventListener("click", () => {
+  previewFitMode = "custom";
   previewZoom = Math.min(1.2, previewZoom + 0.1);
   updatePreviewZoom();
 });
 document.getElementById("zoomOutButton").addEventListener("click", () => {
+  previewFitMode = "custom";
   previewZoom = Math.max(0.45, previewZoom - 0.1);
   updatePreviewZoom();
+});
+document.getElementById("previewFitPageButton").addEventListener("click", () => setPreviewMode("page"));
+document.getElementById("previewFitWidthButton").addEventListener("click", () => setPreviewMode("width"));
+document.getElementById("previewActualSizeButton").addEventListener("click", () => setPreviewMode("actual"));
+window.addEventListener("resize", () => {
+  if (previewHidden) return;
+  if (previewFitMode === "actual" || previewFitMode === "custom") return;
+  fitInvoicePreviewToViewport();
 });
 document.getElementById("documentType").addEventListener("change", () => {
   if (!editingId) {
@@ -6925,7 +7263,11 @@ projectUsdRate.addEventListener("input", convertProjectUsdToLkr);
 pmMonthFilter.addEventListener("change", () => {
   pmProjectPage = 1;
   pmPostPage = 1;
+  pmNotificationPage = 1;
   renderProjectManagerWorkspace();
+});
+calendarMonthFilter?.addEventListener("change", () => {
+  renderUnifiedCalendarView();
 });
 document.getElementById("pmProjectPrevPage").addEventListener("click", () => {
   pmProjectPage = Math.max(1, pmProjectPage - 1);
@@ -6935,6 +7277,7 @@ document.getElementById("pmProjectNextPage").addEventListener("click", () => {
   pmProjectPage += 1;
   renderProjectManagerWorkspace();
 });
+document.getElementById("openSocialPostModalButton").addEventListener("click", openSocialPostModal);
 document.getElementById("pmPostPrevPage").addEventListener("click", () => {
   pmPostPage = Math.max(1, pmPostPage - 1);
   renderProjectManagerWorkspace();
@@ -6946,6 +7289,14 @@ document.getElementById("pmPostNextPage").addEventListener("click", () => {
 document.getElementById("pmPostClientFilter").addEventListener("change", () => {
   pmPostPage = 1;
   renderSocialMediaPosts();
+});
+document.getElementById("pmNotificationPrevPage").addEventListener("click", () => {
+  pmNotificationPage = Math.max(1, pmNotificationPage - 1);
+  renderPmNotifications();
+});
+document.getElementById("pmNotificationNextPage").addEventListener("click", () => {
+  pmNotificationPage += 1;
+  renderPmNotifications();
 });
 document.getElementById("downloadPmPostCsvButton").addEventListener("click", downloadPostedRecordsCsv);
 document.getElementById("downloadPmPostPdfButton").addEventListener("click", downloadPostedRecordsPdf);
@@ -6983,6 +7334,7 @@ document.getElementById("clientModalClearButton").addEventListener("click", rese
 document.getElementById("renewalModalClearButton").addEventListener("click", resetRenewalForm);
 document.getElementById("websiteLoginModalClearButton").addEventListener("click", resetWebsiteLoginForm);
 document.getElementById("userModalClearButton").addEventListener("click", resetUserForm);
+document.getElementById("projectModalClearButton").addEventListener("click", resetProjectForm);
 document.getElementById("financeModalClearButton").addEventListener("click", resetFinanceForm);
 document.getElementById("recentInvoicesPrevPage").addEventListener("click", () => {
   recentInvoicesPage = Math.max(1, recentInvoicesPage - 1);
@@ -7057,6 +7409,7 @@ document.getElementById("resetManagerHandleButton").addEventListener("click", re
 document.getElementById("resetSocialPostButton").addEventListener("click", resetSocialPostForm);
 document.querySelector("#resetCorrectionButton")?.addEventListener("click", resetCorrectionForm);
 document.getElementById("refreshPmNotificationsButton").addEventListener("click", () => {
+  pmNotificationPage = 1;
   renderProjectManagerWorkspace();
   showToast("Project manager notifications refreshed");
 });
@@ -7084,6 +7437,7 @@ document.getElementById("loginPasswordToggle").addEventListener("click", () => {
   const passwordInput = document.getElementById("loginPassword");
   passwordInput.type = passwordInput.type === "password" ? "text" : "password";
 });
+sidebarToggleButton?.addEventListener("click", toggleSidebar);
 userMenuButton.addEventListener("click", (event) => {
   event.stopPropagation();
   userMenu.classList.toggle("is-open");
@@ -7297,6 +7651,7 @@ socialPostForm.addEventListener("submit", (event) => {
   pmPostPage = 1;
   resetSocialPostForm();
   renderProjectManagerWorkspace();
+  closeSocialPostModal();
 });
 
 correctionForm?.addEventListener("submit", (event) => {
@@ -7471,6 +7826,7 @@ document.body.addEventListener("click", (event) => {
   const closeFinanceModalButton = event.target.closest("[data-close-finance-modal]");
   const closeEmployeeModalButton = event.target.closest("[data-close-employee-modal]");
   const closeAdminModalButton = event.target.closest("[data-close-admin-modal]");
+  const closeSocialPostModalButton = event.target.closest("[data-close-social-post-modal]");
   const clientColorButton = event.target.closest("[data-client-color]");
 
   if (clientColorButton) changeClientColor(clientColorButton.dataset.clientColor);
@@ -7478,6 +7834,7 @@ document.body.addEventListener("click", (event) => {
   if (closeFinanceModalButton) closeFinanceRecordModal();
   if (closeEmployeeModalButton) closeEmployeeModal();
   if (closeAdminModalButton) closeAdminRecordModals();
+  if (closeSocialPostModalButton) closeSocialPostModal();
   if (selectButton) selectInvoice(selectButton.dataset.select);
   if (editButton) editInvoice(editButton.dataset.edit);
   if (monthlyButton) createMonthlyCopy(monthlyButton.dataset.monthly);
@@ -7607,6 +7964,9 @@ document.getElementById("logoInput").addEventListener("change", (event) => {
 
 async function startApp() {
   appIsStarting = true;
+  applySidebarState();
+  updateSidebarDateTime();
+  window.setInterval(updateSidebarDateTime, 60000);
   applyAccessControl();
   populateCountrySelects();
   populateFinanceCategories();
@@ -7636,6 +7996,12 @@ async function startApp() {
   activeUserSnapshot = currentUser();
   appIsStarting = false;
   document.body.classList.remove("app-loading");
+  if (isLoggedIn()) {
+    const targetView = savedActiveView();
+    switchView(targetView && userCanAccess(targetView) ? targetView : firstAllowedView());
+  } else {
+    document.body.dataset.activeView = "dashboard";
+  }
   renderAll();
   updatePreviewZoom();
   updatePreviewVisibility();
