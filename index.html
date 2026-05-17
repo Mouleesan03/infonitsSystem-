@@ -1553,6 +1553,17 @@
             <input id="postLinkTikTok" placeholder="TikTok post link" />
           </fieldset>
           <label class="pm-note-field">Note<textarea id="postRemarks" rows="2" placeholder="Optional note"></textarea></label>
+          <section class="pm-mobile-qr-card">
+            <h3>Mobile quick add</h3>
+            <p>Scan this QR to open mobile posted update page.</p>
+            <div class="pm-mobile-qr-wrap">
+              <img id="mobilePostQrImage" alt="Mobile posted update QR" />
+              <div class="pm-mobile-qr-meta">
+                <a id="mobilePostQrLink" href="#" target="_blank" rel="noopener">Open mobile page</a>
+                <code id="mobilePostQrUrl"></code>
+              </div>
+            </div>
+          </section>
           <button class="primary-action save-button" type="submit">Save count</button>
         </form>
       </section>

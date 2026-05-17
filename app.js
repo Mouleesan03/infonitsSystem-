@@ -2160,6 +2160,7 @@ function openSocialPostModal() {
   const modal = document.getElementById("socialPostModal");
   modal.classList.add("is-open");
   modal.setAttribute("aria-hidden", "false");
+  updateMobilePostQr();
   document.getElementById("postClient").focus();
 }
 
@@ -2167,6 +2168,35 @@ function closeSocialPostModal() {
   const modal = document.getElementById("socialPostModal");
   modal.classList.remove("is-open");
   modal.setAttribute("aria-hidden", "true");
+}
+
+function updateMobilePostQr() {
+  const qrImage = document.getElementById("mobilePostQrImage");
+  const qrLink = document.getElementById("mobilePostQrLink");
+  const qrUrlText = document.getElementById("mobilePostQrUrl");
+  if (!qrImage || !qrLink || !qrUrlText) return;
+  const baseOrigin = window.location.origin || "";
+  if (!baseOrigin || baseOrigin === "null") {
+    qrImage.removeAttribute("src");
+    qrLink.textContent = "Available after deploy";
+    qrLink.removeAttribute("href");
+    qrUrlText.textContent = "";
+    return;
+  }
+  const mobileUrl = `${baseOrigin}/mobile-post-update.html`;
+  const encoded = encodeURIComponent(mobileUrl);
+  const primaryQr = `https://quickchart.io/qr?size=220&text=${encoded}`;
+  const fallbackQr = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=${encoded}`;
+  qrImage.onerror = () => {
+    if (qrImage.dataset.fallbackApplied === "yes") return;
+    qrImage.dataset.fallbackApplied = "yes";
+    qrImage.src = fallbackQr;
+  };
+  qrImage.dataset.fallbackApplied = "no";
+  qrImage.src = primaryQr;
+  qrLink.href = mobileUrl;
+  qrLink.textContent = "Open mobile page";
+  qrUrlText.textContent = mobileUrl;
 }
 
 function setupAdminFormModals() {

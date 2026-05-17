@@ -4005,6 +4005,73 @@ body[data-active-view="manager"] .topbar-quick-actions-wrap {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.pm-mobile-qr-card {
+  grid-column: 1 / -1;
+  border: 1px solid #dbe4f1;
+  border-radius: 14px;
+  background: #f8fbff;
+  padding: 12px;
+}
+
+.pm-mobile-qr-card h3 {
+  margin: 0;
+  font-size: 0.98rem;
+  color: #1c2a4b;
+}
+
+.pm-mobile-qr-card p {
+  margin: 4px 0 10px;
+  font-size: 0.82rem;
+  color: #5f6f89;
+}
+
+.pm-mobile-qr-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pm-mobile-qr-meta {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+#mobilePostQrImage {
+  width: 96px;
+  height: 96px;
+  border-radius: 10px;
+  border: 1px solid #cfd9ea;
+  background: #ffffff;
+  object-fit: cover;
+}
+
+#mobilePostQrLink {
+  color: #1d2e63;
+  font-weight: 700;
+  font-size: 0.86rem;
+  text-decoration: none;
+}
+
+#mobilePostQrLink:hover {
+  text-decoration: underline;
+}
+
+#mobilePostQrUrl {
+  display: inline-block;
+  max-width: min(420px, 78vw);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 0.74rem;
+  color: #5f6f89;
+  background: #edf3ff;
+  border: 1px solid #d6e1f5;
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
 .pm-post-records-panel {
   grid-area: posted;
   min-width: 0;
