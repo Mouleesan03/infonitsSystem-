@@ -9,6 +9,7 @@
   const postRemarks = document.getElementById("postRemarks");
   const submitButton = document.getElementById("submitButton");
   const formStatus = document.getElementById("formStatus");
+  const successOverlay = document.getElementById("successOverlay");
 
   let projectRows = [];
 
@@ -168,11 +169,18 @@
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(await res.text());
-      setText("Posted update saved");
+      setText("");
+      if (successOverlay) {
+        successOverlay.classList.add("show");
+        successOverlay.setAttribute("aria-hidden", "false");
+      }
       postLink.value = "";
       postRemarks.value = "";
       postCount.value = "1";
       ensureDateValue();
+      window.setTimeout(() => {
+        window.location.reload();
+      }, 900);
     } catch {
       setText("Save failed", true);
     } finally {
