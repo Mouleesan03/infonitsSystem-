@@ -35,7 +35,22 @@
   }
 
   function today() {
-    return new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  }
+
+  function ensureDateValue() {
+    const value = today();
+    postDate.setAttribute("max", value);
+    postDate.value = value;
+    if (!postDate.value) {
+      postDate.type = "text";
+      postDate.placeholder = "YYYY-MM-DD";
+      postDate.value = value;
+    }
   }
 
   function createId() {
@@ -104,7 +119,7 @@
     const project = projectRows.find((p) => p.id === projectId);
     const clientName = String(postClient.value || project?.clientName || "").trim();
     const projectName = String(project?.projectName || "").trim();
-    const date = String(postDate.value || "");
+    const date = String(postDate.value || "").trim();
     const count = Math.max(1, Number(postCount.value || 1));
     const platform = String(postPlatform.value || "Facebook");
     const link = String(postLink.value || "").trim();
@@ -157,7 +172,7 @@
       postLink.value = "";
       postRemarks.value = "";
       postCount.value = "1";
-      postDate.value = today();
+      ensureDateValue();
     } catch {
       setText("Save failed", true);
     } finally {
@@ -170,7 +185,7 @@
       setText("Supabase config missing", true);
       return;
     }
-    postDate.value = today();
+    ensureDateValue();
     try {
       await loadProjects();
     } catch {
@@ -179,6 +194,9 @@
   }
 
   postClient.addEventListener("change", populateProjectOptions);
+  postLink.addEventListener("input", () => {
+    if (!postDate.value) ensureDateValue();
+  });
   submitButton.addEventListener("click", savePost);
   init();
 })();

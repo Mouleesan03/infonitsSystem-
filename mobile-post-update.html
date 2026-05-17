@@ -6,58 +6,69 @@
     <title>Post Update - Infonits</title>
     <style>
       :root {
-        --bg: #f3f6fb;
+        --bg: #eef3fb;
         --card: #ffffff;
         --text: #172033;
         --muted: #64748b;
-        --line: #d9e2ef;
+        --line: #d7e1ef;
         --primary: #1d2e63;
         --primary-2: #273d7f;
+        --focus: #8fb2ff;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: Poppins, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        background: var(--bg);
+        background: radial-gradient(1100px 700px at -20% -10%, #dce8ff 0%, var(--bg) 45%);
         color: var(--text);
       }
       .wrap {
-        max-width: 560px;
+        max-width: 620px;
         margin: 0 auto;
-        padding: 14px;
+        padding: 18px 14px 22px;
       }
       .card {
         background: var(--card);
         border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 14px;
+        border-radius: 18px;
+        padding: 16px;
         margin-bottom: 12px;
+        box-shadow: 0 16px 36px rgba(15, 23, 42, 0.08);
       }
-      h1, h2 { margin: 0 0 6px; }
-      .muted { margin: 0; color: var(--muted); font-size: 0.92rem; }
-      .grid { display: grid; gap: 10px; margin-top: 10px; }
+      h1 { margin: 0; font-size: 2rem; line-height: 1.1; letter-spacing: -0.02em; }
+      h2 { margin: 4px 0 0; font-size: 1.65rem; line-height: 1.15; letter-spacing: -0.015em; }
+      .muted { margin: 6px 0 0; color: var(--muted); font-size: 0.95rem; }
+      .grid { display: grid; gap: 12px; margin-top: 14px; }
       label { font-size: 0.9rem; font-weight: 600; display: grid; gap: 6px; }
       input, select, textarea {
         width: 100%;
-        border: 1px solid #c8d4e4;
-        border-radius: 10px;
-        min-height: 44px;
-        padding: 10px 12px;
+        border: 1px solid #c7d3e6;
+        border-radius: 12px;
+        min-height: 46px;
+        padding: 10px 13px;
         font: inherit;
         color: var(--text);
         background: #fbfdff;
+        transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
       }
-      textarea { min-height: 90px; resize: vertical; }
+      input:focus, select:focus, textarea:focus {
+        border-color: var(--focus);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(143, 178, 255, 0.2);
+        background: #ffffff;
+      }
+      textarea { min-height: 96px; resize: vertical; }
       .row-2 { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
       .btn {
         width: 100%;
         border: 0;
         border-radius: 12px;
-        min-height: 46px;
+        min-height: 48px;
         font: inherit;
         font-weight: 700;
         color: #fff;
         background: var(--primary);
+        box-shadow: 0 10px 22px rgba(29, 46, 99, 0.24);
       }
       .btn:active { background: var(--primary-2); }
       .btn.secondary {
@@ -66,12 +77,16 @@
       }
       .hidden { display: none !important; }
       .status {
-        margin-top: 10px;
-        font-size: 0.9rem;
+        margin-top: 4px;
+        font-size: 0.92rem;
+        font-weight: 600;
         color: #0f172a;
       }
       @media (max-width: 480px) {
         .row-2 { grid-template-columns: 1fr; }
+        .card { padding: 14px; border-radius: 16px; }
+        h1 { font-size: 1.8rem; }
+        h2 { font-size: 1.5rem; }
       }
     </style>
   </head>
