@@ -152,6 +152,8 @@ let appIsStarting = true;
 let notificationViewMode = "all";
 let notificationFocusClient = "";
 let calendarEventModalDate = "";
+let socialPostAutoSyncTimer = null;
+let lastSocialPostSyncStamp = "";
 
 const DEV_DIAGNOSTICS = Boolean(window.INFONITS_DEBUG);
 const appDiagnostics = {
@@ -900,6 +902,56 @@ function supabaseTableHeaders(extra = {}) {
     "Content-Type": "application/json",
     ...extra,
   };
+}
+
+async function latestSocialPostStamp() {
+  const response = await fetch(
+    supabaseTableUrl("social_media_posts", "?select=updated_at&order=updated_at.desc&limit=1"),
+    { headers: supabaseTableHeaders() },
+  );
+  if (!response.ok) throw new Error(await response.text());
+  const rows = await response.json();
+  return String(rows[0]?.updated_at || "");
+}
+
+async function syncSocialPostsFromSupabaseIfChanged() {
+  if (!supabaseReady() || !isLoggedIn()) return;
+  try {
+    const stamp = await latestSocialPostStamp();
+    if (!stamp) return;
+    if (!lastSocialPostSyncStamp) {
+      lastSocialPostSyncStamp = stamp;
+      return;
+    }
+    if (stamp === lastSocialPostSyncStamp) return;
+    lastSocialPostSyncStamp = stamp;
+    const rows = await readTableRows(supabaseDirectCollections.socialMediaPosts);
+    socialMediaPosts = rows;
+    bumpDataVersion("socialMediaPosts");
+    safeRun("sync:weekly-notifications", () => updateWeeklyProjectNotifications());
+    requestRender("dashboard");
+    requestRender("manager");
+    requestRender("calendar");
+    requestRender("notifications");
+    showToast("New posted update received");
+  } catch (error) {
+    console.error("Social post auto-sync failed", error);
+  }
+}
+
+function startSocialPostAutoSync() {
+  if (socialPostAutoSyncTimer || !supabaseReady()) return;
+  socialPostAutoSyncTimer = window.setInterval(() => {
+    if (document.hidden || !isLoggedIn()) return;
+    syncSocialPostsFromSupabaseIfChanged();
+  }, 12000);
+  syncSocialPostsFromSupabaseIfChanged();
+}
+
+function stopSocialPostAutoSync() {
+  if (!socialPostAutoSyncTimer) return;
+  window.clearInterval(socialPostAutoSyncTimer);
+  socialPostAutoSyncTimer = null;
 }
 
 function cleanDate(value, fallback = today()) {
@@ -2572,6 +2624,7 @@ function openAuthenticatedApp() {
   const targetView = savedActiveView();
   switchView(targetView && userCanAccess(targetView) ? targetView : firstAllowedView());
   applyAccessControl();
+  startSocialPostAutoSync();
 }
 
 function populateUserAccessOptions(selected = roleDefaultAccess["project-manager"]) {
@@ -2634,6 +2687,7 @@ async function loginUser(username, password) {
 
 function logoutUser() {
   clearIdleLogoutTimer();
+  stopSocialPostAutoSync();
   currentUserId = "";
   activeUserSnapshot = null;
   sessionStorage.removeItem(AUTH_SESSION_KEY);
@@ -9933,8 +9987,10 @@ async function startApp() {
   if (isLoggedIn()) {
     const targetView = savedActiveView();
     switchView(targetView && userCanAccess(targetView) ? targetView : firstAllowedView());
+    startSocialPostAutoSync();
   } else {
     document.body.dataset.activeView = "dashboard";
+    stopSocialPostAutoSync();
   }
   renderAll();
   scheduleIdleLogout();
