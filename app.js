@@ -767,6 +767,7 @@ function loadServiceLetterRecords() {
 
 function saveServiceLetterRecords() {
   localStorage.setItem(SERVICE_LETTER_RECORDS_KEY, JSON.stringify(serviceLetterRecords));
+  syncCollectionToSupabase("serviceLetterRecords");
 }
 
 function refreshStateFromStorage() {
@@ -822,6 +823,17 @@ function normalizeLoadedState() {
     date: normalizeIsoDate(event.date, today()),
     title: String(event.title || "Upcoming event"),
     updatedAt: event.updatedAt || new Date().toISOString(),
+  }));
+  serviceLetterRecords = normalizeArray(serviceLetterRecords).map((record) => ({
+    ...record,
+    id: record.id || createId(),
+    date: normalizeIsoDate(record.date, today()),
+    clientName: String(record.clientName || ""),
+    subject: String(record.subject || "Service Letter"),
+    body: String(record.body || ""),
+    preparedBy: String(record.preparedBy || ""),
+    designation: String(record.designation || ""),
+    updatedAt: record.updatedAt || new Date().toISOString(),
   }));
   projectTargets = normalizeObject(projectTargets);
   clientColors = normalizeObject(clientColors);
@@ -1320,6 +1332,12 @@ const supabaseAppDataCollections = {
       calendarEvents = Array.isArray(value) ? value : [];
     },
   },
+  serviceLetterRecords: {
+    get: () => serviceLetterRecords,
+    set: (value) => {
+      serviceLetterRecords = Array.isArray(value) ? value : [];
+    },
+  },
 };
 
 const supabaseSyncTimers = {};
@@ -1654,6 +1672,7 @@ async function migrateOldLocalDataToSupabase() {
     pmNotifications: readOldLocalJson(PM_NOTIFICATIONS_KEY, []),
     monthlyPostReports: readOldLocalJson(MONTHLY_POST_REPORTS_KEY, []),
     calendarEvents: readOldLocalJson(CALENDAR_EVENTS_KEY, []),
+    serviceLetterRecords: readOldLocalJson(SERVICE_LETTER_RECORDS_KEY, []),
     settings: readOldLocalJson(SETTINGS_KEY, {}),
   };
   let moved = false;
@@ -1673,6 +1692,7 @@ async function migrateOldLocalDataToSupabase() {
   if (!pmNotifications.length && oldData.pmNotifications.length) { pmNotifications = oldData.pmNotifications; moved = true; }
   if (!monthlyPostReports.length && oldData.monthlyPostReports.length) { monthlyPostReports = oldData.monthlyPostReports; moved = true; }
   if (!calendarEvents.length && oldData.calendarEvents.length) { calendarEvents = oldData.calendarEvents; moved = true; }
+  if (!serviceLetterRecords.length && oldData.serviceLetterRecords.length) { serviceLetterRecords = oldData.serviceLetterRecords; moved = true; }
   if (Object.keys(oldData.settings).length) { settings = { ...defaultSettings, ...settings, ...oldData.settings }; moved = true; }
   removeOldLocalData();
   if (!moved) return false;
@@ -3738,6 +3758,7 @@ function createBackupPackage() {
       pmNotifications,
       monthlyPostReports,
       calendarEvents,
+      serviceLetterRecords,
       clientColors,
       settings,
     },
@@ -3765,6 +3786,7 @@ async function applyBackupData(backup) {
   pmNotifications = data.pmNotifications || [];
   monthlyPostReports = data.monthlyPostReports || [];
   calendarEvents = data.calendarEvents || [];
+  serviceLetterRecords = data.serviceLetterRecords || [];
   clientColors = data.clientColors && typeof data.clientColors === "object" && !Array.isArray(data.clientColors) ? data.clientColors : {};
   settings = { ...defaultSettings, ...(data.settings || {}) };
   normalizeLoadedState();
