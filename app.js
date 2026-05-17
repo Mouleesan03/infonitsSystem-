@@ -15,7 +15,9 @@ const MANAGER_HANDLES_KEY = "infonits.managerHandles";
 const SOCIAL_POSTS_KEY = "infonits.socialMediaPosts";
 const CORRECTIONS_KEY = "infonits.corrections";
 const PM_NOTIFICATIONS_KEY = "infonits.notifications";
+const SERVICE_LETTER_RECORDS_KEY = "infonits.serviceLetterRecords";
 const MONTHLY_POST_REPORTS_KEY = "infonits.monthlyPostReports";
+const CALENDAR_EVENTS_KEY = "infonits.calendarEvents";
 const CLOUD_BACKUP_KEY = "infonits.cloudBackup";
 const SIDEBAR_COLLAPSED_KEY = "infonits.sidebarCollapsed";
 const ACTIVE_VIEW_KEY = "infonits.activeView";
@@ -30,6 +32,17 @@ const WEBSITE_LOGIN_PAGE_SIZE = 8;
 const PM_WEEKLY_POST_TARGET = 3;
 const PM_MONTHLY_POST_TARGET = PM_WEEKLY_POST_TARGET * 4;
 const MAX_IMAGE_UPLOAD_SIZE = 2 * 1024 * 1024;
+const SERVICE_LETTER_LOGO_PATH = "assets/infonits-logo-dark.png";
+const NOTIFICATION_RESTART_DATE = "2026-05-08";
+const IDLE_LOGOUT_MS = 10 * 60 * 1000;
+const PASSWORD_MIN_LENGTH = 8;
+const WRITE_RETRY_ATTEMPTS = 2;
+const WRITE_RETRY_DELAY_MS = 220;
+const NOTIFICATION_STATUS = {
+  UNREAD: "Unread",
+  READ: "Read",
+  DONE: "Done",
+};
 
 const defaultSettings = {
   businessName: "infonits",
@@ -54,17 +67,17 @@ const defaultSettings = {
 const accessSections = [
   { id: "dashboard", label: "Dashboard" },
   { id: "calendar", label: "Calendar" },
+  { id: "notifications", label: "Notifications" },
   { id: "create", label: "Create Invoice" },
   { id: "clients", label: "Customers" },
-  { id: "employees", label: "Employees" },
-  { id: "services", label: "Service Catalog" },
+  { id: "employees", label: "Team" },
   { id: "invoices", label: "Invoices" },
   { id: "quotations", label: "Quotations" },
   { id: "projects", label: "Projects" },
   { id: "manager", label: "Pr Tracker" },
-  { id: "renewals", label: "Subscriptions" },
   { id: "logins", label: "Portal Access" },
   { id: "finance", label: "Finance" },
+  { id: "documents", label: "Documents" },
   { id: "users", label: "Users & Access" },
   { id: "settings", label: "Settings" },
 ];
@@ -78,9 +91,9 @@ const roleLabels = {
 
 const roleDefaultAccess = {
   admin: accessSections.map((section) => section.id),
-  "project-manager": ["dashboard", "calendar", "clients", "invoices", "quotations", "projects", "manager", "renewals"],
-  designer: ["dashboard", "calendar", "projects", "manager", "services"],
-  developer: ["dashboard", "calendar", "create", "clients", "employees", "services", "invoices", "quotations", "projects", "manager", "renewals"],
+  "project-manager": ["dashboard", "calendar", "notifications", "clients", "invoices", "quotations", "projects", "manager", "documents"],
+  designer: ["dashboard", "calendar", "notifications", "projects", "manager"],
+  developer: ["dashboard", "calendar", "notifications", "create", "clients", "employees", "invoices", "quotations", "projects", "manager"],
 };
 
 let invoices = loadInvoices();
@@ -98,6 +111,8 @@ let socialMediaPosts = loadSocialMediaPosts();
 let corrections = loadCorrections();
 let pmNotifications = loadPmNotifications();
 let monthlyPostReports = loadMonthlyPostReports();
+let calendarEvents = loadCalendarEvents();
+let serviceLetterRecords = loadServiceLetterRecords();
 let clientColors = {};
 let settings = loadSettings();
 let editingId = null;
@@ -112,6 +127,7 @@ let editingManagerHandleId = null;
 let editingSocialPostId = null;
 let editingCorrectionId = null;
 let linkedProjectId = null;
+let editingServiceLetterId = null;
 let currentUserId = sessionStorage.getItem(AUTH_SESSION_KEY) || "";
 let activeUserSnapshot = null;
 let selectedInvoiceId = invoices[0]?.id || null;
@@ -129,9 +145,80 @@ let pmPostPage = 1;
 let pmNotificationPage = 1;
 let websiteLoginPage = 1;
 let pendingEmployeePhotoDataUrl = "";
+let idleLogoutTimerId = null;
 const visibleWebsitePasswords = new Set();
 
 let appIsStarting = true;
+let notificationViewMode = "all";
+let notificationFocusClient = "";
+let calendarEventModalDate = "";
+
+const DEV_DIAGNOSTICS = Boolean(window.INFONITS_DEBUG);
+const appDiagnostics = {
+  renderCounts: {},
+  guardSkips: 0,
+  cacheHits: 0,
+  cacheMisses: 0,
+};
+const renderQueue = new Set();
+let renderFlushTimer = null;
+const actionGuards = new Map();
+const memoCache = new Map();
+const dataVersions = {
+  invoices: 0,
+  projects: 0,
+  renewals: 0,
+  socialMediaPosts: 0,
+  pmNotifications: 0,
+  calendarEvents: 0,
+};
+
+function diagnosticsCount(type, key = "default") {
+  if (!DEV_DIAGNOSTICS) return;
+  if (type === "render") appDiagnostics.renderCounts[key] = (appDiagnostics.renderCounts[key] || 0) + 1;
+  if (type === "guard") appDiagnostics.guardSkips += 1;
+  if (type === "cache-hit") appDiagnostics.cacheHits += 1;
+  if (type === "cache-miss") appDiagnostics.cacheMisses += 1;
+  window.__infonitsDiagnostics = appDiagnostics;
+}
+
+function safeRun(label, fn, fallback = null) {
+  try {
+    diagnosticsCount("render", label);
+    return fn();
+  } catch (error) {
+    console.error(`${label} failed`, error);
+    return fallback;
+  }
+}
+
+function runGuardedAction(key, fn, cooldownMs = 250) {
+  const now = Date.now();
+  const previous = actionGuards.get(key) || 0;
+  if (now - previous < cooldownMs) {
+    diagnosticsCount("guard");
+    return;
+  }
+  actionGuards.set(key, now);
+  return fn();
+}
+
+function bumpDataVersion(name) {
+  if (!(name in dataVersions)) return;
+  dataVersions[name] += 1;
+  memoCache.clear();
+}
+
+function memoizeByKey(key, factory) {
+  if (memoCache.has(key)) {
+    diagnosticsCount("cache-hit");
+    return memoCache.get(key);
+  }
+  diagnosticsCount("cache-miss");
+  const value = factory();
+  memoCache.set(key, value);
+  return value;
+}
 
 const navTabs = document.querySelectorAll(".nav-tab");
 const navGroups = document.querySelectorAll("[data-nav-group]");
@@ -139,6 +226,7 @@ const navGroupToggles = document.querySelectorAll(".nav-group-toggle");
 const views = {
   dashboard: document.getElementById("dashboardView"),
   calendar: document.getElementById("calendarView"),
+  notifications: document.getElementById("notificationsView"),
   create: document.getElementById("createView"),
   clients: document.getElementById("clientsView"),
   employees: document.getElementById("employeesView"),
@@ -148,6 +236,7 @@ const views = {
   projects: document.getElementById("projectsView"),
   manager: document.getElementById("managerView"),
   renewals: document.getElementById("renewalsView"),
+  documents: document.getElementById("documentsView"),
   logins: document.getElementById("loginsView"),
   finance: document.getElementById("financeView"),
   users: document.getElementById("usersView"),
@@ -192,11 +281,34 @@ const sidebarToggleButton = document.getElementById("sidebarToggleButton");
 const loginScreen = document.getElementById("loginScreen");
 const appPreloader = document.getElementById("appPreloader");
 const loginForm = document.getElementById("loginForm");
+const toggleFullscreenButton = document.getElementById("toggleFullscreenButton");
+const quickActionsButton = document.getElementById("quickActionsButton");
+const quickActionsMenu = document.getElementById("quickActionsMenu");
+const topbarContext = document.getElementById("topbarContext");
+const newCustomerButton = document.getElementById("newCustomerButton");
+const newProjectButton = document.getElementById("newProjectButton");
+const newQuotationButton = document.getElementById("newQuotationButton");
+const newInvoiceButton = document.getElementById("newInvoiceButton");
 const userMenuButton = document.getElementById("userMenuButton");
 const userMenu = document.getElementById("userMenu");
+const sidebarUserCard = document.querySelector(".sidebar-user");
+const closeUserMenu = () => {
+  userMenu.classList.remove("is-open");
+  document.body.classList.remove("user-menu-modal-open");
+};
+const toggleUserMenu = () => {
+  const willOpen = !userMenu.classList.contains("is-open");
+  userMenu.classList.toggle("is-open", willOpen);
+  document.body.classList.toggle("user-menu-modal-open", willOpen);
+};
 const activeUserInitial = document.getElementById("activeUserInitial");
 const activeUserName = document.getElementById("activeUserName");
 const activeUserRole = document.getElementById("activeUserRole");
+const activeUserNameInline = document.getElementById("activeUserNameInline");
+const activeUserRoleInline = document.getElementById("activeUserRoleInline");
+const openNotificationsButton = document.getElementById("openNotificationsButton");
+const topbarAlertCount = document.getElementById("topbarAlertCount");
+const managerTopbarAlertCount = document.getElementById("managerTopbarAlertCount");
 const sidebarDateTime = document.getElementById("sidebarDateTime");
 const managerHandleSearchInput = document.getElementById("managerHandleSearchInput");
 const pmMonthFilter = document.getElementById("pmMonthFilter");
@@ -206,6 +318,16 @@ const clientSelect = document.getElementById("clientSelect");
 const previewScale = document.getElementById("previewScale");
 const previewZoomLabel = document.getElementById("previewZoomLabel");
 const invoiceModal = document.getElementById("invoiceModal");
+const serviceLetterForm = document.getElementById("serviceLetterForm");
+const serviceLetterEditorModal = document.getElementById("serviceLetterEditorModal");
+const serviceLetterOptionsModal = document.getElementById("serviceLetterOptionsModal");
+
+function updateFullscreenButtonState() {
+  if (!toggleFullscreenButton) return;
+  const isFullscreen = Boolean(document.fullscreenElement);
+  toggleFullscreenButton.textContent = isFullscreen ? "⤢ Exit fullscreen" : "⛶ Fullscreen";
+  toggleFullscreenButton.setAttribute("aria-label", isFullscreen ? "Exit fullscreen" : "Enter fullscreen");
+}
 
 let sidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "yes";
 
@@ -335,6 +457,7 @@ function loadInvoices() {
 }
 
 function saveInvoices() {
+  bumpDataVersion("invoices");
   syncCollectionToSupabase("invoices");
 }
 
@@ -352,6 +475,7 @@ function loadProjects() {
 }
 
 function saveProjects() {
+  bumpDataVersion("projects");
   syncCollectionToSupabase("projects");
 }
 
@@ -384,6 +508,7 @@ function loadRenewals() {
 }
 
 function saveRenewals() {
+  bumpDataVersion("renewals");
   syncCollectionToSupabase("renewals");
 }
 
@@ -405,15 +530,19 @@ function saveEmployees() {
 
 function defaultUsers() {
   return [
-    { id: "admin", name: "Admin", username: "admin", passwordHash: encodePassword("admin123"), email: "", role: "admin", status: "Active", access: roleDefaultAccess.admin, updatedAt: new Date().toISOString() },
-    { id: "project-manager", name: "Project Manager", username: "manager", passwordHash: encodePassword("manager123"), email: "", role: "project-manager", status: "Active", access: roleDefaultAccess["project-manager"], updatedAt: new Date().toISOString() },
-    { id: "designer", name: "Designer", username: "designer", passwordHash: encodePassword("designer123"), email: "", role: "designer", status: "Active", access: roleDefaultAccess.designer, updatedAt: new Date().toISOString() },
-    { id: "developer", name: "Developer", username: "developer", passwordHash: encodePassword("developer123"), email: "", role: "developer", status: "Active", access: roleDefaultAccess.developer, updatedAt: new Date().toISOString() },
+    { id: "admin", name: "Admin", username: "admin", passwordHash: legacyEncodePassword("admin123"), email: "", role: "admin", status: "Active", access: roleDefaultAccess.admin, mustChangePassword: true, updatedAt: new Date().toISOString() },
+    { id: "project-manager", name: "Project Manager", username: "manager", passwordHash: legacyEncodePassword("manager123"), email: "", role: "project-manager", status: "Active", access: roleDefaultAccess["project-manager"], mustChangePassword: true, updatedAt: new Date().toISOString() },
+    { id: "designer", name: "Designer", username: "designer", passwordHash: legacyEncodePassword("designer123"), email: "", role: "designer", status: "Active", access: roleDefaultAccess.designer, mustChangePassword: true, updatedAt: new Date().toISOString() },
+    { id: "developer", name: "Developer", username: "developer", passwordHash: legacyEncodePassword("developer123"), email: "", role: "developer", status: "Active", access: roleDefaultAccess.developer, mustChangePassword: true, updatedAt: new Date().toISOString() },
   ];
 }
 
-function encodePassword(password = "") {
+function legacyEncodePassword(password = "") {
   return btoa(unescape(encodeURIComponent(password)));
+}
+
+function isLegacyPasswordHash(value = "") {
+  return value && !String(value).startsWith("sha256:");
 }
 
 async function hashPassword(password = "") {
@@ -505,7 +634,9 @@ function sha256Hex(value) {
 
 function passwordMatches(user, password, hashedPassword) {
   const savedHash = user.passwordHash || "";
-  return savedHash === hashedPassword || savedHash === encodePassword(password);
+  if (savedHash === hashedPassword) return true;
+  if (isLegacyPasswordHash(savedHash)) return savedHash === legacyEncodePassword(password);
+  return false;
 }
 
 function isDefaultPassword(username, password) {
@@ -518,13 +649,18 @@ function isDefaultPassword(username, password) {
   return defaults[String(username || "").trim().toLowerCase()] === String(password || "");
 }
 
+function isDefaultUsername(username = "") {
+  return ["admin", "manager", "designer", "developer"].includes(String(username || "").trim().toLowerCase());
+}
+
 function normalizeUser(user) {
   const username = user.username || String(user.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "user";
   return {
     ...user,
     username,
-    passwordHash: user.passwordHash || encodePassword(user.password || `${username}123`),
+    passwordHash: user.passwordHash || legacyEncodePassword(user.password || `${username}123`),
     access: user.role === "admin" ? roleDefaultAccess.admin : user.access || roleDefaultAccess[user.role] || ["dashboard"],
+    mustChangePassword: user.mustChangePassword ?? isDefaultUsername(username),
   };
 }
 
@@ -583,6 +719,7 @@ function loadSocialMediaPosts() {
 }
 
 function saveSocialMediaPosts() {
+  bumpDataVersion("socialMediaPosts");
   syncCollectionToSupabase("socialMediaPosts");
 }
 
@@ -599,6 +736,7 @@ function loadPmNotifications() {
 }
 
 function savePmNotifications() {
+  bumpDataVersion("pmNotifications");
   syncCollectionToSupabase("pmNotifications");
 }
 
@@ -608,6 +746,27 @@ function loadMonthlyPostReports() {
 
 function saveMonthlyPostReports() {
   syncCollectionToSupabase("monthlyPostReports");
+}
+
+function loadCalendarEvents() {
+  return [];
+}
+
+function saveCalendarEvents() {
+  bumpDataVersion("calendarEvents");
+  syncCollectionToSupabase("calendarEvents");
+}
+
+function loadServiceLetterRecords() {
+  try {
+    return JSON.parse(localStorage.getItem(SERVICE_LETTER_RECORDS_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveServiceLetterRecords() {
+  localStorage.setItem(SERVICE_LETTER_RECORDS_KEY, JSON.stringify(serviceLetterRecords));
 }
 
 function refreshStateFromStorage() {
@@ -626,13 +785,46 @@ function refreshStateFromStorage() {
   corrections = loadCorrections();
   pmNotifications = loadPmNotifications();
   monthlyPostReports = loadMonthlyPostReports();
+  calendarEvents = loadCalendarEvents();
+  serviceLetterRecords = loadServiceLetterRecords();
   settings = loadSettings();
+  normalizeLoadedState();
   currentUserId = "";
   selectedInvoiceId = invoices[0]?.id || null;
 }
 
 function loadSettings() {
   return { ...defaultSettings };
+}
+
+function normalizeIsoDate(value, fallback = "") {
+  const text = String(value || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : fallback;
+}
+
+function normalizeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function normalizeLoadedState() {
+  invoices = normalizeArray(invoices);
+  projects = normalizeArray(projects);
+  renewals = normalizeArray(renewals);
+  socialMediaPosts = normalizeArray(socialMediaPosts);
+  pmNotifications = normalizeArray(pmNotifications);
+  calendarEvents = normalizeArray(calendarEvents).map((event) => ({
+    ...event,
+    id: event.id || createId(),
+    date: normalizeIsoDate(event.date, today()),
+    title: String(event.title || "Upcoming event"),
+    updatedAt: event.updatedAt || new Date().toISOString(),
+  }));
+  projectTargets = normalizeObject(projectTargets);
+  clientColors = normalizeObject(clientColors);
 }
 
 function saveSettings() {
@@ -1122,10 +1314,17 @@ const supabaseAppDataCollections = {
       projectTargets = value && typeof value === "object" && !Array.isArray(value) ? value : {};
     },
   },
+  calendarEvents: {
+    get: () => calendarEvents,
+    set: (value) => {
+      calendarEvents = Array.isArray(value) ? value : [];
+    },
+  },
 };
 
 const supabaseSyncTimers = {};
 let pendingSupabaseSaves = 0;
+const collectionWriteLocks = {};
 
 function setSupabaseSaveStatus(status) {
   const labels = {
@@ -1142,7 +1341,10 @@ function syncCollectionToSupabase(collection) {
   supabaseSyncTimers[collection] = window.setTimeout(() => {
     pendingSupabaseSaves += 1;
     if (pendingSupabaseSaves === 1) setSupabaseSaveStatus("saving");
-    writeCollectionToSupabase(collection)
+    const previous = collectionWriteLocks[collection] || Promise.resolve();
+    collectionWriteLocks[collection] = previous
+      .catch(() => {})
+      .then(() => writeCollectionToSupabaseWithRetry(collection))
       .then(() => {
         pendingSupabaseSaves = Math.max(0, pendingSupabaseSaves - 1);
         if (!pendingSupabaseSaves) setSupabaseSaveStatus("saved");
@@ -1153,6 +1355,20 @@ function syncCollectionToSupabase(collection) {
         showToast(`Supabase save failed: ${collection}`);
       });
   }, 350);
+}
+
+async function writeCollectionToSupabaseWithRetry(collection, options = {}) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= WRITE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await writeCollectionToSupabase(collection, options);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= WRITE_RETRY_ATTEMPTS) break;
+      await new Promise((resolve) => window.setTimeout(resolve, WRITE_RETRY_DELAY_MS * (attempt + 1)));
+    }
+  }
+  throw lastError || new Error(`Supabase save failed: ${collection}`);
 }
 
 function syncAllCollectionsToSupabase() {
@@ -1355,6 +1571,7 @@ async function loadAllDataFromSupabase() {
       const settingsRows = await settingsResponse.json();
       settings = { ...defaultSettings, ...(settingsRows[0]?.payload || {}) };
     }
+    normalizeLoadedState();
     selectedInvoiceId = invoices[0]?.id || null;
     ensureDefaultAdminUser();
     if (hasLoadError) showToast("Some Supabase tables could not load");
@@ -1395,6 +1612,7 @@ function removeOldLocalData() {
     CORRECTIONS_KEY,
     PM_NOTIFICATIONS_KEY,
     MONTHLY_POST_REPORTS_KEY,
+    CALENDAR_EVENTS_KEY,
     CLOUD_BACKUP_KEY,
   ].forEach((key) => localStorage.removeItem(key));
 }
@@ -1412,6 +1630,7 @@ function oldLocalDataExists() {
     USERS_KEY,
     MANAGER_HANDLES_KEY,
     SOCIAL_POSTS_KEY,
+    CALENDAR_EVENTS_KEY,
     SETTINGS_KEY,
   ].some((key) => localStorage.getItem(key) !== null);
 }
@@ -1434,6 +1653,7 @@ async function migrateOldLocalDataToSupabase() {
     corrections: readOldLocalJson(CORRECTIONS_KEY, []),
     pmNotifications: readOldLocalJson(PM_NOTIFICATIONS_KEY, []),
     monthlyPostReports: readOldLocalJson(MONTHLY_POST_REPORTS_KEY, []),
+    calendarEvents: readOldLocalJson(CALENDAR_EVENTS_KEY, []),
     settings: readOldLocalJson(SETTINGS_KEY, {}),
   };
   let moved = false;
@@ -1452,6 +1672,7 @@ async function migrateOldLocalDataToSupabase() {
   if (!corrections.length && oldData.corrections.length) { corrections = oldData.corrections; moved = true; }
   if (!pmNotifications.length && oldData.pmNotifications.length) { pmNotifications = oldData.pmNotifications; moved = true; }
   if (!monthlyPostReports.length && oldData.monthlyPostReports.length) { monthlyPostReports = oldData.monthlyPostReports; moved = true; }
+  if (!calendarEvents.length && oldData.calendarEvents.length) { calendarEvents = oldData.calendarEvents; moved = true; }
   if (Object.keys(oldData.settings).length) { settings = { ...defaultSettings, ...settings, ...oldData.settings }; moved = true; }
   removeOldLocalData();
   if (!moved) return false;
@@ -1722,10 +1943,56 @@ function generateEmployeeCode() {
   return `EMP-${String(maxNumber + 1).padStart(3, "0")}`;
 }
 
+let appAudioContext = null;
+let lastToastSoundAt = 0;
+let serviceLetterReadyPdf = null;
+
+function getAudioContext() {
+  if (typeof window === "undefined") return null;
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!appAudioContext) appAudioContext = new AudioCtx();
+  if (appAudioContext.state === "suspended") {
+    appAudioContext.resume().catch(() => {});
+  }
+  return appAudioContext;
+}
+
+function playTone(frequency, duration = 0.12, volume = 0.03, type = "sine", delay = 0) {
+  const context = getAudioContext();
+  if (!context) return;
+  const now = context.currentTime + Math.max(0, delay);
+  const oscillator = context.createOscillator();
+  const gainNode = context.createGain();
+  oscillator.type = type;
+  oscillator.frequency.setValueAtTime(frequency, now);
+  gainNode.gain.setValueAtTime(0, now);
+  gainNode.gain.linearRampToValueAtTime(volume, now + 0.01);
+  gainNode.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+  oscillator.connect(gainNode);
+  gainNode.connect(context.destination);
+  oscillator.start(now);
+  oscillator.stop(now + duration + 0.02);
+}
+
+function playLoginSound() {
+  playTone(523.25, 0.11, 0.035, "triangle", 0);
+  playTone(659.25, 0.13, 0.03, "triangle", 0.08);
+}
+
+function playNotificationSound() {
+  const now = Date.now();
+  if (now - lastToastSoundAt < 180) return;
+  lastToastSoundAt = now;
+  playTone(740, 0.08, 0.018, "sine", 0);
+  playTone(880, 0.09, 0.014, "sine", 0.05);
+}
+
 function showToast(message) {
   const toast = document.getElementById("toast");
   toast.textContent = message;
   toast.classList.add("show");
+  playNotificationSound();
   window.setTimeout(() => toast.classList.remove("show"), 2200);
 }
 
@@ -1922,6 +2189,55 @@ function isLoggedIn() {
   return Boolean(currentUser());
 }
 
+function requireActiveSession(actionLabel = "continue") {
+  const user = currentUser();
+  if (user) return user;
+  logoutUser();
+  showToast(`Session expired. Please login to ${actionLabel}.`);
+  return null;
+}
+
+function promptRequiredPasswordReset(user, previousPassword = "") {
+  const username = String(user?.username || "").trim().toLowerCase();
+  const title = "Security update: change your password now.";
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const input = window.prompt(`${title}\nEnter a new password (minimum ${PASSWORD_MIN_LENGTH} characters):`, "");
+    if (input === null) return null;
+    const next = String(input || "").trim();
+    if (next.length < PASSWORD_MIN_LENGTH) {
+      showToast(`Password must be at least ${PASSWORD_MIN_LENGTH} characters`);
+      continue;
+    }
+    if (isDefaultPassword(username, next) || next === previousPassword) {
+      showToast("Choose a different password");
+      continue;
+    }
+    return next;
+  }
+  return null;
+}
+
+function clearIdleLogoutTimer() {
+  if (!idleLogoutTimerId) return;
+  window.clearTimeout(idleLogoutTimerId);
+  idleLogoutTimerId = null;
+}
+
+function scheduleIdleLogout() {
+  clearIdleLogoutTimer();
+  if (!isLoggedIn()) return;
+  idleLogoutTimerId = window.setTimeout(() => {
+    if (!isLoggedIn()) return;
+    logoutUser();
+    showToast("Logged out automatically after 10 minutes of inactivity");
+  }, IDLE_LOGOUT_MS);
+}
+
+function refreshIdleLogoutTimer() {
+  if (!isLoggedIn()) return;
+  scheduleIdleLogout();
+}
+
 function userCanAccess(viewName) {
   const user = currentUser();
   if (!user) return false;
@@ -1968,20 +2284,262 @@ function applyAccessControl() {
   document.querySelectorAll("[data-view-target]").forEach((button) => {
     button.hidden = !userCanAccess(button.dataset.viewTarget);
   });
-  document.getElementById("newInvoiceButton").hidden = !userCanAccess("create");
-  document.getElementById("newQuotationButton").hidden = !userCanAccess("quotations");
-  document.getElementById("newProjectButton").hidden = !userCanAccess("projects");
-  document.getElementById("newCustomerButton").hidden = !userCanAccess("clients");
+  if (newInvoiceButton) newInvoiceButton.hidden = !userCanAccess("create");
+  if (newQuotationButton) newQuotationButton.hidden = !userCanAccess("quotations");
+  if (newProjectButton) newProjectButton.hidden = !userCanAccess("projects");
+  if (newCustomerButton) newCustomerButton.hidden = !userCanAccess("clients");
+  if (openNotificationsButton) openNotificationsButton.hidden = !userCanAccess("notifications");
   document.getElementById("editProfileButton").hidden = !userCanAccess("users");
+  updateQuickActionsAccess();
   renderActiveUserBadge();
   if (!userCanAccess(activeView)) switchView(firstAllowedView());
+}
+
+const topbarViewMeta = {
+  dashboard: { context: "Dashboard overview", showSearch: true, showQuickActions: true },
+  invoices: { context: "Invoices and payment status", showSearch: true, showQuickActions: true },
+  quotations: { context: "Quotation management", showSearch: true, showQuickActions: true },
+  clients: { context: "Customer records and statements", showSearch: false, showQuickActions: true },
+  projects: { context: "Projects and delivery tracking", showSearch: false, showQuickActions: true },
+  manager: { context: "Post tracker and team progress", showSearch: false, showQuickActions: false },
+  notifications: { context: "Alerts and task updates", showSearch: false, showQuickActions: false },
+  calendar: { context: "Calendar and reminders", showSearch: false, showQuickActions: false },
+};
+
+function updateTopbarForView(viewName) {
+  const meta = topbarViewMeta[viewName] || { context: "Workspace", showSearch: false, showQuickActions: false };
+  if (topbarContext) topbarContext.textContent = meta.context;
+  if (dashboardSearchInput) dashboardSearchInput.hidden = !meta.showSearch;
+  if (quickActionsButton) quickActionsButton.hidden = !meta.showQuickActions;
+  if (!meta.showQuickActions && quickActionsMenu) quickActionsMenu.hidden = true;
+}
+
+function updateQuickActionsAccess() {
+  if (!quickActionsMenu) return;
+  quickActionsMenu.querySelectorAll("[data-quick-action]").forEach((button) => {
+    const action = button.dataset.quickAction;
+    const allowed =
+      (action === "invoice" && userCanAccess("create")) ||
+      (action === "quotation" && userCanAccess("quotations")) ||
+      (action === "customer" && userCanAccess("clients")) ||
+      (action === "project" && userCanAccess("projects"));
+    button.hidden = !allowed;
+  });
 }
 
 function renderActiveUserBadge() {
   const user = currentUser();
   activeUserInitial.textContent = user ? String(user.name || user.username || "U").slice(0, 1).toUpperCase() : "U";
   activeUserName.textContent = user?.name || "";
-  activeUserRole.textContent = user ? `${roleLabels[user.role] || user.role} • ${user.username || ""}` : "";
+  const roleText = user ? `${roleLabels[user.role] || user.role} • ${user.username || ""}` : "";
+  activeUserRole.textContent = roleText;
+  if (activeUserNameInline) activeUserNameInline.textContent = user?.name || "";
+  if (activeUserRoleInline) activeUserRoleInline.textContent = roleText;
+  if (!user) {
+    if (topbarAlertCount) topbarAlertCount.textContent = "0";
+    if (managerTopbarAlertCount) managerTopbarAlertCount.textContent = "0";
+    return;
+  }
+  const unread = unreadNotificationsForUser(user.id);
+  if (topbarAlertCount) topbarAlertCount.textContent = String(unread.length);
+  if (managerTopbarAlertCount) managerTopbarAlertCount.textContent = String(unread.length);
+}
+
+function canUserSeeNotification(user, note) {
+  if (!user || !note) return false;
+  const type = String(note.type || "");
+  const assignedTo = String(note.assignedTo || "");
+  if (user.role === "admin") {
+    return type.startsWith("Admin ") || type === "Weekly missed post" || assignedTo === String(user.id);
+  }
+  if (user.role === "project-manager") {
+    return type === "Weekly missed post" || assignedTo === String(user.id) || assignedTo === "project-manager";
+  }
+  if (user.role === "designer") {
+    return assignedTo === String(user.id) || assignedTo === "designer";
+  }
+  return assignedTo === String(user.id);
+}
+
+function notificationsForUser(userId) {
+  if (!userId) return [];
+  const user = users.find((item) => String(item.id) === String(userId));
+  return pmNotifications
+    .filter((note) => canUserSeeNotification(user, note))
+    .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+}
+
+function unreadNotificationsForUser(userId) {
+  return notificationsForUser(userId).filter((note) => ![NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE].includes(String(note.status || NOTIFICATION_STATUS.UNREAD)));
+}
+
+function markUserNotificationsRead(userId, noteIds = []) {
+  if (!userId || !noteIds.length) return false;
+  let changed = false;
+  const selected = new Set(noteIds);
+  pmNotifications = pmNotifications.map((note) => {
+    const isOwned = note.type === "Weekly missed post" || String(note.assignedTo || "") === String(userId);
+    const isSelected = selected.has(note.id);
+    if (!isOwned || !isSelected || [NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE].includes(String(note.status || NOTIFICATION_STATUS.UNREAD))) return note;
+    changed = true;
+    return applyNotificationStatus(note, NOTIFICATION_STATUS.READ);
+  });
+  if (changed) savePmNotifications();
+  return changed;
+}
+
+function alertTextForNotifications(notes = []) {
+  return notes
+    .slice(0, 8)
+    .map((note, index) => `${index + 1}. ${note.title || "Alert"}: ${note.message || ""}`)
+    .join("\n");
+}
+
+function openMyAlerts() {
+  const user = currentUser();
+  if (!user) return;
+  switchView("notifications");
+  const unread = unreadNotificationsForUser(user.id);
+  if (!unread.length) {
+    showToast("No unread alerts");
+    return;
+  }
+  window.alert(`You have ${unread.length} unread alert${unread.length === 1 ? "" : "s"}:\n\n${alertTextForNotifications(unread)}`);
+  const changed = markUserNotificationsRead(user.id, unread.map((note) => note.id));
+  if (changed) {
+    renderActiveUserBadge();
+    requestRender("notifications");
+    requestRender("manager");
+  }
+}
+
+function handleLoginAlerts(user) {
+  if (!user) return;
+  const unread = unreadNotificationsForUser(user.id);
+  if (!unread.length) return;
+  switchView("notifications");
+  showToast(`${unread.length} new alert${unread.length === 1 ? "" : "s"} for ${user.name}`);
+  if (user.role === "designer") {
+    window.alert(`Designer alerts:\n\n${alertTextForNotifications(unread)}`);
+  }
+}
+
+function notificationWeekLabel(note = {}) {
+  const source = String(note.sourceId || "");
+  const match = source.match(/(\d{4}-\d{2}-\d{2})$/);
+  if (!match) return "";
+  const start = match[1];
+  const end = addDays(start, 6);
+  return `${formatShortDate(start)} to ${formatShortDate(end)}`;
+}
+
+function notificationWeekStart(note = {}) {
+  const source = String(note.sourceId || "");
+  const match = source.match(/(\d{4}-\d{2}-\d{2})$/);
+  return match ? match[1] : "";
+}
+
+function shouldHideReadNotification(note = {}) {
+  if (String(note.status || NOTIFICATION_STATUS.UNREAD) !== NOTIFICATION_STATUS.READ) return false;
+  const currentWeekStart = currentWeekRange().start.toISOString().slice(0, 10);
+  const noteWeekStart = notificationWeekStart(note);
+  if (noteWeekStart) return noteWeekStart < currentWeekStart;
+  const rawDate = note.readAt || note.updatedAt || note.createdAt || "";
+  const parsed = rawDate ? new Date(rawDate) : null;
+  const readDate = parsed && !Number.isNaN(parsed.getTime())
+    ? `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, "0")}-${String(parsed.getDate()).padStart(2, "0")}`
+    : String(rawDate).slice(0, 10);
+  return Boolean(readDate && readDate < currentWeekStart);
+}
+
+function notificationMissedDatesText(note = {}) {
+  const weekStart = notificationWeekStart(note);
+  if (!weekStart) return "";
+  const weekDates = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  const postedDates = new Set(
+    socialMediaPosts
+      .filter((post) => String(post.projectId || "") === String(note.projectId || ""))
+      .map((post) => post.uploadDate || post.scheduledDate || "")
+      .filter((date) => date && date >= weekStart && date <= addDays(weekStart, 6)),
+  );
+  const missedDates = weekDates.filter((date) => !postedDates.has(date));
+  if (!missedDates.length) return "Missed dates: none";
+  return `Missed dates: ${missedDates.map((date) => formatShortDate(date)).join(", ")}`;
+}
+
+function notificationDetailText(note = {}) {
+  const details = [];
+  const client = note.clientName || "";
+  const project = note.projectName || "";
+  const required = Number(note.required || PM_WEEKLY_POST_TARGET);
+  const posted = Number(note.posted || 0);
+  const missing = Number(note.missing || Math.max(0, required - posted));
+  if (client) details.push(`Client: ${client}`);
+  if (project) details.push(`Project: ${project}`);
+  details.push(`Required: ${formatNumber(required)} posts`);
+  details.push(`Posted: ${formatNumber(posted)} posts`);
+  details.push(`Missing: ${formatNumber(missing)} posts`);
+  return details.join(" | ");
+}
+
+function notificationTimeLabel(note = {}) {
+  const raw = note.updatedAt || note.readAt || note.createdAt || "";
+  if (!raw) return "";
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+}
+
+function renderNotificationsView() {
+  const list = document.getElementById("notificationsList");
+  if (!list) return;
+  const user = currentUser();
+  if (!user) {
+    list.innerHTML = `<p class="muted-label">Login to view notifications</p>`;
+    return;
+  }
+  let notes = notificationsForUser(user.id).filter((note) => note.type !== "Team notify" && !shouldHideReadNotification(note));
+  if (user.role === "admin") {
+    const adminPriority = ["Admin overdue invoice", "Admin renewal overdue", "Admin renewal due"];
+    notes = [...notes].sort((a, b) => {
+      const aRank = adminPriority.indexOf(String(a.type || ""));
+      const bRank = adminPriority.indexOf(String(b.type || ""));
+      const ar = aRank === -1 ? 99 : aRank;
+      const br = bRank === -1 ? 99 : bRank;
+      if (ar !== br) return ar - br;
+      return String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || ""));
+    });
+  }
+  if (notificationViewMode === "designer") {
+    notes = notes.filter((note) => (note.designerName || note.designerId) && (!notificationFocusClient || note.clientName === notificationFocusClient));
+  }
+  const emptyByRole = {
+    admin: "No overdue or renewal alerts right now.",
+    "project-manager": "No pending team notifications right now.",
+    designer: "No assigned notifications. You're all caught up.",
+    developer: "No task alerts assigned right now.",
+  };
+  list.innerHTML = notes.length
+    ? notes
+        .map(
+          (note, index) => `
+        <article class="pm-notification ${escapeAttribute([NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE].includes(String(note.status || NOTIFICATION_STATUS.UNREAD)) ? "Notified" : "Missed")}">
+          <div class="pm-notification-status">
+            <span>${[NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE].includes(String(note.status || NOTIFICATION_STATUS.UNREAD)) ? "✓" : "!"}</span>
+          </div>
+          <div class="pm-notification-copy">
+            <strong>${escapeHtml(note.clientName || note.title || `Notification ${index + 1}`)}${(note.designerName || note.designerId) ? ` <em class="designer-tag">Designer</em>` : ""}${notificationWeekLabel(note) ? ` <em class="designer-tag">Missed timeframe: ${escapeHtml(notificationWeekLabel(note))} (Mon-Sun)</em>` : ""}</strong>
+            <p>${escapeHtml(note.message || "")}</p>
+          </div>
+          <div class="pm-notification-actions">
+            <small>${escapeHtml(notificationTimeLabel(note))}</small>
+            <button class="secondary-action ${[NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE].includes(String(note.status || NOTIFICATION_STATUS.UNREAD)) ? "is-read" : "is-unread"}" type="button" title="${[NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE].includes(String(note.status || NOTIFICATION_STATUS.UNREAD)) ? "Read" : "Mark read"}" aria-label="${[NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE].includes(String(note.status || NOTIFICATION_STATUS.UNREAD)) ? "Read" : "Mark read"}" data-notification-done="${note.id}">${[NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE].includes(String(note.status || NOTIFICATION_STATUS.UNREAD)) ? "Read" : "Mark read"}</button>
+          </div>
+        </article>
+      `,
+        )
+        .join("")
+    : `<p class="muted-label">${escapeHtml(emptyByRole[user.role] || "No notifications")}</p>`;
 }
 
 function openAuthenticatedApp() {
@@ -2021,20 +2579,41 @@ async function loginUser(username, password) {
     showToast(users.length ? "Invalid username or password" : "Users not loaded from Supabase");
     return false;
   }
-  if (user.passwordHash !== passwordHash) {
-    users = users.map((item) => (item.id === user.id ? { ...item, passwordHash, updatedAt: new Date().toISOString() } : item));
-    saveUsers();
+  const legacyPassword = isLegacyPasswordHash(user.passwordHash || "");
+  let nextPasswordHash = passwordHash;
+  let mustChangePassword = Boolean(user.mustChangePassword) || legacyPassword || isDefaultPassword(normalizedUsername, passwordValue);
+  if (mustChangePassword) {
+    const newPassword = promptRequiredPasswordReset(user, passwordValue);
+    if (!newPassword) {
+      showToast("Password reset required to login");
+      return false;
+    }
+    nextPasswordHash = await hashPassword(newPassword);
+    mustChangePassword = false;
   }
   currentUserId = user.id;
-  activeUserSnapshot = user;
+  const loggedInUser = {
+    ...user,
+    passwordHash: nextPasswordHash,
+    mustChangePassword,
+    lastLoginAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  users = users.map((item) => (item.id === user.id ? loggedInUser : item));
+  saveUsers();
+  activeUserSnapshot = loggedInUser;
   sessionStorage.setItem(AUTH_SESSION_KEY, currentUserId);
   loginForm.reset();
   openAuthenticatedApp();
-  showToast(isDefaultPassword(normalizedUsername, passwordValue) ? "Login ok. Please change this default password now." : `Welcome ${user.name}`);
+  scheduleIdleLogout();
+  handleLoginAlerts(loggedInUser);
+  playLoginSound();
+  showToast(`Welcome ${loggedInUser.name}`);
   return true;
 }
 
 function logoutUser() {
+  clearIdleLogoutTimer();
   currentUserId = "";
   activeUserSnapshot = null;
   sessionStorage.removeItem(AUTH_SESSION_KEY);
@@ -2064,6 +2643,8 @@ function switchView(viewName) {
   navTabs.forEach((tab) => {
     tab.classList.toggle("active", tab.dataset.view === viewName);
   });
+  updateTopbarForView(viewName);
+  if (quickActionsMenu) quickActionsMenu.hidden = true;
 
   const activeTab = Array.from(navTabs).find((tab) => tab.dataset.view === viewName);
   const activeGroup = activeTab?.closest("[data-nav-group]");
@@ -2313,7 +2894,7 @@ function resetForm() {
   document.getElementById("documentType").value = "Invoice";
   document.getElementById("invoiceNumber").value = generateInvoiceNumber();
   document.getElementById("invoiceDate").value = today();
-  document.getElementById("dueDate").value = addDays(today(), 14);
+  document.getElementById("dueDate").value = addDays(today(), 10);
   document.getElementById("status").value = "Unpaid";
   document.getElementById("repeatFrequency").value = "none";
   document.getElementById("paymentMethod").value = "";
@@ -2475,7 +3056,7 @@ function createMonthlyCopy(id) {
     id: createId(),
     invoiceNumber: generateDocumentNumber(source.documentType || "Invoice", nextDate),
     invoiceDate: nextDate,
-    dueDate: addDays(nextDate, 14),
+    dueDate: addDays(nextDate, 10),
     status: source.documentType === "Quotation" ? "Draft" : "Unpaid",
     projectId: null,
     updatedAt: new Date().toISOString(),
@@ -2556,6 +3137,38 @@ function updateInvoiceStatus(id, status) {
   showToast("Invoice status updated");
 }
 
+function autoMarkOverdueInvoices() {
+  const now = today();
+  let changed = false;
+  invoices = invoices.map((invoice) => {
+    const type = invoice.documentType || "Invoice";
+    const status = invoice.status || "Unpaid";
+    const shouldMarkOverdue =
+      type === "Invoice" &&
+      status !== "Paid" &&
+      status !== "Overdue" &&
+      invoice.dueDate &&
+      invoice.dueDate < now;
+    if (!shouldMarkOverdue) return invoice;
+    changed = true;
+    return { ...invoice, status: "Overdue", updatedAt: new Date().toISOString() };
+  });
+  if (changed) saveInvoices();
+}
+
+function normalizeInvoiceDueDatesToTenDays() {
+  let changed = false;
+  invoices = invoices.map((invoice) => {
+    const type = invoice.documentType || "Invoice";
+    if (type !== "Invoice" || !invoice.invoiceDate) return invoice;
+    const expectedDueDate = addDays(invoice.invoiceDate, 10);
+    if (invoice.dueDate === expectedDueDate) return invoice;
+    changed = true;
+    return { ...invoice, dueDate: expectedDueDate, updatedAt: new Date().toISOString() };
+  });
+  if (changed) saveInvoices();
+}
+
 function convertQuotationToInvoice(id) {
   const quotation = invoices.find((item) => item.id === id);
   if (!quotation) return;
@@ -2566,7 +3179,7 @@ function convertQuotationToInvoice(id) {
     documentType: "Invoice",
     invoiceNumber: generateDocumentNumber("Invoice", invoiceDate),
     invoiceDate,
-    dueDate: addDays(invoiceDate, 14),
+    dueDate: addDays(invoiceDate, 10),
     status: "Unpaid",
     updatedAt: new Date().toISOString(),
   };
@@ -3124,6 +3737,7 @@ function createBackupPackage() {
       corrections,
       pmNotifications,
       monthlyPostReports,
+      calendarEvents,
       clientColors,
       settings,
     },
@@ -3150,8 +3764,10 @@ async function applyBackupData(backup) {
   corrections = data.corrections || [];
   pmNotifications = data.pmNotifications || [];
   monthlyPostReports = data.monthlyPostReports || [];
+  calendarEvents = data.calendarEvents || [];
   clientColors = data.clientColors && typeof data.clientColors === "object" && !Array.isArray(data.clientColors) ? data.clientColors : {};
   settings = { ...defaultSettings, ...(data.settings || {}) };
+  normalizeLoadedState();
   await syncAllCollectionsToSupabaseNow({ replaceStale: true });
   resetForm();
   resetClientForm();
@@ -3361,7 +3977,10 @@ function renderDashboard() {
       summary.billed += invoiceTotal;
       if (invoice.status === "Paid") {
         summary.paid += invoiceTotal;
-      } else if (invoice.status === "Overdue" || (invoice.dueDate && invoice.dueDate < now)) {
+      } else if (
+        invoice.status === "Overdue" ||
+        (invoice.status === "Unpaid" && invoice.dueDate && invoice.dueDate < now)
+      ) {
         summary.overdue += invoiceTotal;
         summary.pending += invoiceTotal;
       } else {
@@ -3381,7 +4000,9 @@ function renderDashboard() {
   document.getElementById("dashboardTotalCustomers").textContent = formatNumber(clients.length);
   const paidPercent = totals.billed ? (totals.paid / totals.billed) * 100 : 0;
   const pendingPercent = totals.billed ? (totals.pending / totals.billed) * 100 : 0;
-  const overdueCount = invoiceDocs.filter((invoice) => invoice.status === "Overdue" || (invoice.status !== "Paid" && invoice.dueDate && invoice.dueDate < now)).length;
+  const overdueCount = invoiceDocs.filter(
+    (invoice) => invoice.status === "Overdue" || (invoice.status === "Unpaid" && invoice.dueDate && invoice.dueDate < now),
+  ).length;
   document.getElementById("dashboardPaidHelper").textContent = `${formatNumber(paidPercent, 1)}% of billed`;
   document.getElementById("dashboardPendingHelper").textContent = `${formatNumber(pendingPercent, 1)}% of billed`;
   document.getElementById("dashboardOverdueHelper").textContent = `${formatNumber(overdueCount)} invoices`;
@@ -3826,11 +4447,14 @@ async function getUserFormData() {
   const access = role === "admin" ? roleDefaultAccess.admin : getSelectedUserAccess();
   const existing = users.find((user) => user.id === editingUserId);
   const password = document.getElementById("userPassword").value;
+  const username = document.getElementById("userUsername").value.trim();
+  const isTemporaryDefault = password ? isDefaultPassword(username, password) : false;
   return {
     id: editingUserId || createId(),
     name: document.getElementById("userName").value.trim(),
-    username: document.getElementById("userUsername").value.trim(),
+    username,
     passwordHash: password ? await hashPassword(password) : existing?.passwordHash || (await hashPassword("123456")),
+    mustChangePassword: password ? isTemporaryDefault : Boolean(existing?.mustChangePassword),
     email: document.getElementById("userEmail").value.trim(),
     role,
     status: document.getElementById("userStatus").value,
@@ -4039,13 +4663,17 @@ function managerMonth() {
 }
 
 function managerProjects() {
-  const monthRows = projectsForMonth(managerMonth()).filter(isManagerProject);
-  const unique = new Map();
-  monthRows.forEach((project) => {
-    const key = projectRecurringKey(project);
-    if (!unique.has(key)) unique.set(key, project);
+  const month = managerMonth();
+  const key = `manager-projects|${month}|${dataVersions.projects}`;
+  return memoizeByKey(key, () => {
+    const monthRows = projectsForMonth(month).filter(isManagerProject);
+    const unique = new Map();
+    monthRows.forEach((project) => {
+      const recurKey = projectRecurringKey(project);
+      if (!unique.has(recurKey)) unique.set(recurKey, project);
+    });
+    return [...unique.values()];
   });
-  return [...unique.values()];
 }
 
 function postCount(post = {}) {
@@ -4174,7 +4802,9 @@ function pastWeekRange() {
 }
 
 function addPmNotificationOnce(type, title, message, sourceId, assignedTo = "project-manager", extra = {}) {
-  if (pmNotifications.some((item) => item.sourceId === sourceId)) return;
+  const incoming = { type, sourceId, ...extra };
+  const identity = notificationIdentityKey(incoming);
+  if (pmNotifications.some((item) => notificationIdentityKey(item) === identity)) return;
   pmNotifications.unshift({
     id: createId(),
     type,
@@ -4182,10 +4812,171 @@ function addPmNotificationOnce(type, title, message, sourceId, assignedTo = "pro
     message,
     sourceId,
     assignedTo,
-    status: "Unread",
+    status: NOTIFICATION_STATUS.UNREAD,
     createdAt: new Date().toISOString(),
     ...extra,
   });
+  savePmNotifications();
+}
+
+function upsertPmNotification(type, title, message, sourceId, assignedTo = "admin", extra = {}) {
+  const incoming = { type, sourceId, ...extra };
+  const identity = notificationIdentityKey(incoming);
+  const existing = pmNotifications.find((note) => notificationIdentityKey(note) === identity);
+  if (existing) {
+    pmNotifications = pmNotifications.map((note) =>
+      notificationIdentityKey(note) === identity
+        ? { ...note, type, title, message, assignedTo, updatedAt: new Date().toISOString(), ...extra }
+        : note,
+    );
+  } else {
+    pmNotifications.unshift({
+      id: createId(),
+      type,
+      title,
+      message,
+      sourceId,
+      assignedTo,
+      status: NOTIFICATION_STATUS.UNREAD,
+      createdAt: new Date().toISOString(),
+      ...extra,
+    });
+  }
+}
+
+function notificationWeekToken(note = {}) {
+  const source = String(note.sourceId || "");
+  const match = source.match(/(\d{4}-\d{2}-\d{2})$/);
+  if (match) return match[1];
+  return String(note.weekStart || "");
+}
+
+function notificationIdentityKey(note = {}) {
+  return [
+    String(note.type || ""),
+    String(note.sourceId || ""),
+    notificationWeekToken(note),
+    String(note.assignedTo || ""),
+  ].join("|");
+}
+
+function applyNotificationStatus(note, status, meta = {}) {
+  const now = new Date().toISOString();
+  const normalized = String(status || NOTIFICATION_STATUS.UNREAD);
+  if (normalized === NOTIFICATION_STATUS.READ) {
+    return { ...note, status: NOTIFICATION_STATUS.READ, readAt: note.readAt || now, updatedAt: now, ...meta };
+  }
+  if (normalized === NOTIFICATION_STATUS.DONE || normalized === "Resolved") {
+    return { ...note, status: NOTIFICATION_STATUS.DONE, doneAt: note.doneAt || now, resolvedAt: note.resolvedAt || now, updatedAt: now, ...meta };
+  }
+  return { ...note, status: NOTIFICATION_STATUS.UNREAD, updatedAt: now, ...meta };
+}
+
+function dedupePmNotifications() {
+  const bySource = new Map();
+  pmNotifications.forEach((note) => {
+    const key = notificationIdentityKey(note) || String(note.id || "");
+    if (!key) return;
+    const existing = bySource.get(key);
+    if (!existing) {
+      bySource.set(key, note);
+      return;
+    }
+    const existingTime = String(existing.updatedAt || existing.readAt || existing.createdAt || "");
+    const noteTime = String(note.updatedAt || note.readAt || note.createdAt || "");
+    const keepNote = noteTime > existingTime;
+    if (keepNote) {
+      const readOrDone = [existing.status, note.status].includes(NOTIFICATION_STATUS.READ) || [existing.status, note.status].includes(NOTIFICATION_STATUS.DONE);
+      bySource.set(key, readOrDone ? applyNotificationStatus(note, note.status === NOTIFICATION_STATUS.DONE ? NOTIFICATION_STATUS.DONE : NOTIFICATION_STATUS.READ) : note);
+    } else if (![NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE].includes(existing.status) && [NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE].includes(note.status)) {
+      bySource.set(key, applyNotificationStatus(existing, note.status, { readAt: note.readAt || existing.readAt, doneAt: note.doneAt || existing.doneAt }));
+    }
+  });
+  pmNotifications = [...bySource.values()].sort((a, b) =>
+    String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")),
+  );
+}
+
+function normalizeNotificationLifecycleState() {
+  pmNotifications = pmNotifications.map((note) => {
+    const status = String(note.status || NOTIFICATION_STATUS.UNREAD);
+    if (status === "Resolved") return applyNotificationStatus(note, NOTIFICATION_STATUS.DONE);
+    if (![NOTIFICATION_STATUS.UNREAD, NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE, "Notified"].includes(status)) {
+      return { ...note, status: NOTIFICATION_STATUS.UNREAD };
+    }
+    return note;
+  });
+}
+
+function updateAdminSystemNotifications() {
+  const todayDate = today();
+  const invoiceDocs = invoices.filter((invoice) => (invoice.documentType || "Invoice") === "Invoice");
+  const systemPrefix = ["admin-overdue-invoice-", "admin-renewal-due-", "admin-renewal-overdue-"];
+  const activeSystemSourceIds = new Set();
+
+  invoiceDocs
+    .filter((invoice) => invoice.status !== "Paid" && invoice.dueDate && invoice.dueDate < todayDate)
+    .forEach((invoice) => {
+      const total = money(calculateTotals(invoice).total, invoiceCurrency(invoice));
+      const sourceId = `admin-overdue-invoice-${invoice.id}`;
+      activeSystemSourceIds.add(sourceId);
+      upsertPmNotification(
+        "Admin overdue invoice",
+        "Invoice overdue",
+        `${invoice.invoiceNumber || "Invoice"} for ${invoice.customerName || "Client"} is overdue.`,
+        sourceId,
+        "admin",
+        {
+          clientName: invoice.customerName || "",
+          projectName: invoice.items?.[0]?.title || "",
+          dueDate: invoice.dueDate,
+          overdueDays: Math.max(1, Math.round((new Date(`${todayDate}T00:00:00`) - new Date(`${invoice.dueDate}T00:00:00`)) / 86400000)),
+          totalAmount: total,
+        },
+      );
+    });
+
+  renewals.forEach((renewal) => {
+    const expiry = String(renewal.expiryDate || "");
+    if (!expiry) return;
+    const status = String(renewal.status || "").toLowerCase();
+    if (status === "renewed") return;
+    const days = Math.round((new Date(`${expiry}T00:00:00`) - new Date(`${todayDate}T00:00:00`)) / 86400000);
+    if (days < 0) {
+      const sourceId = `admin-renewal-overdue-${renewal.id}`;
+      activeSystemSourceIds.add(sourceId);
+      upsertPmNotification(
+        "Admin renewal overdue",
+        "Renewal overdue",
+        `${renewal.name || renewal.clientName || "Renewal"} expired and needs action.`,
+        sourceId,
+        "admin",
+        { clientName: renewal.clientName || renewal.name || "", dueDate: expiry, overdueDays: Math.abs(days) },
+      );
+      return;
+    }
+    if (days <= 7) {
+      const sourceId = `admin-renewal-due-${renewal.id}`;
+      activeSystemSourceIds.add(sourceId);
+      upsertPmNotification(
+        "Admin renewal due",
+        "Renewal due soon",
+        `${renewal.name || renewal.clientName || "Renewal"} is due in ${days} day${days === 1 ? "" : "s"}.`,
+        sourceId,
+        "admin",
+        { clientName: renewal.clientName || renewal.name || "", dueDate: expiry, daysLeft: days },
+      );
+    }
+  });
+
+  pmNotifications = pmNotifications.filter((note) => {
+    const sourceId = String(note.sourceId || "");
+    const isSystem = systemPrefix.some((prefix) => sourceId.startsWith(prefix));
+    if (!isSystem) return true;
+    return activeSystemSourceIds.has(sourceId);
+  });
+
+  dedupePmNotifications();
   savePmNotifications();
 }
 
@@ -4195,7 +4986,25 @@ function updatePmNotifications() {
 }
 
 function visiblePmNotifications() {
-  return pmNotifications.filter((note) => note.type === "Weekly missed post");
+  const key = `visible-pm-notes|${managerMonth()}|${dataVersions.pmNotifications}`;
+  return memoizeByKey(key, () => pmNotifications.filter((note) => note.type === "Weekly missed post" && note.status !== NOTIFICATION_STATUS.DONE));
+}
+
+function notificationDateFromNote(note = {}) {
+  const source = String(note.sourceId || "");
+  const sourceMatch = source.match(/weekly-missed-[^-]+-(\d{4}-\d{2}-\d{2})$/);
+  if (sourceMatch) return sourceMatch[1];
+  const created = String(note.createdAt || "").slice(0, 10);
+  return created || "";
+}
+
+function applyNotificationRestartDate() {
+  const beforeCount = pmNotifications.length;
+  pmNotifications = pmNotifications.filter((note) => {
+    const date = notificationDateFromNote(note);
+    return date && date >= NOTIFICATION_RESTART_DATE;
+  });
+  if (pmNotifications.length !== beforeCount) savePmNotifications();
 }
 
 function missedPostWhatsappMessage(note) {
@@ -4235,33 +5044,59 @@ async function copyTextToClipboard(text) {
 }
 
 async function notifyDesignerForMissedPost(notificationId) {
+  return runGuardedAction(`notify-designer:${notificationId}`, async () => {
+    const note = pmNotifications.find((item) => item.id === notificationId);
+    if (!note) return;
+    if (!note.designerId) {
+      showToast("Assign a designer before notifying");
+      return;
+    }
+    const message = missedPostWhatsappMessage(note);
+    addPmNotificationOnce(
+      "Team notify",
+      "Missed post alert",
+      `${note.clientName || "Client"} - ${note.projectName || "Project"} is missing ${note.missing || 0} post${Number(note.missing || 0) === 1 ? "" : "s"} this week.`,
+      `designer-alert-${note.id}-${note.designerId}`,
+      note.designerId,
+      {
+        relatedMissedPostId: note.id,
+        projectId: note.projectId || "",
+        clientName: note.clientName || "",
+        projectName: note.projectName || "",
+        missing: note.missing || 0,
+        required: note.required || PM_WEEKLY_POST_TARGET,
+        posted: note.posted || 0,
+      },
+    );
+    note.status = "Notified";
+    savePmNotifications();
+    requestRender("manager");
+    const copied = await ensureMessageCopied(message);
+    showToast(copied ? "Message copied. Paste it in WhatsApp group." : "Copy prompt shown. Paste in WhatsApp group.");
+  }, 300);
+}
+
+function relatedMissedPostIdFromTeamNotify(note = {}) {
+  if (note.relatedMissedPostId) return note.relatedMissedPostId;
+  const source = String(note.sourceId || "");
+  const match = source.match(/^designer-alert-(.+)-[^-]+$/);
+  return match?.[1] || "";
+}
+
+function closeNotificationForUser(user, notificationId) {
   const note = pmNotifications.find((item) => item.id === notificationId);
-  if (!note) return;
-  if (!note.designerId) {
-    showToast("Assign a designer before notifying");
-    return;
+  if (!note) return false;
+  if (!canUserSeeNotification(user, note)) return false;
+  const isDesignerTeamNotify = user.role === "designer" && note.type === "Team notify";
+  if (isDesignerTeamNotify) {
+    const relatedId = relatedMissedPostIdFromTeamNotify(note);
+    pmNotifications = pmNotifications
+      .map((item) => (item.id === relatedId ? applyNotificationStatus(item, NOTIFICATION_STATUS.DONE) : item))
+      .map((item) => (item.id === note.id ? applyNotificationStatus(item, NOTIFICATION_STATUS.READ) : item));
+    savePmNotifications();
+    return true;
   }
-  const message = missedPostWhatsappMessage(note);
-  addPmNotificationOnce(
-    "Team notify",
-    "Missed post alert",
-    `${note.clientName || "Client"} - ${note.projectName || "Project"} is missing ${note.missing || 0} post${Number(note.missing || 0) === 1 ? "" : "s"} this week.`,
-    `designer-alert-${note.id}-${note.designerId}`,
-    note.designerId,
-    {
-      projectId: note.projectId || "",
-      clientName: note.clientName || "",
-      projectName: note.projectName || "",
-      missing: note.missing || 0,
-      required: note.required || PM_WEEKLY_POST_TARGET,
-      posted: note.posted || 0,
-    },
-  );
-  note.status = "Notified";
-  savePmNotifications();
-  renderPmNotifications();
-  const copied = await ensureMessageCopied(message);
-  showToast(copied ? "Message copied. Paste it in WhatsApp group." : "Copy prompt shown. Paste in WhatsApp group.");
+  return markUserNotificationsRead(user.id, [notificationId]);
 }
 
 async function ensureMessageCopied(message) {
@@ -4285,14 +5120,19 @@ function projectAssignedDesigner(project = {}) {
 }
 
 function updateWeeklyProjectNotifications() {
-  const { start, end } = pastWeekRange();
+  const { start, end } = currentWeekRange();
   const weekKey = start.toISOString().slice(0, 10);
   const previousWeeklyNotes = new Map(
     pmNotifications
       .filter((note) => note.type === "Weekly missed post" && note.sourceId)
       .map((note) => [note.sourceId, note]),
   );
-  pmNotifications = pmNotifications.filter((note) => !["Weekly warning", "Weekly missed post"].includes(note.type || ""));
+  pmNotifications = pmNotifications.filter((note) => {
+    const type = note.type || "";
+    if (type === "Weekly warning") return false;
+    if (type === "Weekly missed post" && note.status !== NOTIFICATION_STATUS.DONE) return false;
+    return true;
+  });
   managerProjects()
     .filter(isActiveProject)
     .filter(isPostTrackedProject)
@@ -4310,6 +5150,7 @@ function updateWeeklyProjectNotifications() {
       const designer = projectAssignedDesigner(project);
       const sourceId = `weekly-missed-${project.id}-${weekKey}`;
       const previousNote = previousWeeklyNotes.get(sourceId);
+      if (previousNote?.status === NOTIFICATION_STATUS.DONE) return;
       addPmNotificationOnce(
         "Weekly missed post",
         "Missed posts this week",
@@ -4318,7 +5159,7 @@ function updateWeeklyProjectNotifications() {
         "project-manager",
         {
           id: previousNote?.id || createId(),
-          status: previousNote?.status || "Unread",
+          status: previousNote?.status || NOTIFICATION_STATUS.UNREAD,
           createdAt: previousNote?.createdAt || new Date().toISOString(),
           projectId: project.id,
           projectName,
@@ -4331,6 +5172,7 @@ function updateWeeklyProjectNotifications() {
         },
       );
     });
+  dedupePmNotifications();
   savePmNotifications();
 }
 
@@ -4473,26 +5315,33 @@ function socialPostGroupKey(post = {}) {
 }
 
 function groupedSocialPosts(sourcePosts) {
-  const groups = new Map();
-  (sourcePosts || socialMediaPosts.filter((post) => postMonth(post) === managerMonth()))
-    .forEach((post) => {
-      const key = socialPostGroupKey(post);
-      if (!groups.has(key)) {
-        groups.set(key, {
-          key,
-          posts: [],
-          date: post.uploadDate || post.scheduledDate || "",
-          clientName: post.clientName || "",
-          projectName: post.projectName || "",
-          remarks: post.remarks || "",
-        });
-      }
-      groups.get(key).posts.push(post);
-    });
-  return [...groups.values()].map((group) => ({
-    ...group,
-    count: Math.max(...group.posts.map((post) => postCount(post)), 0),
-  }));
+  const month = managerMonth();
+  const isDefaultSource = !sourcePosts;
+  const cacheKey = isDefaultSource
+    ? `grouped-posts|${month}|${dataVersions.socialMediaPosts}`
+    : `grouped-posts|custom|${sourcePosts.length}|${dataVersions.socialMediaPosts}`;
+  return memoizeByKey(cacheKey, () => {
+    const groups = new Map();
+    (sourcePosts || socialMediaPosts.filter((post) => postMonth(post) === month))
+      .forEach((post) => {
+        const groupKey = socialPostGroupKey(post);
+        if (!groups.has(groupKey)) {
+          groups.set(groupKey, {
+            key: groupKey,
+            posts: [],
+            date: post.uploadDate || post.scheduledDate || "",
+            clientName: post.clientName || "",
+            projectName: post.projectName || "",
+            remarks: post.remarks || "",
+          });
+        }
+        groups.get(groupKey).posts.push(post);
+      });
+    return [...groups.values()].map((group) => ({
+      ...group,
+      count: Math.max(...group.posts.map((post) => postCount(post)), 0),
+    }));
+  });
 }
 
 function groupedSocialPostCount(posts) {
@@ -4518,9 +5367,12 @@ function socialPostGroupPlatforms(posts = []) {
 
 function filteredSocialPostGroups() {
   const clientFilter = fieldValue("pmPostClientFilter");
-  return groupedSocialPosts()
-    .filter((group) => !clientFilter || group.clientName === clientFilter)
-    .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  const cacheKey = `filtered-posts|${managerMonth()}|${clientFilter}|${dataVersions.socialMediaPosts}`;
+  return memoizeByKey(cacheKey, () =>
+    groupedSocialPosts()
+      .filter((group) => !clientFilter || group.clientName === clientFilter)
+      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || ""))),
+  );
 }
 
 function renderPostClientFilter() {
@@ -4734,13 +5586,16 @@ function renderSocialMediaPosts() {
 
 function monthlyPostRows() {
   const month = managerMonth();
-  const clientNames = [...new Set([...managerProjects().filter(isPostTrackedProject).map((project) => project.clientName || project.name), ...socialMediaPosts.map((post) => post.clientName)].filter(Boolean))];
-  return clientNames.map((clientName) => {
-    const posts = socialMediaPosts.filter((post) => post.clientName === clientName && postMonth(post) === month);
-    const uploaded = groupedSocialPostCount(posts);
-    const remaining = Math.max(0, PM_MONTHLY_POST_TARGET - uploaded);
-    const status = uploaded >= PM_MONTHLY_POST_TARGET ? "Complete" : "Pending";
-    return { clientName, required: PM_MONTHLY_POST_TARGET, uploaded, remaining, status };
+  const cacheKey = `monthly-post-rows|${month}|${dataVersions.projects}|${dataVersions.socialMediaPosts}`;
+  return memoizeByKey(cacheKey, () => {
+    const clientNames = [...new Set([...managerProjects().filter(isPostTrackedProject).map((project) => project.clientName || project.name), ...socialMediaPosts.map((post) => post.clientName)].filter(Boolean))];
+    return clientNames.map((clientName) => {
+      const posts = socialMediaPosts.filter((post) => post.clientName === clientName && postMonth(post) === month);
+      const uploaded = groupedSocialPostCount(posts);
+      const remaining = Math.max(0, PM_MONTHLY_POST_TARGET - uploaded);
+      const status = uploaded >= PM_MONTHLY_POST_TARGET ? "Complete" : "Pending";
+      return { clientName, required: PM_MONTHLY_POST_TARGET, uploaded, remaining, status };
+    });
   });
 }
 
@@ -4897,18 +5752,30 @@ function renderCalendarReminders(month) {
   const [year] = String(month || "").split("-").map(Number);
   const holidayEvents = holidayEventsForYear(year).filter((event) => String(event.date).startsWith(month));
   const todayDate = today();
-  const reminders = holidayEvents
+  const holidayReminders = holidayEvents
     .map((event) => ({ ...event, daysLeft: daysBetweenIso(todayDate, event.date) }))
     .filter((event) => event.daysLeft >= 0 && event.daysLeft <= 4)
     .sort((a, b) => a.daysLeft - b.daysLeft);
+  const customReminders = calendarEvents
+    .filter((event) => String(event.date || "").startsWith(month))
+    .map((event) => ({ ...event, daysLeft: daysBetweenIso(todayDate, event.date) }))
+    .filter((event) => event.daysLeft >= 0)
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
+    .slice(0, 5);
+  const reminders = [
+    ...customReminders.map((event) => ({
+      text: `<strong>${escapeHtml(event.title || "Upcoming event")}</strong> on ${escapeHtml(formatDate(event.date))} (${event.daysLeft} day${event.daysLeft === 1 ? "" : "s"} left)`,
+    })),
+    ...holidayReminders.map((event) => ({
+      text: `<strong>${escapeHtml(event.name)}</strong> on ${escapeHtml(formatDate(event.date))} (${event.daysLeft} day${event.daysLeft === 1 ? "" : "s"} left)`,
+    })),
+  ];
   list.innerHTML = reminders.length
-    ? reminders
-      .map((event) => `<div class="pm-calendar-reminder-item"><strong>${escapeHtml(event.name)}</strong> on ${escapeHtml(formatDate(event.date))} (${event.daysLeft} day${event.daysLeft === 1 ? "" : "s"} left)</div>`)
-      .join("")
-    : `<div class="pm-calendar-reminder-item">No holiday reminders in the next 4 days.</div>`;
+    ? reminders.map((event) => `<div class="pm-calendar-reminder-item">${event.text}</div>`).join("")
+    : `<div class="pm-calendar-reminder-item">No upcoming reminders in this month.</div>`;
 }
 
-function renderCalendarGrid(calendarId, monthValue) {
+function renderCalendarGrid(calendarId, monthValue, displayMode = "chips") {
   const calendar = document.querySelector(`#${calendarId}`);
   if (!calendar) return;
   const month = monthValue || managerMonth();
@@ -4950,6 +5817,14 @@ function renderCalendarGrid(calendarId, monthValue) {
     list.push(event);
     holidaysByDate.set(event.date, list);
   });
+  const customEventsByDate = new Map();
+  calendarEvents
+    .filter((event) => String(event.date || "").startsWith(month))
+    .forEach((event) => {
+      const list = customEventsByDate.get(event.date) || [];
+      list.push(event);
+      customEventsByDate.set(event.date, list);
+    });
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const cells = [
     ...weekdays.map((day) => `<div class="pm-calendar-weekday">${day}</div>`),
@@ -4960,11 +5835,18 @@ function renderCalendarGrid(calendarId, monthValue) {
       const posted = postsByDate.get(dateKey) || [];
       const dueRenewals = renewalsByDate.get(dateKey) || [];
       const holidays = holidaysByDate.get(dateKey) || [];
+      const customEvents = customEventsByDate.get(dateKey) || [];
       const postChips = posted
         .map((group) => {
           const clientName = group.clientName || "Client";
           const label = `${clientName} (${group.count})`;
           return `<span class="pm-calendar-chip-tag" style="background:${clientCalendarColor(clientName)}" title="${escapeAttribute(`${label} - ${group.projectName || ""}`)}">${escapeHtml(label)}</span>`;
+        })
+        .join("");
+      const postDots = posted
+        .map((group) => {
+          const label = `${group.clientName || "Client"} (${group.count}) - ${group.projectName || ""}`;
+          return `<span class="pm-calendar-dot" style="background:${clientCalendarColor(group.clientName)}" title="${escapeAttribute(label)}" data-calendar-client="${escapeAttribute(group.clientName || "Client")}"></span>`;
         })
         .join("");
       const renewalChips = dueRenewals
@@ -4974,14 +5856,32 @@ function renderCalendarGrid(calendarId, monthValue) {
           return `<span class="pm-calendar-chip-tag is-renewal-chip" title="${escapeAttribute(`${label} - ${renewal.name || renewal.type || "Item"}`)}">${escapeHtml(label)}</span>`;
         })
         .join("");
+      const renewalDots = dueRenewals
+        .map((renewal) => {
+          const label = `Renewal: ${renewal.clientName || "Client"} - ${renewal.name || renewal.type || "Item"}`;
+          return `<span class="pm-calendar-dot is-renewal" title="${escapeAttribute(label)}" data-calendar-client="${escapeAttribute(label)}"></span>`;
+        })
+        .join("");
       const holidayChips = holidays
         .map((event) => `<span class="pm-calendar-chip-tag is-holiday-chip" title="${escapeAttribute(event.name)}">${escapeHtml(event.name)}</span>`)
         .join("");
-      const totalItems = posted.length + dueRenewals.length + holidays.length;
+      const holidayDots = holidays
+        .map((event) => `<span class="pm-calendar-dot is-holiday-dot" title="${escapeAttribute(event.name)}" data-calendar-client="${escapeAttribute(event.name)}"></span>`)
+        .join("");
+      const customChips = customEvents
+        .map((event) => `<span class="pm-calendar-chip-tag is-custom-event-chip" title="${escapeAttribute(event.note || event.title || "Upcoming event")}">${escapeHtml(event.title || "Upcoming event")}</span>`)
+        .join("");
+      const customDots = customEvents
+        .map((event) => `<span class="pm-calendar-dot is-custom-event-dot" title="${escapeAttribute(event.title || "Upcoming event")}" data-calendar-client="${escapeAttribute(event.title || "Upcoming event")}"></span>`)
+        .join("");
+      const totalItems = posted.length + dueRenewals.length + holidays.length + customEvents.length;
+      const content = displayMode === "dots"
+        ? `<div class="pm-calendar-dot-list">${customDots}${holidayDots}${renewalDots}${postDots}</div>`
+        : `<div class="pm-calendar-chip-list">${customChips}${holidayChips}${renewalChips}${postChips}</div>`;
       return `
-        <div class="pm-calendar-day">
+        <div class="pm-calendar-day is-clickable" data-calendar-date="${escapeAttribute(dateKey)}">
           <div class="pm-calendar-date"><span>${day}</span>${totalItems ? `<small>${totalItems}</small>` : ""}</div>
-          ${totalItems ? `<div class="pm-calendar-chip-list">${holidayChips}${renewalChips}${postChips}</div>` : ""}
+          ${totalItems ? content : ""}
         </div>
       `;
     }),
@@ -4991,14 +5891,94 @@ function renderCalendarGrid(calendarId, monthValue) {
 }
 
 function renderPostCalendar() {
-  renderCalendarGrid("postCalendarGrid", managerMonth());
+  renderCalendarGrid("postCalendarGrid", managerMonth(), "dots");
 }
 
 function renderUnifiedCalendarView() {
   if (calendarMonthFilter && !calendarMonthFilter.value) {
     calendarMonthFilter.value = managerMonth();
   }
-  renderCalendarGrid("unifiedCalendarGrid", calendarMonthFilter?.value || managerMonth());
+  renderCalendarGrid("unifiedCalendarGrid", calendarMonthFilter?.value || managerMonth(), "chips");
+}
+
+function renderCalendarEventModal() {
+  const list = document.getElementById("calendarEventModalList");
+  const label = document.getElementById("calendarEventModalDateLabel");
+  if (!list || !label) return;
+  label.textContent = calendarEventModalDate ? formatDate(calendarEventModalDate) : "";
+  const dayEvents = calendarEvents.filter((event) => String(event.date || "") === calendarEventModalDate);
+  list.innerHTML = dayEvents.length
+    ? dayEvents.map((event) => `
+        <article class="calendar-event-item">
+          <strong>${escapeHtml(event.title || "Upcoming event")}</strong>
+          <button class="secondary-action" type="button" data-calendar-event-remove="${escapeAttribute(event.id)}">Remove</button>
+        </article>
+      `).join("")
+    : `<p class="muted-label">No events for this day.</p>`;
+}
+
+function openCalendarEventModal(dateValue = "") {
+  const date = String(dateValue || "").trim();
+  if (!date) return;
+  calendarEventModalDate = date;
+  renderCalendarEventModal();
+  setModalOpen("calendarEventModal", true);
+  const input = document.getElementById("calendarEventInput");
+  if (input) {
+    input.value = "";
+    input.focus();
+  }
+}
+
+function closeCalendarEventModal() {
+  calendarEventModalDate = "";
+  setModalOpen("calendarEventModal", false);
+}
+
+function addCalendarEventFromModal() {
+  return runGuardedAction(`calendar-add:${calendarEventModalDate}`, () => {
+    if (!calendarEventModalDate) return;
+    const input = document.getElementById("calendarEventInput");
+    if (!input) return;
+    const cleanTitle = String(input.value || "").trim();
+    if (!cleanTitle) {
+      input.focus();
+      return;
+    }
+    const exists = calendarEvents.some(
+      (event) => String(event.date || "") === calendarEventModalDate && String(event.title || "").trim().toLowerCase() === cleanTitle.toLowerCase(),
+    );
+    if (exists) {
+      showToast("This event already exists on that date");
+      return;
+    }
+    calendarEvents.unshift({
+      id: createId(),
+      date: calendarEventModalDate,
+      title: cleanTitle,
+      note: "",
+      updatedAt: new Date().toISOString(),
+    });
+    input.value = "";
+    saveCalendarEvents();
+    renderCalendarEventModal();
+    requestRender("calendar");
+    requestRender("manager");
+    showToast("Upcoming event added");
+  }, 180);
+}
+
+function removeCalendarEvent(eventId = "") {
+  return runGuardedAction(`calendar-remove:${eventId}`, () => {
+    const before = calendarEvents.length;
+    calendarEvents = calendarEvents.filter((event) => event.id !== eventId);
+    if (calendarEvents.length === before) return;
+    saveCalendarEvents();
+    renderCalendarEventModal();
+    requestRender("calendar");
+    requestRender("manager");
+    showToast("Event removed");
+  }, 180);
 }
 
 function renderCorrections() {
@@ -5069,12 +6049,88 @@ function renderPmDatabaseTables() {
     .join("");
 }
 
+function renderPmActionQueue() {
+  const wrap = document.getElementById("pmActionQueue");
+  if (!wrap) return;
+  const notes = visiblePmNotifications().slice().sort((a, b) => Number(b.missing || 0) - Number(a.missing || 0));
+  const todayIso = today();
+  const soonRenewals = renewals
+    .filter((item) => {
+      const d = String(item.expiryDate || "");
+      return d && d >= todayIso && d <= addDays(todayIso, 3);
+    })
+    .sort((a, b) => String(a.expiryDate || "").localeCompare(String(b.expiryDate || "")));
+  const designerPending = new Map();
+  notes.forEach((note) => {
+    const name = note.designerName || "Not assigned";
+    designerPending.set(name, (designerPending.get(name) || 0) + Number(note.missing || 0));
+  });
+  const topDesigner = [...designerPending.entries()].sort((a, b) => b[1] - a[1])[0];
+  const topNote = notes[0];
+  const list = [];
+  if (topNote) {
+    list.push({
+      title: "Today priority",
+      detail: `${topNote.clientName || "Client"} - missing ${formatNumber(topNote.missing || 0)} posts`,
+      noteId: topNote.id,
+      clientName: topNote.clientName || "",
+    });
+  }
+  if (notes.length > 1) {
+    const second = notes[1];
+    list.push({
+      title: "Second priority",
+      detail: `${second.clientName || "Client"} - missing ${formatNumber(second.missing || 0)} posts`,
+      noteId: second.id,
+      clientName: second.clientName || "",
+    });
+  }
+  if (soonRenewals[0]) {
+    const renewal = soonRenewals[0];
+    list.push({
+      title: "Upcoming renewal",
+      detail: `${renewal.name || renewal.clientName || "Renewal"} due ${formatDate(renewal.expiryDate)}`,
+      noteId: "",
+      clientName: "",
+    });
+  }
+  if (topDesigner) {
+    list.push({
+      title: "Designer load",
+      detail: `${topDesigner[0]} has ${formatNumber(topDesigner[1])} pending posts`,
+      noteId: "",
+      clientName: "",
+    });
+  }
+  wrap.innerHTML = list.length
+    ? list
+        .map(
+          (item) => `
+        <article class="pm-action-item">
+          <strong>${escapeHtml(item.title)}</strong>
+          <p>${escapeHtml(item.detail)}</p>
+          <div class="pm-action-buttons">
+            <button class="secondary-action" type="button" data-pm-action="assign" data-pm-client="${escapeAttribute(item.clientName)}">Assign</button>
+            ${
+              item.noteId
+                ? `<button class="secondary-action" type="button" data-pm-action="mark-done" data-pm-note="${escapeAttribute(item.noteId)}">Mark done</button>`
+                : ""
+            }
+          </div>
+        </article>
+      `,
+        )
+        .join("")
+    : `<p class="muted-label">No high-priority actions right now.</p>`;
+}
+
 function renderProjectManagerWorkspace() {
   if (!views.manager) return;
   populateProjectManagerForms();
   updateWeeklyProjectNotifications();
   renderProjectManagerDashboard();
   renderProjectManagerProjects();
+  renderPmActionQueue();
   renderSocialMediaPosts();
   renderPmNotifications();
   renderPostCalendar();
@@ -5317,7 +6373,15 @@ function openSavedLogin(url) {
   window.open(safeUrl, "_blank", "noopener,noreferrer");
 }
 
+function canManageSensitiveCredentials(user = currentUser()) {
+  return Boolean(user && user.role === "admin");
+}
+
 async function copyLoginField(id, field) {
+  if (field === "password" && !canManageSensitiveCredentials()) {
+    showToast("Only admin can copy passwords");
+    return;
+  }
   const login = websiteLogins.find((item) => item.id === id);
   const value = login?.[field] || "";
   if (!value) {
@@ -5344,6 +6408,10 @@ async function copyLoginField(id, field) {
 }
 
 function toggleWebsitePassword(id) {
+  if (!canManageSensitiveCredentials()) {
+    showToast("Only admin can view passwords");
+    return;
+  }
   if (visibleWebsitePasswords.has(id)) {
     visibleWebsitePasswords.delete(id);
   } else {
@@ -5410,6 +6478,7 @@ function renderPortalRenewalAlerts() {
 }
 
 function renderWebsiteLogins() {
+  const allowSensitive = canManageSensitiveCredentials();
   const query = websiteLoginSearchInput.value.trim().toLowerCase();
   const rows = websiteLogins.filter((login) =>
     `${login.websiteName} ${login.username} ${login.domainSource} ${login.hostingProvider}`.toLowerCase().includes(query),
@@ -5437,9 +6506,9 @@ function renderWebsiteLogins() {
                     <button class="icon-action compact" title="Copy username" aria-label="Copy username" type="button" data-copy-login="${login.id}" data-copy-field="username">${iconCopy()}</button>
                   </div>
                   <div class="credential-cell">
-                    <span>${login.password ? (visibleWebsitePasswords.has(login.id) ? escapeHtml(login.password) : "••••••••") : ""}</span>
-                    <button class="icon-action compact" title="Show or hide password" aria-label="Show or hide password" type="button" data-toggle-password="${login.id}">${iconEye()}</button>
-                    <button class="icon-action compact" title="Copy password" aria-label="Copy password" type="button" data-copy-login="${login.id}" data-copy-field="password">${iconCopy()}</button>
+                    <span>${login.password ? (allowSensitive && visibleWebsitePasswords.has(login.id) ? escapeHtml(login.password) : "••••••••") : ""}</span>
+                    <button class="icon-action compact" title="${allowSensitive ? "Show or hide password" : "Only admin can view password"}" aria-label="${allowSensitive ? "Show or hide password" : "Only admin can view password"}" type="button" data-toggle-password="${login.id}" ${allowSensitive ? "" : "disabled"}>${iconEye()}</button>
+                    <button class="icon-action compact" title="${allowSensitive ? "Copy password" : "Only admin can copy password"}" aria-label="${allowSensitive ? "Copy password" : "Only admin can copy password"}" type="button" data-copy-login="${login.id}" data-copy-field="password" ${allowSensitive ? "" : "disabled"}>${iconCopy()}</button>
                   </div>
                 </div>
               </td>
@@ -6600,7 +7669,7 @@ function renderPreview() {
 
           <div class="invoice-notes">
             <h3>Notes</h3>
-            <p>${escapeHtml(invoice.notes || "Payment is due within 15 days of the invoice date.")}</p>
+            <p>${escapeHtml(invoice.notes || "Payment is due within 10 days of the invoice date.")}</p>
             ${invoice.terms ? `<h3>Terms</h3><p>${escapeHtml(invoice.terms)}</p>` : ""}
             ${invoice.authorizedBy ? `<p><strong>Authorized by:</strong> ${escapeHtml(invoice.authorizedBy)}</p>` : ""}
             <p>For questions, contact: ${escapeHtml(settings.businessEmail)}${settings.contactPhone ? ` | ${escapeHtml(formatPhone(settings.contactPhone))}` : ""}</p>
@@ -6678,14 +7747,618 @@ async function getInvoiceCanvas(invoice) {
 
 function saveBlob(data, filename, type) {
   const blob = new Blob([data], { type });
+  if (typeof window !== "undefined" && window.navigator?.msSaveOrOpenBlob) {
+    window.navigator.msSaveOrOpenBlob(blob, filename);
+    return { blob, url: "" };
+  }
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
   link.download = filename;
+  link.rel = "noopener";
+  link.target = "_self";
+  link.style.position = "fixed";
+  link.style.left = "-9999px";
+  link.style.top = "-9999px";
   document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
+  const clickEvent = new MouseEvent("click", {
+    bubbles: true,
+    cancelable: true,
+    view: window,
+  });
+  link.dispatchEvent(clickEvent);
+  window.setTimeout(() => {
+    link.click();
+    link.remove();
+  }, 0);
+  window.setTimeout(() => URL.revokeObjectURL(url), 120000);
+  return { blob, url };
+}
+
+function clearServiceLetterReadyPdf() {
+  if (serviceLetterReadyPdf?.url) URL.revokeObjectURL(serviceLetterReadyPdf.url);
+  serviceLetterReadyPdf = null;
+  const readyLink = document.getElementById("serviceLetterReadyLink");
+  if (readyLink) {
+    readyLink.hidden = true;
+    readyLink.removeAttribute("href");
+    readyLink.removeAttribute("download");
+  }
+}
+
+function setServiceLetterReadyPdf(data, filename) {
+  clearServiceLetterReadyPdf();
+  const blob = new Blob([data], { type: "application/pdf" });
+  const url = URL.createObjectURL(blob);
+  serviceLetterReadyPdf = { blob, url, filename };
+  const readyLink = document.getElementById("serviceLetterReadyLink");
+  if (readyLink) {
+    readyLink.href = url;
+    readyLink.download = filename;
+    readyLink.hidden = false;
+  }
+}
+
+function openServiceLetterReadyPdf(openWindow = null) {
+  if (!serviceLetterReadyPdf?.url) return false;
+  if (openWindow && !openWindow.closed) {
+    openWindow.location.href = serviceLetterReadyPdf.url;
+  } else {
+    window.open(serviceLetterReadyPdf.url, "_blank", "noopener");
+  }
+  return true;
+}
+
+async function buildServiceLetterPdf() {
+  const rawData = getServiceLetterData();
+  const data = {
+    ...rawData,
+    clientName: rawData.clientName || "Client",
+  };
+  const preparingButton = document.getElementById("buildServiceLetterPdfButton");
+  const originalButtonText = preparingButton?.textContent || "Build PDF";
+  try {
+    showToast("Building PDF...");
+    if (preparingButton) {
+      preparingButton.disabled = true;
+      preparingButton.textContent = "Building PDF...";
+    }
+    const canvas = await getServiceLetterCanvas(data);
+    const pdf = buildImagePdf(canvas.toDataURL("image/jpeg", 0.98), canvas.width, canvas.height);
+    const filename = `service-letter-${safeFilename(data.clientName || "client").toLowerCase()}-${data.date || today()}.pdf`;
+    setServiceLetterReadyPdf(pdf, filename);
+    showToast("PDF ready. Click Open ready PDF.");
+    return true;
+  } catch (error) {
+    console.error("Service letter PDF build failed", error);
+    showToast("Service letter PDF build failed");
+    return false;
+  } finally {
+    if (preparingButton) {
+      preparingButton.disabled = false;
+      preparingButton.textContent = originalButtonText;
+    }
+  }
+}
+
+function defaultServiceLetterBody(clientName = "") {
+  return [
+    `This letter is to certify that ${clientName || "the applicant"} is currently engaged with our organization in a professional capacity.`,
+    "",
+    "During this period, the individual has actively contributed to strategic planning, operational coordination, and client-facing responsibilities.",
+    "",
+    "This letter is issued upon request for official documentation purposes.",
+    "",
+    "If you require any further information, please feel free to contact us.",
+  ].join("\n");
+}
+
+function getServiceLetterData() {
+  return {
+    date: fieldValue("serviceLetterDate", today()),
+    clientName: fieldValue("serviceLetterClientName").trim(),
+    subject: fieldValue("serviceLetterSubject", "Service Letter").trim() || "Service Letter",
+    body: fieldValue("serviceLetterBody").trim(),
+    preparedBy: fieldValue("serviceLetterPreparedBy", activeUserName?.textContent || "Admin").trim(),
+    designation: fieldValue("serviceLetterDesignation", "Project Manager").trim(),
+  };
+}
+
+function openServiceLetterOptionsModal() {
+  startNewServiceLetterFlow();
+}
+
+function closeServiceLetterOptionsModal() {
+  serviceLetterOptionsModal?.classList.remove("is-open");
+  serviceLetterOptionsModal?.setAttribute("aria-hidden", "true");
+}
+
+function openServiceLetterEditorModal() {
+  serviceLetterEditorModal?.classList.add("is-open");
+  serviceLetterEditorModal?.setAttribute("aria-hidden", "false");
+}
+
+function closeServiceLetterEditorModal() {
+  serviceLetterEditorModal?.classList.remove("is-open");
+  serviceLetterEditorModal?.setAttribute("aria-hidden", "true");
+}
+
+function startNewServiceLetterFlow() {
+  closeServiceLetterOptionsModal();
+  resetServiceLetterForm();
+  openServiceLetterEditorModal();
+}
+
+function saveServiceLetterRecord() {
+  const data = getServiceLetterData();
+  if (!data.clientName) {
+    showToast("Client name is required");
+    return;
+  }
+  const record = {
+    id: editingServiceLetterId || createId(),
+    ...data,
+    updatedAt: new Date().toISOString(),
+  };
+  if (editingServiceLetterId) {
+    serviceLetterRecords = serviceLetterRecords.map((item) => (item.id === editingServiceLetterId ? record : item));
+  } else {
+    serviceLetterRecords.unshift(record);
+  }
+  editingServiceLetterId = record.id;
+  saveServiceLetterRecords();
+  renderServiceLetterRecords();
+  showToast("Service letter saved");
+}
+
+function editServiceLetterRecord(id) {
+  const record = serviceLetterRecords.find((item) => item.id === id);
+  if (!record) return;
+  editingServiceLetterId = id;
+  setFieldValue("serviceLetterDate", record.date || today());
+  setFieldValue("serviceLetterClientName", record.clientName || "");
+  setFieldValue("serviceLetterSubject", record.subject || "Service Letter");
+  setFieldValue("serviceLetterBody", record.body || "");
+  setFieldValue("serviceLetterPreparedBy", record.preparedBy || "");
+  setFieldValue("serviceLetterDesignation", record.designation || "");
+  renderServiceLetterPreview();
+  openServiceLetterEditorModal();
+}
+
+function deleteServiceLetterRecord(id) {
+  const record = serviceLetterRecords.find((item) => item.id === id);
+  if (!record || !confirm(`Delete service letter for ${record.clientName || "client"}?`)) return;
+  serviceLetterRecords = serviceLetterRecords.filter((item) => item.id !== id);
+  if (editingServiceLetterId === id) editingServiceLetterId = null;
+  saveServiceLetterRecords();
+  renderServiceLetterRecords();
+}
+
+function renderServiceLetterRecords() {
+  const table = document.getElementById("serviceLetterRecordsTable");
+  if (!table) return;
+  table.innerHTML = serviceLetterRecords.length
+    ? serviceLetterRecords
+      .map(
+        (record, index) => `
+      <tr>
+        <td>${index + 1}</td>
+        <td>${escapeHtml(formatDate(record.date || ""))}</td>
+        <td>${escapeHtml(record.clientName || "")}</td>
+        <td>${escapeHtml(record.subject || "Service Letter")}</td>
+        <td>${escapeHtml(record.preparedBy || "")}</td>
+        <td>
+          <div class="action-row icon-actions">
+            <button class="icon-action edit" type="button" title="Edit" data-service-letter-edit="${record.id}">${iconEdit()}</button>
+            <button class="icon-action delete" type="button" title="Delete" data-service-letter-delete="${record.id}">${iconDelete()}</button>
+          </div>
+        </td>
+      </tr>`,
+      )
+      .join("")
+    : emptyRow("No saved service letters yet", 6);
+}
+
+function resetServiceLetterForm() {
+  if (!serviceLetterForm) return;
+  clearServiceLetterReadyPdf();
+  editingServiceLetterId = null;
+  serviceLetterForm.reset();
+  setFieldValue("serviceLetterDate", today());
+  setFieldValue("serviceLetterSubject", "Service Letter");
+  setFieldValue("serviceLetterPreparedBy", activeUserName?.textContent || "Admin");
+  setFieldValue("serviceLetterDesignation", "Project Manager");
+  setFieldValue("serviceLetterBody", defaultServiceLetterBody(""));
+  renderServiceLetterPreview();
+}
+
+function renderServiceLetterPreview() {
+  const container = document.getElementById("serviceLetterPreview");
+  if (!container) return;
+  const data = getServiceLetterData();
+  const formattedDate = new Date(`${data.date || today()}T00:00:00`).toLocaleDateString("en-US", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).toUpperCase();
+  const serviceLetterLogo = SERVICE_LETTER_LOGO_PATH
+    ? new URL(SERVICE_LETTER_LOGO_PATH, window.location.href).href
+    : settings.logoDataUrl || defaultSettings.logoDataUrl;
+  const logo = serviceLetterLogo
+    ? `<img class="service-letter-logo-image" src="${escapeAttribute(serviceLetterLogo)}" alt="${escapeAttribute(settings.businessName)} logo" />`
+    : `<span class="invoice-logo-text">${escapeHtml(settings.businessName || defaultSettings.businessName)}</span>`;
+  const footerIcon = (type) => {
+    if (type === "phone") return `<span class="service-footer-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2 2a13 13 0 0 0 4 4l2-2 5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2Z" /></svg></span>`;
+    if (type === "web") return `<span class="service-footer-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M4.5 7.5h15M4.5 16.5h15" /></svg></span>`;
+    if (type === "mail") return `<span class="service-footer-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16v12H4V6Zm0 1 8 6 8-6" /></svg></span>`;
+    return `<span class="service-footer-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-5.5 7-11a7 7 0 1 0-14 0c0 5.5 7 11 7 11Zm0-8.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" /></svg></span>`;
+  };
+  const bodyHtml = (data.body || defaultServiceLetterBody(data.clientName))
+    .split(/\n+/)
+    .filter(Boolean)
+    .map((line) => `<p>${escapeHtml(line)}</p>`)
+    .join("");
+  container.innerHTML = `
+    <article class="service-letter-paper service-letter-a4">
+      <header class="service-letter-header">
+        <div class="service-letter-logo-wrap">${logo}</div>
+        <div class="service-letter-top-line"></div>
+      </header>
+      <section class="service-letter-body">
+        <div class="service-letter-date">Date : <strong>${escapeHtml(formattedDate)}</strong></div>
+        <h2 class="service-letter-title">${escapeHtml(data.subject || "Service Letter")}</h2>
+        <p class="service-letter-salute">To Whom It May Concern,</p>
+        <div class="service-letter-content">${bodyHtml}</div>
+        <div class="service-letter-sign">
+          <p>Sincerely,</p>
+          <p><strong>${escapeHtml(data.preparedBy || "Admin")}</strong></p>
+          <p>${escapeHtml(data.designation || "Project Manager")}</p>
+          <p>${escapeHtml(formatDate(data.date || today()))}</p>
+        </div>
+      </section>
+      <footer class="service-letter-footer">
+        <div>${footerIcon("phone")}${escapeHtml(settings.contactPhone || defaultSettings.contactPhone)}</div>
+        <div>${footerIcon("web")}${escapeHtml(settings.businessWebsite || defaultSettings.businessWebsite)}<br />${footerIcon("mail")}${escapeHtml(settings.businessEmail || defaultSettings.businessEmail)}</div>
+        <div>${footerIcon("map")}${escapeHtml(settings.businessAddress || defaultSettings.businessAddress)}</div>
+      </footer>
+      <div class="service-letter-bottom-stripe">
+        <div class="orange"></div>
+        <div class="blue"></div>
+        <div class="orange thin"></div>
+      </div>
+      <div class="service-letter-corner-shape" aria-hidden="true"></div>
+      <div class="service-letter-corner-shape small" aria-hidden="true"></div>
+    </article>
+  `;
+}
+
+function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = String(text || "").split(/\s+/).filter(Boolean);
+  let line = "";
+  let cursorY = y;
+  words.forEach((word) => {
+    const testLine = line ? `${line} ${word}` : word;
+    if (ctx.measureText(testLine).width > maxWidth && line) {
+      ctx.fillText(line, x, cursorY);
+      line = word;
+      cursorY += lineHeight;
+    } else {
+      line = testLine;
+    }
+  });
+  if (line) ctx.fillText(line, x, cursorY);
+  return cursorY + lineHeight;
+}
+
+function drawContainImage(ctx, image, x, y, boxWidth, boxHeight) {
+  if (!image) return;
+  const scale = Math.min(boxWidth / image.width, boxHeight / image.height);
+  const drawWidth = image.width * scale;
+  const drawHeight = image.height * scale;
+  const offsetX = x + (boxWidth - drawWidth) / 2;
+  const offsetY = y + (boxHeight - drawHeight) / 2;
+  ctx.drawImage(image, offsetX, offsetY, drawWidth, drawHeight);
+}
+
+async function createServiceLetterCanvas(data) {
+  renderServiceLetterPreview();
+  const letterElement = document.querySelector("#serviceLetterPreview .service-letter-paper");
+  if (!letterElement) throw new Error("Letter preview not found");
+  const targetWidth = 1240;
+  const targetHeight = 1754;
+  const clone = letterElement.cloneNode(true);
+  const styles = getDocumentStyles();
+
+  clone.style.width = `${targetWidth}px`;
+  clone.style.minHeight = `${targetHeight}px`;
+  clone.style.maxWidth = "none";
+  clone.style.boxShadow = "none";
+  clone.style.border = "0";
+  clone.style.margin = "0";
+
+  await inlineImages(clone);
+
+  const html = `
+    <html xmlns="http://www.w3.org/1999/xhtml">
+      <head>
+        <style>
+          ${styles}
+          body { margin: 0; background: #ffffff; }
+          .service-letter-paper {
+            width: ${targetWidth}px !important;
+            min-height: ${targetHeight}px !important;
+            max-width: ${targetWidth}px !important;
+            margin: 0 !important;
+            border-radius: 0 !important;
+            border: 0 !important;
+            box-shadow: none !important;
+            background: #ffffff !important;
+          }
+        </style>
+      </head>
+      <body>${clone.outerHTML}</body>
+    </html>
+  `;
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${targetWidth}" height="${targetHeight}" viewBox="0 0 ${targetWidth} ${targetHeight}">
+      <foreignObject width="100%" height="100%">${html}</foreignObject>
+    </svg>
+  `;
+  const image = await loadImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, targetWidth, targetHeight);
+  ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
+  const logoImage = await loadImage(SERVICE_LETTER_LOGO_PATH || settings.logoDataUrl || defaultSettings.logoDataUrl).catch(() => null);
+  if (logoImage) {
+    drawContainImage(ctx, logoImage, 46, 24, 260, 88);
+  }
+  return canvas;
+}
+
+async function createServiceLetterCanvasDirect(data) {
+  const width = 794;
+  const height = 1123;
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(scale, scale);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, width, height);
+
+  const navy = "#0f3b73";
+  const orange = "#ff6b2c";
+  const text = "#1f2937";
+  const muted = "#475569";
+  const line = "#dbe3ef";
+
+  const drawText = (value, x, y, size, color = text, weight = 500, align = "left") => {
+    ctx.fillStyle = color;
+    ctx.font = `${weight} ${size}px Poppins, Arial, sans-serif`;
+    ctx.textAlign = align;
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText(String(value || ""), x, y);
+  };
+  const wrapText = (value, x, y, maxWidth, lineHeight, size, color = "#283244", weight = 400) => {
+    ctx.font = `${weight} ${size}px Poppins, Arial, sans-serif`;
+    ctx.fillStyle = color;
+    ctx.textAlign = "left";
+    const words = String(value || "").split(/\s+/).filter(Boolean);
+    let currentLine = "";
+    words.forEach((word) => {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      if (ctx.measureText(testLine).width > maxWidth && currentLine) {
+        ctx.fillText(currentLine, x, y);
+        currentLine = word;
+        y += lineHeight;
+      } else {
+        currentLine = testLine;
+      }
+    });
+    if (currentLine) ctx.fillText(currentLine, x, y);
+    return y + lineHeight;
+  };
+  const drawLogoFallback = () => {
+    const logoX = 44;
+    const logoY = 28;
+    const logoDot = 10;
+    const logoGap = 5;
+    for (let row = 0; row < 3; row += 1) {
+      for (let col = 0; col < 3; col += 1) {
+        ctx.fillStyle = row === 0 && col === 1 ? orange : navy;
+        ctx.fillRect(logoX + col * (logoDot + logoGap), logoY + row * (logoDot + logoGap), logoDot, logoDot);
+      }
+    }
+    drawText("infonits", logoX + 3 * (logoDot + logoGap) + 10, logoY + 34, 38, navy, 700);
+  };
+
+  const logoImage = await loadImage(SERVICE_LETTER_LOGO_PATH || settings.logoDataUrl || defaultSettings.logoDataUrl).catch(() => null);
+  if (logoImage) {
+    drawContainImage(ctx, logoImage, 44, 24, 210, 54);
+  } else {
+    drawLogoFallback();
+  }
+
+  const gradient = ctx.createLinearGradient(282, 56, width - 44, 56);
+  gradient.addColorStop(0, "rgba(255,107,44,0)");
+  gradient.addColorStop(0.18, "rgba(255,107,44,0.75)");
+  gradient.addColorStop(1, "rgba(255,107,44,0.75)");
+  ctx.fillStyle = gradient;
+  ctx.fillRect(282, 52, width - 326, 8);
+
+  const formattedDate = new Date(`${data.date || today()}T00:00:00`).toLocaleDateString("en-US", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).toUpperCase();
+  drawText(`Date : ${formattedDate}`, width - 48, 132, 13, text, 500, "right");
+
+  const subject = data.subject || "Service Letter";
+  drawText(subject, width / 2, 178, 25, text, 600, "center");
+  const lineWidth = Math.min(ctx.measureText(subject).width + 10, width - 74);
+  ctx.strokeStyle = "#313945";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo((width - lineWidth) / 2, 187);
+  ctx.lineTo((width + lineWidth) / 2, 187);
+  ctx.stroke();
+
+  let y = 244;
+  drawText("To Whom It May Concern,", 48, y, 15, text, 500);
+  y += 38;
+
+  const paragraphs = (data.body || defaultServiceLetterBody(data.clientName)).split(/\n+/).filter(Boolean);
+  paragraphs.forEach((p) => {
+    y = wrapText(p, 48, y, width - 96, 23, 14, "#283244", 400);
+    y += 14;
+  });
+
+  y += 4;
+  drawText("Sincerely,", 48, y, 14, text, 400);
+  y += 25;
+  drawText(data.preparedBy || "Admin", 48, y, 14, text, 700);
+  y += 20;
+  drawText(data.designation || "Project Manager", 48, y, 14, muted, 500);
+  y += 20;
+  drawText(formatDate(data.date || today()), 48, y, 14, muted, 500);
+
+  const footerTop = 1023;
+  ctx.strokeStyle = line;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(48, footerTop);
+  ctx.lineTo(width - 48, footerTop);
+  ctx.stroke();
+  const footerIcon = (x, y, label) => {
+    ctx.fillStyle = orange;
+    ctx.beginPath();
+    ctx.arc(x + 6, y - 5, 7, 0, Math.PI * 2);
+    ctx.fill();
+    drawText(label, x + 6, y - 1, 8, "#ffffff", 700, "center");
+  };
+  footerIcon(48, 1054, "P");
+  drawText(settings.contactPhone || defaultSettings.contactPhone, 66, 1054, 12, "#253148", 600);
+  footerIcon(250, 1054, "W");
+  drawText(settings.businessWebsite || defaultSettings.businessWebsite, 268, 1047, 12, "#253148", 600);
+  footerIcon(250, 1076, "M");
+  drawText(settings.businessEmail || defaultSettings.businessEmail, 268, 1076, 12, "#253148", 600);
+  footerIcon(494, 1054, "A");
+  wrapText(settings.businessAddress || defaultSettings.businessAddress, 512, 1054, 225, 16, 12, "#253148", 600);
+
+  ctx.fillStyle = orange;
+  ctx.fillRect(0, height - 20, width - 240, 20);
+  ctx.fillStyle = navy;
+  ctx.fillRect(width - 240, height - 28, 170, 28);
+  ctx.fillStyle = orange;
+  ctx.fillRect(width - 70, height - 16, 70, 16);
+  ctx.strokeStyle = "rgba(15, 59, 115, 0.28)";
+  ctx.lineWidth = 18;
+  ctx.beginPath();
+  ctx.moveTo(width - 36, 880);
+  ctx.lineTo(width - 110, 1010);
+  ctx.lineTo(width - 36, 1110);
+  ctx.stroke();
+  return canvas;
+}
+
+async function renderDisplayedServiceLetterCanvas() {
+  renderServiceLetterPreview();
+  const letterElement = document.querySelector("#serviceLetterPreview .service-letter-paper");
+  if (!letterElement) throw new Error("Service letter preview not found");
+  const rect = letterElement.getBoundingClientRect();
+  const width = Math.ceil(rect.width || 794);
+  const height = Math.ceil(letterElement.scrollHeight || 1123);
+  const clone = letterElement.cloneNode(true);
+  const styles = getDocumentStyles();
+
+  clone.style.width = `${width}px`;
+  clone.style.minHeight = `${height}px`;
+  clone.style.maxWidth = "none";
+  clone.style.boxShadow = "none";
+  clone.style.borderRadius = "0";
+  clone.style.margin = "0";
+
+  await inlineImages(clone);
+
+  const html = `
+    <html xmlns="http://www.w3.org/1999/xhtml">
+      <head>
+        <style>
+          ${styles}
+          body { margin: 0; background: #ffffff; }
+          .service-letter-paper { box-shadow: none !important; border-radius: 0 !important; width: ${width}px !important; min-height: ${height}px !important; max-width: ${width}px !important; border: 0 !important; }
+        </style>
+      </head>
+      <body>${clone.outerHTML}</body>
+    </html>
+  `;
+
+  const svg = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <foreignObject width="100%" height="100%">${html}</foreignObject>
+    </svg>
+  `;
+
+  const image = await loadImage(`data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`);
+  const scale = 2;
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+  return canvas;
+}
+
+async function downloadServiceLetterPdf() {
+  const popup = window.open("about:blank", "_blank");
+  if (popup && !popup.closed) {
+    popup.document.write("<p style='font-family: Poppins, Arial, sans-serif; padding: 16px;'>Preparing PDF...</p>");
+  }
+  const preparingButton = document.getElementById("downloadServiceLetterPdfButton");
+  const originalButtonText = preparingButton?.textContent || "Open / Download PDF";
+  try {
+    showToast("Preparing PDF...");
+    if (preparingButton) {
+      preparingButton.disabled = true;
+      preparingButton.textContent = "Preparing PDF...";
+    }
+    if (!serviceLetterReadyPdf) {
+      const built = await buildServiceLetterPdf();
+      if (!built) {
+        if (popup && !popup.closed) popup.close();
+        return;
+      }
+    }
+    const opened = openServiceLetterReadyPdf(popup);
+    if (!opened) {
+      if (popup && !popup.closed) popup.close();
+      showToast("PDF not ready. Click Build PDF first.");
+      return;
+    }
+    saveBlob(serviceLetterReadyPdf.blob, serviceLetterReadyPdf.filename, "application/pdf");
+    showToast(`${serviceLetterReadyPdf.filename} opened`);
+  } catch (error) {
+    console.error("Service letter PDF download failed", error);
+    if (popup && !popup.closed) popup.close();
+    showToast("Service letter PDF download failed");
+  } finally {
+    if (preparingButton) {
+      preparingButton.disabled = false;
+      preparingButton.textContent = originalButtonText;
+    }
+  }
+}
+
+async function getServiceLetterCanvas(data) {
+  renderServiceLetterPreview();
+  return createServiceLetterCanvasDirect(data);
 }
 
 function safeFilename(value) {
@@ -6969,7 +8642,7 @@ async function renderInvoiceCanvas(invoice) {
   drawText(moneyCanvas(totals.total), totalsX + 510, lowerY + 314, 24, "#ffffff", 600, "right");
 
   drawText("Notes", 106, lowerY + 410, 24, navy, 600);
-  let notesY = wrapText(invoice.notes || "Payment is due within 15 days of the invoice date.", 106, lowerY + 460, 600, 34, 20, gray);
+  let notesY = wrapText(invoice.notes || "Payment is due within 10 days of the invoice date.", 106, lowerY + 460, 600, 34, 20, gray);
   if (invoice.terms) {
     drawText("Terms", 106, notesY + 28, 22, navy, 600);
     notesY = wrapText(invoice.terms, 106, notesY + 66, 600, 30, 18, gray);
@@ -6999,8 +8672,19 @@ function estimateItemRowHeight(item) {
 function loadImage(src) {
   return new Promise((resolve, reject) => {
     const image = new Image();
-    image.addEventListener("load", () => resolve(image));
-    image.addEventListener("error", reject);
+    if (/^https?:\/\//i.test(String(src || ""))) {
+      // Prevent cross-origin canvas taint when rendering downloadable PDFs.
+      image.crossOrigin = "anonymous";
+    }
+    const timeout = window.setTimeout(() => reject(new Error("Image load timed out")), 3000);
+    image.addEventListener("load", () => {
+      window.clearTimeout(timeout);
+      resolve(image);
+    });
+    image.addEventListener("error", (error) => {
+      window.clearTimeout(timeout);
+      reject(error);
+    });
     image.src = src;
   });
 }
@@ -7077,25 +8761,62 @@ function formatShortDate(dateString) {
   });
 }
 
+const SECTION_RENDERERS = {
+  dashboard: () => renderDashboard(),
+  calendar: () => renderUnifiedCalendarView(),
+  notifications: () => renderNotificationsView(),
+  manager: () => renderProjectManagerWorkspace(),
+  invoices: () => renderInvoiceTable(),
+  quotations: () => renderQuotationTable(),
+  projects: () => renderProjects(),
+  finance: () => renderFinance(),
+};
+
+function renderSections(sectionNames = []) {
+  [...new Set(sectionNames)].forEach((name) => {
+    const renderer = SECTION_RENDERERS[name];
+    if (!renderer) return;
+    safeRun(`render:${name}`, renderer);
+  });
+}
+
+function flushRenderQueue() {
+  renderFlushTimer = null;
+  const sections = [...renderQueue];
+  renderQueue.clear();
+  if (!sections.length) return;
+  if (sections.includes("all")) {
+    renderAll();
+    return;
+  }
+  renderSections(sections);
+}
+
+function requestRender(section = "all") {
+  renderQueue.add(section);
+  if (renderFlushTimer) return;
+  renderFlushTimer = window.setTimeout(flushRenderQueue, 0);
+}
+
 function renderAll() {
-  renderDashboard();
-  renderUnifiedCalendarView();
-  renderClients();
-  renderEmployees();
-  renderServices();
-  renderRenewals();
-  renderWebsiteLogins();
-  renderUsers();
-  renderManagerHandles();
-  renderProjectManagerWorkspace();
-  renderItemSuggestions();
-  renderProjects();
-  renderFinance();
-  renderInvoiceTable();
-  renderQuotationTable();
-  renderPreview();
-  renderSettings();
-  applyAccessControl();
+  safeRun("normalize:restart-notes", () => applyNotificationRestartDate());
+  safeRun("normalize:admin-notes", () => updateAdminSystemNotifications());
+  safeRun("normalize:invoice-due", () => normalizeInvoiceDueDatesToTenDays());
+  safeRun("normalize:overdue", () => autoMarkOverdueInvoices());
+  renderSections(["dashboard", "calendar", "manager", "notifications", "projects", "finance", "invoices", "quotations"]);
+  safeRun("render:service-letter-preview", () => renderServiceLetterPreview());
+  safeRun("render:service-letter-records", () => renderServiceLetterRecords());
+  safeRun("render:clients", () => renderClients());
+  safeRun("render:employees", () => renderEmployees());
+  safeRun("render:services", () => renderServices());
+  safeRun("render:renewals", () => renderRenewals());
+  safeRun("render:website-logins", () => renderWebsiteLogins());
+  safeRun("render:users", () => renderUsers());
+  safeRun("render:manager-handles", () => renderManagerHandles());
+  safeRun("render:item-suggestions", () => renderItemSuggestions());
+  safeRun("render:preview", () => renderPreview());
+  safeRun("render:settings", () => renderSettings());
+  safeRun("apply:access-control", () => applyAccessControl());
 }
 
 function statusBadge(status) {
@@ -7170,16 +8891,38 @@ document.querySelectorAll("[data-view-target]").forEach((button) => {
   button.addEventListener("click", () => switchView(button.dataset.viewTarget));
 });
 
-document.getElementById("newInvoiceButton").addEventListener("click", () => startNewDocument("Invoice"));
-document.getElementById("newQuotationButton").addEventListener("click", () => startNewDocument("Quotation"));
-document.getElementById("newCustomerButton").addEventListener("click", () => {
+newInvoiceButton?.addEventListener("click", () => startNewDocument("Invoice"));
+newQuotationButton?.addEventListener("click", () => startNewDocument("Quotation"));
+newCustomerButton?.addEventListener("click", () => {
   switchView("clients");
   openClientModal("add");
 });
-document.getElementById("newProjectButton").addEventListener("click", () => {
+newProjectButton?.addEventListener("click", () => {
   resetProjectForm();
   showProjectForm();
   switchView("projects");
+});
+quickActionsButton?.addEventListener("click", (event) => {
+  event.stopPropagation();
+  if (!quickActionsMenu) return;
+  quickActionsMenu.hidden = !quickActionsMenu.hidden;
+});
+quickActionsMenu?.addEventListener("click", (event) => {
+  const actionButton = event.target.closest("[data-quick-action]");
+  if (!actionButton) return;
+  const action = actionButton.dataset.quickAction;
+  quickActionsMenu.hidden = true;
+  if (action === "invoice") startNewDocument("Invoice");
+  if (action === "quotation") startNewDocument("Quotation");
+  if (action === "customer") {
+    switchView("clients");
+    openClientModal("add");
+  }
+  if (action === "project") {
+    resetProjectForm();
+    showProjectForm();
+    switchView("projects");
+  }
 });
 document.querySelectorAll("[data-dashboard-invoice-filter]").forEach((button) => {
   button.addEventListener("click", () => {
@@ -7269,6 +9012,22 @@ pmMonthFilter.addEventListener("change", () => {
 calendarMonthFilter?.addEventListener("change", () => {
   renderUnifiedCalendarView();
 });
+document.getElementById("unifiedCalendarGrid")?.addEventListener("click", (event) => {
+  const cell = event.target.closest("[data-calendar-date]");
+  if (!cell) return;
+  openCalendarEventModal(cell.dataset.calendarDate || "");
+});
+document.getElementById("postCalendarGrid")?.addEventListener("click", (event) => {
+  const cell = event.target.closest("[data-calendar-date]");
+  if (!cell) return;
+  openCalendarEventModal(cell.dataset.calendarDate || "");
+});
+document.getElementById("calendarEventAddButton")?.addEventListener("click", addCalendarEventFromModal);
+document.getElementById("calendarEventInput")?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  addCalendarEventFromModal();
+});
 document.getElementById("pmProjectPrevPage").addEventListener("click", () => {
   pmProjectPage = Math.max(1, pmProjectPage - 1);
   renderProjectManagerWorkspace();
@@ -7290,11 +9049,11 @@ document.getElementById("pmPostClientFilter").addEventListener("change", () => {
   pmPostPage = 1;
   renderSocialMediaPosts();
 });
-document.getElementById("pmNotificationPrevPage").addEventListener("click", () => {
+document.getElementById("pmNotificationPrevPage")?.addEventListener("click", () => {
   pmNotificationPage = Math.max(1, pmNotificationPage - 1);
   renderPmNotifications();
 });
-document.getElementById("pmNotificationNextPage").addEventListener("click", () => {
+document.getElementById("pmNotificationNextPage")?.addEventListener("click", () => {
   pmNotificationPage += 1;
   renderPmNotifications();
 });
@@ -7366,6 +9125,11 @@ document.getElementById("downloadProjectSheetButton").addEventListener("click", 
 document.getElementById("downloadProjectPdfButton").addEventListener("click", downloadProjectPdf);
 document.getElementById("downloadPmReportButton").addEventListener("click", downloadManagerMonthlyReport);
 document.getElementById("downloadPmPdfReportButton").addEventListener("click", downloadManagerMonthlyPdfReport);
+document.getElementById("openNotificationsFromManagerButton")?.addEventListener("click", () => {
+  notificationViewMode = "all";
+  notificationFocusClient = "";
+  switchView("notifications");
+});
 clientSelect.addEventListener("change", () => fillInvoiceClient(clientSelect.value));
 
 clientForm.addEventListener("submit", (event) => {
@@ -7408,7 +9172,14 @@ document.getElementById("resetUserButton").addEventListener("click", resetUserFo
 document.getElementById("resetManagerHandleButton").addEventListener("click", resetManagerHandleForm);
 document.getElementById("resetSocialPostButton").addEventListener("click", resetSocialPostForm);
 document.querySelector("#resetCorrectionButton")?.addEventListener("click", resetCorrectionForm);
-document.getElementById("refreshPmNotificationsButton").addEventListener("click", () => {
+document.getElementById("resetServiceLetterButton")?.addEventListener("click", resetServiceLetterForm);
+document.getElementById("previewServiceLetterButton")?.addEventListener("click", renderServiceLetterPreview);
+document.getElementById("buildServiceLetterPdfButton")?.addEventListener("click", buildServiceLetterPdf);
+document.getElementById("downloadServiceLetterPdfButton")?.addEventListener("click", downloadServiceLetterPdf);
+document.getElementById("saveServiceLetterRecordButton")?.addEventListener("click", saveServiceLetterRecord);
+document.getElementById("openServiceLetterOptionsButton")?.addEventListener("click", openServiceLetterOptionsModal);
+document.getElementById("newServiceLetterButton")?.addEventListener("click", startNewServiceLetterFlow);
+document.getElementById("refreshPmNotificationsButton")?.addEventListener("click", () => {
   pmNotificationPage = 1;
   renderProjectManagerWorkspace();
   showToast("Project manager notifications refreshed");
@@ -7431,24 +9202,67 @@ employeeStatusFilter.addEventListener("change", renderEmployees);
 managerHandleSearchInput.addEventListener("input", renderManagerHandles);
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  getAudioContext();
   await loginUser(document.getElementById("loginUsername").value, document.getElementById("loginPassword").value);
 });
 document.getElementById("loginPasswordToggle").addEventListener("click", () => {
   const passwordInput = document.getElementById("loginPassword");
   passwordInput.type = passwordInput.type === "password" ? "text" : "password";
 });
+toggleFullscreenButton?.addEventListener("click", async () => {
+  try {
+    if (document.fullscreenElement) {
+      await document.exitFullscreen();
+    } else {
+      await document.documentElement.requestFullscreen();
+    }
+  } catch (error) {
+    showToast("Fullscreen is not available");
+  } finally {
+    updateFullscreenButtonState();
+  }
+});
+document.addEventListener("fullscreenchange", updateFullscreenButtonState);
 sidebarToggleButton?.addEventListener("click", toggleSidebar);
 userMenuButton.addEventListener("click", (event) => {
   event.stopPropagation();
-  userMenu.classList.toggle("is-open");
+  toggleUserMenu();
+});
+sidebarUserCard?.addEventListener("click", (event) => {
+  if (event.target.closest("#editProfileButton, #logoutButton")) return;
+  toggleUserMenu();
 });
 document.getElementById("editProfileButton").addEventListener("click", () => {
-  userMenu.classList.remove("is-open");
+  closeUserMenu();
   const user = currentUser();
   if (user) editUser(user.id);
 });
+openNotificationsButton?.addEventListener("click", () => {
+  notificationViewMode = "all";
+  notificationFocusClient = "";
+  const currentView = document.body.dataset.activeView || "dashboard";
+  if (currentView === "notifications") {
+    switchView("dashboard");
+    return;
+  }
+  switchView("notifications");
+});
+document.getElementById("markAllAlertsReadButton")?.addEventListener("click", () => {
+  const user = currentUser();
+  if (!user) return;
+  const unread = unreadNotificationsForUser(user.id);
+  if (!unread.length) {
+    showToast("No unread alerts");
+    return;
+  }
+  markUserNotificationsRead(user.id, unread.map((note) => note.id));
+  renderActiveUserBadge();
+  renderNotificationsView();
+  renderProjectManagerWorkspace();
+  showToast("All alerts marked as read");
+});
 document.getElementById("logoutButton").addEventListener("click", () => {
-  userMenu.classList.remove("is-open");
+  closeUserMenu();
   logoutUser();
   showToast("Logged out");
 });
@@ -7489,6 +9303,10 @@ serviceForm.addEventListener("submit", (event) => {
   resetServiceForm();
   renderServices();
   renderItemSuggestions();
+});
+serviceLetterForm?.addEventListener("input", () => {
+  clearServiceLetterReadyPdf();
+  renderServiceLetterPreview();
 });
 
 employeeForm.addEventListener("submit", (event) => {
@@ -7780,7 +9598,14 @@ form.addEventListener("submit", (event) => {
 });
 
 document.body.addEventListener("click", (event) => {
-  if (!event.target.closest(".user-menu-wrap")) userMenu.classList.remove("is-open");
+  if (!event.target.closest(".user-menu-wrap")) closeUserMenu();
+  if (quickActionsMenu && !event.target.closest(".topbar-quick-actions-wrap")) quickActionsMenu.hidden = true;
+  if (appShell.classList.contains("is-locked")) return;
+  const isLoginAction = event.target.closest("#loginForm, #loginPasswordToggle");
+  if (!isLoginAction) {
+    const protectedUser = requireActiveSession("use this action");
+    if (!protectedUser) return;
+  }
   const selectButton = event.target.closest("[data-select]");
   const editButton = event.target.closest("[data-edit]");
   const monthlyButton = event.target.closest("[data-monthly]");
@@ -7822,12 +9647,22 @@ document.body.addEventListener("click", (event) => {
   const openUrlButton = event.target.closest("[data-open-url]");
   const copyLoginButton = event.target.closest("[data-copy-login]");
   const togglePasswordButton = event.target.closest("[data-toggle-password]");
+  const notificationDoneButton = event.target.closest("[data-notification-done]");
   const closeInvoiceModalButton = event.target.closest("[data-close-invoice-modal]");
   const closeFinanceModalButton = event.target.closest("[data-close-finance-modal]");
   const closeEmployeeModalButton = event.target.closest("[data-close-employee-modal]");
   const closeAdminModalButton = event.target.closest("[data-close-admin-modal]");
   const closeSocialPostModalButton = event.target.closest("[data-close-social-post-modal]");
+  const closeCalendarEventModalButton = event.target.closest("[data-close-calendar-event-modal]");
+  const closeServiceLetterOptionsModalButton = event.target.closest("[data-close-service-letter-options-modal]");
+  const closeServiceLetterEditorModalButton = event.target.closest("[data-close-service-letter-editor-modal]");
+  const removeCalendarEventButton = event.target.closest("[data-calendar-event-remove]");
+  const openServiceLetterOptionsButton = event.target.closest("#openServiceLetterOptionsButton");
+  const newServiceLetterButton = event.target.closest("#newServiceLetterButton");
   const clientColorButton = event.target.closest("[data-client-color]");
+  const serviceLetterEditButton = event.target.closest("[data-service-letter-edit]");
+  const serviceLetterDeleteButton = event.target.closest("[data-service-letter-delete]");
+  const pmActionButton = event.target.closest("[data-pm-action]");
 
   if (clientColorButton) changeClientColor(clientColorButton.dataset.clientColor);
   if (closeInvoiceModalButton) closeInvoiceModal();
@@ -7835,6 +9670,11 @@ document.body.addEventListener("click", (event) => {
   if (closeEmployeeModalButton) closeEmployeeModal();
   if (closeAdminModalButton) closeAdminRecordModals();
   if (closeSocialPostModalButton) closeSocialPostModal();
+  if (closeCalendarEventModalButton) closeCalendarEventModal();
+  if (closeServiceLetterOptionsModalButton) closeServiceLetterOptionsModal();
+  if (closeServiceLetterEditorModalButton) closeServiceLetterEditorModal();
+  if (openServiceLetterOptionsButton) openServiceLetterOptionsModal();
+  if (newServiceLetterButton) startNewServiceLetterFlow();
   if (selectButton) selectInvoice(selectButton.dataset.select);
   if (editButton) editInvoice(editButton.dataset.edit);
   if (monthlyButton) createMonthlyCopy(monthlyButton.dataset.monthly);
@@ -7889,9 +9729,48 @@ document.body.addEventListener("click", (event) => {
   if (openUrlButton) openSavedLogin(openUrlButton.dataset.openUrl);
   if (copyLoginButton) copyLoginField(copyLoginButton.dataset.copyLogin, copyLoginButton.dataset.copyField);
   if (togglePasswordButton) toggleWebsitePassword(togglePasswordButton.dataset.togglePassword);
+  if (notificationDoneButton) {
+    const user = currentUser();
+    if (!user) return;
+    const changed = closeNotificationForUser(user, notificationDoneButton.dataset.notificationDone);
+    if (changed) {
+      renderActiveUserBadge();
+      requestRender("notifications");
+      requestRender("manager");
+      showToast("Notification closed");
+    }
+  }
+  if (serviceLetterEditButton) editServiceLetterRecord(serviceLetterEditButton.dataset.serviceLetterEdit);
+  if (serviceLetterDeleteButton) deleteServiceLetterRecord(serviceLetterDeleteButton.dataset.serviceLetterDelete);
+  if (removeCalendarEventButton) removeCalendarEvent(removeCalendarEventButton.dataset.calendarEventRemove || "");
+  if (pmActionButton) {
+    const action = pmActionButton.dataset.pmAction;
+    const clientName = pmActionButton.dataset.pmClient || "";
+    const noteId = pmActionButton.dataset.pmNote || "";
+    if (action === "assign") {
+      notificationViewMode = "designer";
+      notificationFocusClient = clientName || "";
+      switchView("notifications");
+      showToast(clientName ? `Open designer notifications for ${clientName}` : "Open designer notifications");
+    }
+    if (action === "mark-done" && noteId) {
+      const user = currentUser();
+      if (!user) return;
+      const changed = closeNotificationForUser(user, noteId);
+      if (changed) {
+        renderActiveUserBadge();
+        requestRender("manager");
+        requestRender("notifications");
+        showToast("Marked done");
+      }
+    }
+  }
 });
 
 document.body.addEventListener("change", (event) => {
+  if (appShell.classList.contains("is-locked")) return;
+  const protectedUser = requireActiveSession("change this field");
+  if (!protectedUser) return;
   const statusSelect = event.target.closest("[data-project-status]");
   const invoiceStatusSelect = event.target.closest("[data-invoice-status]");
   const moneyInput = event.target.closest("[data-project-money]");
@@ -7908,6 +9787,36 @@ document.body.addEventListener("change", (event) => {
     moneyInput.value = amount ? formatNumber(amount) : "";
     updateProjectMoney(moneyInput.dataset.projectMoney, moneyInput.dataset.projectMoneyField, amount);
   }
+});
+
+document.addEventListener(
+  "submit",
+  (event) => {
+    if (appShell.classList.contains("is-locked")) return;
+    if (event.target?.id === "loginForm") return;
+    const user = requireActiveSession("submit this form");
+    if (user) return;
+    event.preventDefault();
+    event.stopPropagation();
+  },
+  true,
+);
+
+["click", "keydown", "mousemove", "scroll", "touchstart"].forEach((eventName) => {
+  document.addEventListener(eventName, refreshIdleLogoutTimer, { passive: true });
+});
+
+document.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  closeUserMenu();
+  if (quickActionsMenu) quickActionsMenu.hidden = true;
+  if (document.getElementById("invoiceModal")?.classList.contains("is-open")) closeInvoiceModal();
+  if (document.getElementById("financeRecordModal")?.classList.contains("is-open")) closeFinanceRecordModal();
+  if (document.getElementById("employeeModal")?.classList.contains("is-open")) closeEmployeeModal();
+  closeAdminRecordModals();
+  closeSocialPostModal();
+  closeServiceLetterOptionsModal();
+  closeServiceLetterEditorModal();
 });
 
 document.getElementById("printInvoiceButton").addEventListener("click", () => {
@@ -7981,6 +9890,8 @@ async function startApp() {
     currentUserId = "";
     sessionStorage.removeItem(AUTH_SESSION_KEY);
   }
+  normalizeNotificationLifecycleState();
+  dedupePmNotifications();
   resetForm();
   resetClientForm();
   resetEmployeeForm();
@@ -7993,6 +9904,7 @@ async function startApp() {
   resetSocialPostForm();
   resetCorrectionForm();
   resetFinanceForm();
+  resetServiceLetterForm();
   activeUserSnapshot = currentUser();
   appIsStarting = false;
   document.body.classList.remove("app-loading");
@@ -8003,6 +9915,8 @@ async function startApp() {
     document.body.dataset.activeView = "dashboard";
   }
   renderAll();
+  scheduleIdleLogout();
+  updateFullscreenButtonState();
   updatePreviewZoom();
   updatePreviewVisibility();
 }
