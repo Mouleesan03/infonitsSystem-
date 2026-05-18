@@ -58,7 +58,7 @@ const defaultSettings = {
   showPaymentDetails: "yes",
   contactPhone: "+94 77 607 9157",
   designWhatsappGroupUrl: "",
-  logoDataUrl: "assets/infonits-logo.jpg",
+  logoDataUrl: "https://infonits.io/oamtoaro/2024/07/Infonits-Logo-e1723609294367-1024x205.png",
   autoProjectFinance: "no",
   aiMode: "local",
   aiApiKey: "",
@@ -8087,9 +8087,7 @@ function renderServiceLetterPreview() {
     month: "short",
     year: "numeric",
   }).toUpperCase();
-  const serviceLetterLogo = SERVICE_LETTER_LOGO_PATH
-    ? new URL(SERVICE_LETTER_LOGO_PATH, window.location.href).href
-    : settings.logoDataUrl || defaultSettings.logoDataUrl;
+  const serviceLetterLogo = resolveServiceLetterLogoSrc();
   const logo = serviceLetterLogo
     ? `<img class="service-letter-logo-image" src="${escapeAttribute(serviceLetterLogo)}" alt="${escapeAttribute(settings.businessName)} logo" />`
     : `<span class="invoice-logo-text">${escapeHtml(settings.businessName || defaultSettings.businessName)}</span>`;
@@ -8136,6 +8134,12 @@ function renderServiceLetterPreview() {
       <div class="service-letter-corner-shape small" aria-hidden="true"></div>
     </article>
   `;
+}
+
+function resolveServiceLetterLogoSrc() {
+  if (SERVICE_LETTER_LOGO_PATH) return new URL(SERVICE_LETTER_LOGO_PATH, window.location.href).href;
+  if (settings.logoDataUrl) return settings.logoDataUrl;
+  return defaultSettings.logoDataUrl || "";
 }
 
 function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
@@ -8218,7 +8222,7 @@ async function createServiceLetterCanvas(data) {
   ctx.fillStyle = "#ffffff";
   ctx.fillRect(0, 0, targetWidth, targetHeight);
   ctx.drawImage(image, 0, 0, targetWidth, targetHeight);
-  const logoImage = await loadImage(SERVICE_LETTER_LOGO_PATH || settings.logoDataUrl || defaultSettings.logoDataUrl).catch(() => null);
+  const logoImage = await loadImage(resolveServiceLetterLogoSrc()).catch(() => null);
   if (logoImage) {
     drawContainImage(ctx, logoImage, 46, 24, 260, 88);
   }
@@ -8283,7 +8287,7 @@ async function createServiceLetterCanvasDirect(data) {
     drawText("infonits", logoX + 3 * (logoDot + logoGap) + 10, logoY + 34, 38, navy, 700);
   };
 
-  const logoImage = await loadImage(SERVICE_LETTER_LOGO_PATH || settings.logoDataUrl || defaultSettings.logoDataUrl).catch(() => null);
+  const logoImage = await loadImage(resolveServiceLetterLogoSrc()).catch(() => null);
   if (logoImage) {
     drawContainImage(ctx, logoImage, 44, 24, 210, 54);
   } else {
@@ -8463,8 +8467,7 @@ async function downloadServiceLetterPdf() {
 }
 
 async function getServiceLetterCanvas(data) {
-  renderServiceLetterPreview();
-  return createServiceLetterCanvasDirect(data);
+  return renderDisplayedServiceLetterCanvas(data);
 }
 
 function safeFilename(value) {

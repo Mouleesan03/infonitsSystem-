@@ -3308,22 +3308,27 @@ h2 {
 }
 
 .service-letter-footer {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  padding: 14px 48px 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 48px 12px;
   border-top: 1px solid #dbe3ef;
-  color: #253148;
-  font-size: 0.76rem;
-  font-weight: 550;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.74rem;
+  font-weight: 500;
+  line-height: 1.35;
 }
 
 .service-footer-icon {
   display: inline-grid;
   place-items: center;
-  width: 16px;
-  height: 16px;
-  margin-right: 6px;
+  width: 14px;
+  height: 14px;
+  margin-right: 4px;
+  border-radius: 999px;
+  background: transparent;
   color: #ff6b2c;
   vertical-align: text-bottom;
 }
