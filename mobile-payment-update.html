@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Finance Mobile - Infonits</title>
+    <style>
+      :root {
+        --bg: #f2f6ff;
+        --bg-2: #e9f0ff;
+        --card: #ffffff;
+        --text: #111b34;
+        --muted: #5f7091;
+        --line: #d6e1f2;
+        --focus: #83a7ff;
+        --primary: #1f2f67;
+        --primary-2: #273d7f;
+        --chip: #eef3ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Poppins, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background:
+          radial-gradient(520px 340px at 100% -12%, #dce9ff 0%, transparent 68%),
+          radial-gradient(680px 380px at -20% 0%, var(--bg-2) 0%, transparent 74%),
+          var(--bg);
+        color: var(--text);
+      }
+      .wrap { max-width: 720px; margin: 0 auto; padding: 12px; }
+      .card {
+        background: var(--card);
+        border: 1px solid #d9e5f6;
+        border-radius: 16px;
+        padding: 12px;
+        box-shadow: 0 10px 28px rgba(16, 32, 76, 0.08);
+      }
+      .card + .card { margin-top: 10px; }
+      .hero {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: linear-gradient(135deg, #ffffff, #f4f8ff);
+        padding: 10px;
+      }
+      h1 { margin: 0; font-size: 1.25rem; line-height: 1.1; }
+      .muted { margin: 4px 0 0; color: var(--muted); font-size: 0.8rem; }
+      .top-actions {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+      .btn {
+        border: 0;
+        border-radius: 11px;
+        min-height: 40px;
+        padding: 0 14px;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .btn.primary {
+        color: #fff;
+        background: linear-gradient(135deg, var(--primary), var(--primary-2));
+        box-shadow: 0 10px 20px rgba(31, 47, 103, 0.24);
+      }
+      .btn.soft { background: var(--chip); color: #253353; border: 1px solid #d5e1f5; }
+      .filters { margin-top: 8px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 7px; }
+      .summary-grid { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; }
+      .summary-card {
+        border: 1px solid #dce6f5;
+        border-left: 4px solid #22c1b7;
+        border-radius: 10px;
+        background: #f7fbff;
+        padding: 8px;
+      }
+      .summary-card:nth-child(2) { border-left-color: #3b82f6; }
+      .summary-card:nth-child(3) { border-left-color: #ef4444; }
+      .summary-card:nth-child(4) { border-left-color: #f59e0b; }
+      .summary-card span { display: block; color: #5f6f89; font-size: 0.68rem; font-weight: 600; }
+      .summary-card strong { display: block; margin-top: 2px; font-size: 0.98rem; color: #1d2e63; }
+
+      label { font-size: 0.78rem; font-weight: 650; display: grid; gap: 5px; color: #334766; }
+      input, select, textarea {
+        width: 100%;
+        border: 1px solid #cfdcf0;
+        border-radius: 10px;
+        min-height: 40px;
+        padding: 8px 10px;
+        font: inherit;
+        color: var(--text);
+        background: #fdfefe;
+      }
+      input:focus, select:focus, textarea:focus {
+        border-color: var(--focus);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(131, 167, 255, 0.2);
+      }
+      textarea { min-height: 80px; resize: vertical; }
+      .row-2 { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+      .grid { display: grid; gap: 9px; }
+      .hidden { display: none !important; }
+      .status { margin-top: 3px; font-size: 0.82rem; min-height: 18px; font-weight: 600; }
+
+      .record-list { display: grid; gap: 8px; margin-top: 10px; }
+      .record-item {
+        border: 1px solid #d9e5f6;
+        border-radius: 11px;
+        background: #fff;
+        padding: 9px;
+      }
+      .record-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+      .chip { border-radius: 999px; padding: 2px 8px; font-size: 0.69rem; font-weight: 700; background: #eef3ff; color: #2c3f66; }
+      .record-amount { font-weight: 700; color: #182750; }
+      .record-meta { margin-top: 4px; color: #5f6f89; font-size: 0.74rem; line-height: 1.35; }
+      .record-actions { margin-top: 7px; display: flex; justify-content: flex-end; }
+      .btn.delete { min-height: 34px; padding: 0 10px; background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+      .pager {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .pager button {
+        min-width: 34px;
+        min-height: 34px;
+        border: 1px solid #d5e1f5;
+        border-radius: 10px;
+        background: #edf3ff;
+        color: #253353;
+        font-weight: 700;
+      }
+      .pager span {
+        font-size: 0.78rem;
+        color: #5f6f89;
+        font-weight: 600;
+      }
+
+      @media (max-width: 480px) {
+        .filters { grid-template-columns: 1fr; }
+        .row-2 { grid-template-columns: 1fr; }
+        .summary-grid { grid-template-columns: 1fr 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <header class="hero">
+          <h1>Monthly Finance</h1>
+          <p class="muted">Mobile finance dashboard and records.</p>
+        </header>
+
+        <div class="top-actions">
+          <button class="btn primary" id="toggleAddRecordButton" type="button">+ Add record</button>
+          <button class="btn soft" id="refreshFinanceButton" type="button">Refresh</button>
+        </div>
+
+        <div class="filters">
+          <label>Month <input id="financeMonthFilter" type="month" /></label>
+          <label>Type
+            <select id="financeTypeFilter">
+              <option value="all">All types</option>
+              <option value="income">Income</option>
+              <option value="expense">Expense</option>
+              <option value="loan">Loan</option>
+              <option value="saving">Saving</option>
+              <option value="gold">Gold</option>
+            </select>
+          </label>
+          <label>Category <input id="financeCategoryFilter" placeholder="All categories" /></label>
+        </div>
+
+        <section class="summary-grid">
+          <article class="summary-card"><span>Project profit</span><strong id="sumProjectProfit">Rs. 0</strong></article>
+          <article class="summary-card"><span>Income</span><strong id="sumIncome">Rs. 0</strong></article>
+          <article class="summary-card"><span>Unpaid expenses</span><strong id="sumUnpaid">Rs. 0</strong></article>
+          <article class="summary-card"><span>Balance</span><strong id="sumBalance">Rs. 0</strong></article>
+          <article class="summary-card"><span>Savings</span><strong id="sumSavings">Rs. 0</strong></article>
+          <article class="summary-card"><span>Gold assets</span><strong id="sumGold">Rs. 0</strong></article>
+        </section>
+
+        <section id="addRecordPanel" class="card hidden" style="margin-top:10px; padding:10px; box-shadow:none;">
+          <div class="grid">
+            <div class="row-2">
+              <label>Type
+                <select id="financeType">
+                  <option value="income">Income</option>
+                  <option value="expense">Expense</option>
+                  <option value="loan">Loan</option>
+                  <option value="saving">Saving</option>
+                  <option value="gold">Gold</option>
+                </select>
+              </label>
+              <label>Status
+                <select id="financeStatus">
+                  <option value="paid">Paid / done</option>
+                  <option value="unpaid">Unpaid / pending</option>
+                </select>
+              </label>
+            </div>
+            <label>Client
+              <select id="paymentClient"></select>
+            </label>
+            <label>Project (optional)
+              <select id="paymentProject"></select>
+            </label>
+            <div class="row-2">
+              <label>Date <input id="paymentDate" type="date" /></label>
+              <label>Amount (LKR) <input id="paymentAmount" type="number" min="0" step="0.01" value="0" /></label>
+            </div>
+            <label>Category <input id="financeCategory" placeholder="Client payment / Hosting / Other" /></label>
+            <label>Method
+              <select id="paymentMethod">
+                <option value="Bank transfer">Bank transfer</option>
+                <option value="Cash">Cash</option>
+                <option value="Card">Card</option>
+                <option value="Online">Online</option>
+              </select>
+            </label>
+            <label>Reference (optional) <input id="paymentReference" placeholder="TXN / Invoice no" /></label>
+            <label>Note <textarea id="paymentNote" placeholder="Optional note"></textarea></label>
+            <button class="btn primary" id="savePaymentButton" type="button">Save record</button>
+            <p class="status" id="paymentStatusText"></p>
+          </div>
+        </section>
+
+        <section class="record-list" id="financeRecordList"></section>
+        <div class="pager">
+          <button id="financePrevPage" type="button" aria-label="Previous page">‹</button>
+          <span id="financePageLabel">Page 1 of 1</span>
+          <button id="financeNextPage" type="button" aria-label="Next page">›</button>
+        </div>
+      </section>
+    </main>
+    <script src="supabase-config.js"></script>
+    <script src="mobile-payment-update.js"></script>
+  </body>
+</html>
