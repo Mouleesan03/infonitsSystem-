@@ -6,7 +6,7 @@
     <title>Invoice Mobile - Infonits</title>
     <style>
       :root {
-        --bg: #f4f7fb;
+        --bg: #f3f6fc;
         --card: #ffffff;
         --text: #111827;
         --muted: #64748b;
@@ -14,30 +14,110 @@
         --primary: #1f2f67;
         --primary-2: #273d7f;
         --focus: #83a7ff;
+        --ok: #22a065;
+        --warn: #ea4335;
+        --chip: #eef3ff;
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
         font-family: Poppins, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
-        background: var(--bg);
+        background:
+          radial-gradient(520px 340px at 100% -12%, #dce9ff 0%, transparent 68%),
+          radial-gradient(680px 380px at -20% 0%, #eaf1ff 0%, transparent 74%),
+          var(--bg);
         color: var(--text);
       }
-      .wrap { max-width: 720px; margin: 0 auto; padding: 12px; }
+      .wrap { width: min(100%, 460px); margin: 0 auto; padding: 12px; }
       .panel {
         background: var(--card);
         border: 1px solid var(--line);
-        border-radius: 16px;
+        border-radius: 22px;
         padding: 12px;
         box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
       }
-      .hero {
-        border: 1px solid var(--line);
-        border-radius: 12px;
-        background: #f8fbff;
-        padding: 10px;
+      .topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #5f7091;
+        font-size: 0.78rem;
+        font-weight: 800;
       }
-      h1 { margin: 0; font-size: 1.25rem; line-height: 1.15; }
-      .muted { margin: 4px 0 0; color: var(--muted); font-size: 0.8rem; }
+      .time-pill {
+        border: 1px solid #dbe6f6;
+        border-radius: 999px;
+        min-width: 54px;
+        text-align: center;
+        padding: 6px 10px;
+        color: #1b2947;
+        background: rgba(255, 255, 255, 0.78);
+      }
+      .hero { margin-top: 14px; }
+      .hero-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .back-btn {
+        width: 42px;
+        height: 42px;
+        border: 1px solid #dbe6f6;
+        border-radius: 12px;
+        background: #ffffff;
+        color: #65779b;
+        font-size: 1.75rem;
+        line-height: 1;
+        font-weight: 800;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        box-shadow: 0 5px 14px rgba(31, 47, 103, 0.08);
+      }
+      h1 { margin: 0; font-size: 1.9rem; line-height: 1; letter-spacing: -0.05em; }
+      .muted { margin: 6px 0 0; color: var(--muted); font-size: 0.82rem; font-weight: 600; }
+      .summary {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px;
+        margin-top: 12px;
+      }
+      .summary div {
+        border: 1px solid #dce6f5;
+        border-radius: 12px;
+        padding: 9px;
+        background: #f8fbff;
+        border-left: 4px solid var(--warn);
+      }
+      .summary div:nth-child(2) { border-left-color: var(--ok); }
+      .summary div:nth-child(3) { border-left-color: #3b82f6; }
+      .summary div:nth-child(4) { border-left-color: #f59e0b; }
+      .summary span { display: block; color: var(--muted); font-size: 0.67rem; font-weight: 700; }
+      .summary strong { display: block; margin-top: 3px; color: #1d2e63; font-size: 0.98rem; }
+      .summary em {
+        display: block;
+        margin-top: 3px;
+        font-style: normal;
+        font-size: 0.65rem;
+        font-weight: 800;
+      }
+      .summary .dot {
+        display: inline-block;
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        margin-right: 6px;
+        vertical-align: middle;
+      }
+      .summary .dot.red { background: #ef4444; }
+      .summary .dot.green { background: #14b8a6; }
+      .summary .dot.blue { background: #3b82f6; }
+      .summary .dot.orange { background: #f59e0b; }
+      .summary .meta-red { color: #ef4444; }
+      .summary .meta-green { color: #14b8a6; }
+      .summary .meta-blue { color: #3b82f6; }
+      .summary .meta-orange { color: #d98a00; }
       .grid { display: grid; gap: 9px; margin-top: 10px; }
       .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
       label { display: grid; gap: 5px; color: #334155; font-size: 0.78rem; font-weight: 650; }
@@ -57,24 +137,10 @@
         box-shadow: 0 0 0 3px rgba(131, 167, 255, 0.2);
       }
       textarea { min-height: 78px; resize: vertical; }
-      .summary {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 7px;
-        margin-top: 10px;
-      }
-      .summary div {
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 8px;
-        background: #f8fbff;
-      }
-      .summary span { display: block; color: var(--muted); font-size: 0.68rem; font-weight: 650; }
-      .summary strong { display: block; margin-top: 2px; color: #1d2e63; font-size: 1rem; }
       .btn {
         width: 100%;
         border: 0;
-        border-radius: 11px;
+        border-radius: 14px;
         min-height: 42px;
         padding: 0 14px;
         font: inherit;
@@ -85,30 +151,60 @@
       }
       .btn.secondary {
         color: #1d2e63;
-        background: #eef4ff;
+        background: #edf3ff;
         border: 1px solid #d6e1f2;
         box-shadow: none;
       }
       .top-actions { display: grid; grid-template-columns: 1fr; gap: 8px; margin-top: 10px; }
       .filters {
+        border: 1px solid #dbe7f8;
+        border-radius: 14px;
+        padding: 10px;
+        background: #fbfdff;
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 8px;
         margin-top: 10px;
       }
-      .hidden { display: none !important; }
-      .invoice-list { display: grid; gap: 8px; margin-top: 10px; }
-      .invoice-card {
-        border: 1px solid var(--line);
-        border-radius: 10px;
-        padding: 9px;
-        background: #ffffff;
-      }
-      .invoice-card-head {
+      .filter-head {
+        grid-column: 1 / -1;
         display: flex;
         align-items: center;
         justify-content: space-between;
+        margin-bottom: 4px;
+      }
+      .filter-head strong {
+        font-size: 0.94rem;
+        color: #1e2f66;
+      }
+      .filter-head span {
+        color: var(--muted);
+        font-size: 0.74rem;
+        font-weight: 700;
+      }
+      .hidden { display: none !important; }
+      .invoice-list { display: grid; gap: 8px; margin-top: 10px; }
+      .invoice-card {
+        border: 1px solid #d9e5f6;
+        border-radius: 14px;
+        padding: 10px;
+        background: #ffffff;
+        border-left: 5px solid #d9e5f6;
+      }
+      .invoice-card.paid { border-left-color: #14b8a6; }
+      .invoice-card.overdue { border-left-color: #ef4444; }
+      .invoice-card.sent { border-left-color: #3b82f6; }
+      .invoice-card.draft { border-left-color: #f59e0b; }
+      .invoice-card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
         gap: 8px;
+      }
+      .invoice-title {
+        display: flex;
+        align-items: center;
+        gap: 7px;
       }
       .invoice-card strong { color: #1d2e63; }
       .invoice-card small {
@@ -117,11 +213,34 @@
         font-size: 0.72rem;
         margin-top: 3px;
       }
+      .status-chip {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        padding: 3px 8px;
+        font-size: 0.67rem;
+        font-weight: 800;
+        background: var(--chip);
+        color: #274071;
+      }
+      .status-chip.paid { background: #dbf8e8; color: #18794e; }
+      .status-chip.overdue { background: #ffe5e5; color: #b42318; }
+      .status-chip.sent { background: #e7eeff; color: #2247a4; }
+      .status-chip.draft { background: #fff3dd; color: #9a5b00; }
       .invoice-card-actions {
         display: grid;
-        grid-template-columns: 1fr;
+        grid-template-columns: 1fr 1fr auto;
         gap: 7px;
         margin-top: 8px;
+      }
+      .mini-btn {
+        min-width: 42px;
+        border: 1px solid #d6e1f2;
+        border-radius: 14px;
+        background: #edf3ff;
+        color: #32497d;
+        font-size: 1.1rem;
+        font-weight: 900;
       }
       .pager {
         display: flex;
@@ -154,14 +273,33 @@
   <body>
     <main class="wrap">
       <section class="panel">
+        <div class="topline">
+          <span id="invoicePeriod">May · invoices</span>
+          <span class="time-pill" id="invoiceTime">9:41</span>
+        </div>
         <header class="hero">
-          <h1>Invoice</h1>
-          <p class="muted">Mobile invoice list and quick create.</p>
+          <div class="hero-head">
+            <div>
+              <h1>Invoice</h1>
+              <p class="muted">Mobile invoice list and quick create.</p>
+            </div>
+            <button class="back-btn" id="invoiceBackButton" type="button" aria-label="Go back">‹</button>
+          </div>
         </header>
+        <section class="summary">
+          <div><span><i class="dot red"></i>OUTSTANDING</span><strong id="invoiceOutstanding">Rs. 0</strong><em id="invoiceOutstandingMeta" class="meta-red">0 overdue</em></div>
+          <div><span><i class="dot green"></i>PAID</span><strong id="invoicePaidMonth">Rs. 0</strong><em id="invoicePaidMonthMeta" class="meta-green">0% of billed</em></div>
+          <div><span><i class="dot blue"></i>SENT</span><strong id="invoiceSentCount">0</strong><em id="invoiceSentMeta" class="meta-blue">awaiting</em></div>
+          <div><span><i class="dot orange"></i>DRAFTS</span><strong id="invoiceDraftCount">0</strong><em id="invoiceDraftMeta" class="meta-orange">in progress</em></div>
+        </section>
         <div class="top-actions">
           <button class="btn" id="toggleInvoiceFormButton" type="button">+ Create invoice</button>
         </div>
         <div class="filters">
+          <div class="filter-head">
+            <strong>Filter</strong>
+            <span id="invoiceShownCount">0 shown</span>
+          </div>
           <label>Search <input id="invoiceSearchFilter" placeholder="Invoice or customer" /></label>
           <label>Type
             <select id="invoiceTypeFilter">
@@ -234,7 +372,7 @@
         <section class="invoice-list" id="invoiceList"></section>
         <div class="pager">
           <button id="invoicePrevPage" type="button" aria-label="Previous page">‹</button>
-          <span id="invoicePageLabel">Page 1 of 1</span>
+          <span id="invoicePageLabel">1 / 1</span>
           <button id="invoiceNextPage" type="button" aria-label="Next page">›</button>
         </div>
       </section>

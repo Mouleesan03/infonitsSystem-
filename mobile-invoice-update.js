@@ -25,6 +25,18 @@
   const invoicePrevPage = document.getElementById("invoicePrevPage");
   const invoiceNextPage = document.getElementById("invoiceNextPage");
   const invoicePageLabel = document.getElementById("invoicePageLabel");
+  const invoiceOutstanding = document.getElementById("invoiceOutstanding");
+  const invoiceOutstandingMeta = document.getElementById("invoiceOutstandingMeta");
+  const invoicePaidMonth = document.getElementById("invoicePaidMonth");
+  const invoicePaidMonthMeta = document.getElementById("invoicePaidMonthMeta");
+  const invoiceSentCount = document.getElementById("invoiceSentCount");
+  const invoiceSentMeta = document.getElementById("invoiceSentMeta");
+  const invoiceDraftCount = document.getElementById("invoiceDraftCount");
+  const invoiceDraftMeta = document.getElementById("invoiceDraftMeta");
+  const invoiceShownCount = document.getElementById("invoiceShownCount");
+  const invoicePeriod = document.getElementById("invoicePeriod");
+  const invoiceTime = document.getElementById("invoiceTime");
+  const invoiceBackButton = document.getElementById("invoiceBackButton");
   const saveButton = document.getElementById("saveInvoiceButton");
   const statusText = document.getElementById("invoiceStatusText");
   const invoiceNoPreview = document.getElementById("invoiceNoPreview");
@@ -32,6 +44,7 @@
 
   let clients = [];
   let invoices = [];
+  let projectTargets = {};
   let invoicePage = 1;
   const INVOICE_PAGE_SIZE = 5;
 
@@ -93,6 +106,19 @@
     return `${label} ${Number(value || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   }
 
+  function monthValueFromDate(dateString) {
+    return String(dateString || "").slice(0, 7);
+  }
+
+  function effectiveStatus(invoice) {
+    const status = String(invoice.status || "Unpaid");
+    if (status === "Paid" || status === "Draft" || status === "Overdue") return status;
+    if (status !== "Unpaid") return status;
+    const due = String(invoice.dueDate || "");
+    if (due && due < today()) return "Overdue";
+    return status;
+  }
+
   function normalizeClient(row) {
     const payload = row && row.payload && typeof row.payload === "object" ? row.payload : {};
     return {
@@ -137,6 +163,16 @@
     invoices = (await res.json()).map(normalizeInvoice);
   }
 
+  async function loadProjectTargets() {
+    const res = await fetch(api("app_data?collection=eq.projectTargets&app_id=eq.main&select=payload&limit=1"), { headers: headers() });
+    if (!res.ok) {
+      projectTargets = {};
+      return;
+    }
+    const rows = await res.json();
+    projectTargets = rows[0]?.payload && typeof rows[0].payload === "object" ? rows[0].payload : {};
+  }
+
   function renderClients() {
     customerName.innerHTML = ["<option value=''>Select customer</option>"]
       .concat(clients.map((client) => `<option value="${client.name.replace(/"/g, "&quot;")}">${client.name}</option>`))
@@ -164,6 +200,34 @@
     return `${label} ${Number(value || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   }
 
+  function compactAmount(value) {
+    const n = Number(value || 0);
+    if (Math.abs(n) >= 1000000) return `Rs. ${(n / 1000000).toFixed(2).replace(/\.00$/, "")}m`;
+    if (Math.abs(n) >= 1000) return `Rs. ${(n / 1000).toFixed(0)}k`;
+    return `Rs. ${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  }
+
+  function formatLkrExact(value) {
+    const n = Number(value || 0);
+    const hasDecimal = Math.abs(n % 1) > 0;
+    return `Rs. ${n.toLocaleString("en-US", {
+      minimumFractionDigits: hasDecimal ? 2 : 0,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+
+  function projectUsdRateForMonth(month) {
+    return Number(projectTargets?.[month]?.usdRate || 0);
+  }
+
+  function invoiceTotalInLkr(invoice) {
+    const total = invoiceTotal(invoice);
+    if ((invoice.currency || "LKR") !== "USD") return total;
+    const month = String(invoice.invoiceDate || today()).slice(0, 7);
+    const rate = projectUsdRateForMonth(month) || projectUsdRateForMonth(today().slice(0, 7)) || 319.6;
+    return total * rate;
+  }
+
   function escapeHtml(value) {
     return String(value || "")
       .replace(/&/g, "&amp;")
@@ -173,13 +237,59 @@
       .replace(/'/g, "&#39;");
   }
 
+  function renderSummaryCards() {
+    let pendingLkr = 0;
+    let paidTotalLkr = 0;
+    let sentCount = 0;
+    let draftCount = 0;
+    let overdueCount = 0;
+    const now = today();
+    const invoiceDocs = invoices.filter((invoice) => (invoice.documentType || "Invoice") === "Invoice");
+
+    invoiceDocs.forEach((invoice) => {
+      const status = effectiveStatus(invoice);
+      const amountLkr = invoiceTotalInLkr(invoice);
+      if (status === "Sent") sentCount += 1;
+      if (status === "Draft") draftCount += 1;
+      const isOverdue = status === "Overdue" || (status === "Unpaid" && invoice.dueDate && invoice.dueDate < now);
+      if (isOverdue) overdueCount += 1;
+      if (status === "Paid") {
+        paidTotalLkr += amountLkr;
+      } else if (status !== "Draft") {
+        pendingLkr += amountLkr;
+      }
+    });
+
+    const billedLkr = paidTotalLkr + pendingLkr;
+    const paidPercent = billedLkr > 0 ? Math.round((paidTotalLkr / billedLkr) * 100) : 0;
+
+    invoiceOutstanding.textContent = formatLkrExact(pendingLkr);
+    invoiceOutstandingMeta.textContent = `${overdueCount} overdue`;
+    invoicePaidMonth.textContent = formatLkrExact(paidTotalLkr);
+    invoicePaidMonthMeta.textContent = `${paidPercent}% of billed`;
+    invoiceSentCount.textContent = String(sentCount);
+    invoiceSentMeta.textContent = sentCount > 0 ? "awaiting" : "none";
+    invoiceDraftCount.textContent = String(draftCount);
+    invoiceDraftMeta.textContent = draftCount > 0 ? "in progress" : "none";
+  }
+
+  function statusClass(status) {
+    const key = String(status || "").toLowerCase();
+    if (key === "paid") return "paid";
+    if (key === "overdue") return "overdue";
+    if (key === "sent") return "sent";
+    if (key === "draft") return "draft";
+    return "";
+  }
+
   function renderInvoices() {
     const invoiceDocs = filteredInvoices();
     const totalPages = Math.max(1, Math.ceil(invoiceDocs.length / INVOICE_PAGE_SIZE));
     if (invoicePage > totalPages) invoicePage = totalPages;
     const start = (invoicePage - 1) * INVOICE_PAGE_SIZE;
     const paged = invoiceDocs.slice(start, start + INVOICE_PAGE_SIZE);
-    invoicePageLabel.textContent = `Page ${invoicePage} of ${totalPages}`;
+    invoicePageLabel.textContent = `${invoicePage} / ${totalPages}`;
+    invoiceShownCount.textContent = `${invoiceDocs.length} shown`;
     invoicePrevPage.disabled = invoicePage <= 1;
     invoiceNextPage.disabled = invoicePage >= totalPages;
     if (!paged.length) {
@@ -189,16 +299,21 @@
     invoiceList.innerHTML = paged
       .map(
         (invoice) => `
-          <article class="invoice-card">
+          <article class="invoice-card ${statusClass(effectiveStatus(invoice))}">
             <div class="invoice-card-head">
               <div>
-                <strong>${escapeHtml(invoice.invoiceNumber)}</strong>
-                <small>${escapeHtml(invoice.customerName)} | ${escapeHtml(invoice.invoiceDate || "-")} | ${escapeHtml(invoice.status || "Unpaid")}</small>
+                <div class="invoice-title">
+                  <strong>${escapeHtml(invoice.invoiceNumber)}</strong>
+                  <span class="status-chip ${statusClass(effectiveStatus(invoice))}">${escapeHtml(effectiveStatus(invoice))}</span>
+                </div>
+                <small>${escapeHtml(invoice.customerName)} | ${escapeHtml(invoice.invoiceDate || "-")} | ${escapeHtml(invoice.currency || "LKR")}</small>
               </div>
               <strong>${escapeHtml(invoiceMoney(invoice, invoiceTotal(invoice)))}</strong>
             </div>
             <div class="invoice-card-actions">
               <button class="btn secondary" type="button" data-download-invoice="${escapeHtml(invoice.id)}">Download</button>
+              <button class="btn secondary" type="button" data-view-invoice="${escapeHtml(invoice.id)}">View</button>
+              <button class="mini-btn" type="button" aria-label="More actions">...</button>
             </div>
           </article>
         `,
@@ -212,10 +327,11 @@
     const status = invoiceStatusFilter.value || "All";
     const customer = String(invoiceCustomerFilter.value || "").trim().toLowerCase();
     return invoices.filter((invoice) => {
+      const statusValue = effectiveStatus(invoice);
       const haystack = `${invoice.invoiceNumber || ""} ${invoice.customerName || ""}`.toLowerCase();
       const matchesQuery = !query || haystack.includes(query);
       const matchesType = type === "All" || (invoice.documentType || "Invoice") === type;
-      const matchesStatus = status === "All" || (invoice.status || "Unpaid") === status;
+      const matchesStatus = status === "All" || statusValue === status;
       const matchesCustomer = !customer || String(invoice.customerName || "").toLowerCase().includes(customer);
       return matchesQuery && matchesType && matchesStatus && matchesCustomer;
     });
@@ -241,6 +357,17 @@
     window.open(url, "_blank", "noopener");
     setTimeout(() => URL.revokeObjectURL(url), 120000);
     setText("PDF downloaded");
+  }
+
+  async function viewInvoice(invoice) {
+    setText("Opening preview...");
+    const canvas = renderInvoiceCanvas(invoice);
+    const pdf = buildImagePdf(canvas.toDataURL("image/jpeg", 0.98), canvas.width, canvas.height);
+    const blob = new Blob([pdf], { type: "application/pdf" });
+    const url = URL.createObjectURL(blob);
+    window.open(url, "_blank", "noopener");
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+    setText("Preview opened");
   }
 
   function renderInvoiceCanvas(invoice) {
@@ -552,7 +679,8 @@
       discount.value = "0";
       advancePaid.value = "0";
       notes.value = "";
-      await loadInvoices();
+      await Promise.all([loadInvoices(), loadProjectTargets()]);
+      renderSummaryCards();
       renderInvoices();
       updatePreview();
     } catch (error) {
@@ -572,8 +700,9 @@
     dueDate.value = addDays(today(), 10);
     itemTitle.value = "Service";
     try {
-      await Promise.all([loadClients(), loadInvoices()]);
+      await Promise.all([loadClients(), loadInvoices(), loadProjectTargets()]);
       renderClients();
+      renderSummaryCards();
       renderInvoices();
       updatePreview();
     } catch (error) {
@@ -594,10 +723,17 @@
     if (!hidden) invoiceFormPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   invoiceList.addEventListener("click", (event) => {
-    const button = event.target.closest("[data-download-invoice]");
-    if (!button) return;
-    const invoice = invoices.find((item) => item.id === button.getAttribute("data-download-invoice"));
-    if (invoice) downloadInvoice(invoice);
+    const downloadButton = event.target.closest("[data-download-invoice]");
+    const viewButton = event.target.closest("[data-view-invoice]");
+    if (downloadButton) {
+      const invoice = invoices.find((item) => item.id === downloadButton.getAttribute("data-download-invoice"));
+      if (invoice) downloadInvoice(invoice);
+      return;
+    }
+    if (viewButton) {
+      const invoice = invoices.find((item) => item.id === viewButton.getAttribute("data-view-invoice"));
+      if (invoice) viewInvoice(invoice);
+    }
   });
   [invoiceSearchFilter, invoiceTypeFilter, invoiceStatusFilter, invoiceCustomerFilter].forEach((input) => {
     input.addEventListener("input", resetInvoicePageAndRender);
@@ -611,5 +747,19 @@
     invoicePage += 1;
     renderInvoices();
   });
+  invoiceBackButton.addEventListener("click", () => {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    window.location.href = "./mobile-dashboard.html?v=20260521-sync";
+  });
+  (function updateHeaderClock() {
+    const now = new Date();
+    invoicePeriod.textContent = `${now.toLocaleDateString("en-US", { month: "short" }).toUpperCase()} · INVOICES`;
+    invoiceTime.textContent = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+    const paidMonthLabel = document.querySelector(".summary div:nth-child(2) span");
+    if (paidMonthLabel) paidMonthLabel.innerHTML = `<i class="dot green"></i>PAID · ${now.toLocaleDateString("en-US", { month: "short" }).toUpperCase()}`;
+  })();
   init();
 })();

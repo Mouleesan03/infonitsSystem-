@@ -4,6 +4,9 @@
   const addPanel = document.getElementById("addRecordPanel");
   const toggleAddRecordButton = document.getElementById("toggleAddRecordButton");
   const refreshFinanceButton = document.getElementById("refreshFinanceButton");
+  const financePeriod = document.getElementById("financePeriod");
+  const financeTime = document.getElementById("financeTime");
+  const financeBackButton = document.getElementById("financeBackButton");
 
   const financeMonthFilter = document.getElementById("financeMonthFilter");
   const financeTypeFilter = document.getElementById("financeTypeFilter");
@@ -28,6 +31,13 @@
   const sumUnpaid = document.getElementById("sumUnpaid");
   const sumSavings = document.getElementById("sumSavings");
   const sumGold = document.getElementById("sumGold");
+  const sumProjectProfitMeta = document.getElementById("sumProjectProfitMeta");
+  const sumIncomeMeta = document.getElementById("sumIncomeMeta");
+  const sumUnpaidMeta = document.getElementById("sumUnpaidMeta");
+  const sumBalanceMeta = document.getElementById("sumBalanceMeta");
+  const sumSavingsMeta = document.getElementById("sumSavingsMeta");
+  const sumGoldMeta = document.getElementById("sumGoldMeta");
+  const financeRecordCount = document.getElementById("financeRecordCount");
   const financeRecordList = document.getElementById("financeRecordList");
   const financePrevPage = document.getElementById("financePrevPage");
   const financeNextPage = document.getElementById("financeNextPage");
@@ -38,6 +48,7 @@
   let records = [];
   let projectTargets = {};
   let financePage = 1;
+  let editingRecordId = "";
   const FINANCE_PAGE_SIZE = 5;
 
   function ready() {
@@ -82,6 +93,13 @@
 
   function money(value) {
     return `Rs. ${Number(value || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
+  }
+
+  function compactMoney(value) {
+    const n = Number(value || 0);
+    if (Math.abs(n) >= 1000000) return `Rs. ${(n / 1000000).toFixed(2).replace(/\.00$/, "")}M`;
+    if (Math.abs(n) >= 1000) return `Rs. ${(n / 1000).toFixed(0)}k`;
+    return money(n);
   }
 
   function escapeHtml(v) {
@@ -313,6 +331,10 @@
   function renderSummary(list) {
     const month = financeMonthFilter.value || thisMonth();
     const monthRecords = records.filter((record) => financeRecordAppliesToMonth(record, month));
+    const [yearText, monthText] = month.split("-");
+    const prevDate = new Date(Number(yearText), Math.max(0, Number(monthText) - 2), 1);
+    const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+    const prevMonthRecords = records.filter((record) => financeRecordAppliesToMonth(record, prevMonth));
     const projectSummary = projectFinanceSummary(month);
     const otherIncome = monthRecords.filter((record) => record.type === "income").reduce((sum, record) => sum + Number(record.amount || 0), 0);
     const unpaidManualExpenses = monthRecords.filter((record) => record.type === "expense").reduce((sum, record) => sum + financeRecordOutstandingAmount(record, month), 0);
@@ -322,12 +344,23 @@
     const paidExpenses = monthRecords.reduce((sum, record) => sum + financeRecordPaidAmount(record, month), 0);
     const unpaidExpenses = unpaidManualExpenses + unpaidLoans;
     const balance = otherIncome - paidExpenses;
-    if (sumProjectProfit) sumProjectProfit.textContent = money(projectSummary.income);
-    sumIncome.textContent = money(otherIncome);
-    sumUnpaid.textContent = money(unpaidExpenses);
-    sumBalance.textContent = money(balance);
-    if (sumSavings) sumSavings.textContent = money(savings);
-    if (sumGold) sumGold.textContent = money(goldAssets);
+    const prevIncome = prevMonthRecords.filter((record) => record.type === "income").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+    const prevSavings = prevMonthRecords.filter((record) => record.type === "saving").reduce((sum, record) => sum + Number(record.amount || 0), 0);
+    const incomePct = prevIncome > 0 ? Math.round(((otherIncome - prevIncome) / prevIncome) * 100) : 0;
+    const overdueCount = monthRecords.filter((record) => financeRecordIsExpenseLike(record) && financeRecordOutstandingAmount(record, month) > 0).length;
+    const goldNewCount = monthRecords.filter((record) => record.type === "gold" && financeRecordMonth(record) === month).length;
+    if (sumProjectProfit) sumProjectProfit.textContent = compactMoney(projectSummary.income);
+    sumIncome.textContent = compactMoney(otherIncome);
+    sumUnpaid.textContent = compactMoney(unpaidExpenses);
+    sumBalance.textContent = compactMoney(balance);
+    if (sumSavings) sumSavings.textContent = compactMoney(savings);
+    if (sumGold) sumGold.textContent = compactMoney(goldAssets);
+    if (sumProjectProfitMeta) sumProjectProfitMeta.textContent = "live";
+    if (sumIncomeMeta) sumIncomeMeta.textContent = `${incomePct >= 0 ? "+" : ""}${incomePct}%`;
+    if (sumUnpaidMeta) sumUnpaidMeta.textContent = `${overdueCount} overdue`;
+    if (sumBalanceMeta) sumBalanceMeta.textContent = "this month";
+    if (sumSavingsMeta) sumSavingsMeta.textContent = `${savings - prevSavings >= 0 ? "+" : ""}${money(savings - prevSavings).replace("Rs. ", "Rs. ")}`;
+    if (sumGoldMeta) sumGoldMeta.textContent = `+${goldNewCount} entry`;
   }
 
   function typeChip(record) {
@@ -342,6 +375,7 @@
     if (financePage > totalPages) financePage = totalPages;
     const start = (financePage - 1) * FINANCE_PAGE_SIZE;
     const paged = list.slice(start, start + FINANCE_PAGE_SIZE);
+    if (financeRecordCount) financeRecordCount.textContent = `${paged.length} of ${list.length}`;
     if (financePageLabel) financePageLabel.textContent = `Page ${financePage} of ${totalPages}`;
     if (financePrevPage) financePrevPage.disabled = financePage <= 1;
     if (financeNextPage) financeNextPage.disabled = financePage >= totalPages;
@@ -353,20 +387,41 @@
       .map((record) => {
         const statusText = record.status === "paid" ? "Recorded" : "Unpaid";
         return `
-          <article class=\"record-item\">
+          <article class=\"record-item ${escapeHtml(record.type)}\">
             <div class=\"record-top\">
-              <span class=\"chip\">${escapeHtml(typeChip(record))}</span>
+              <div class=\"chips\">
+                <span class=\"chip\">${escapeHtml(typeChip(record))}</span>
+                <span class=\"chip status\">${escapeHtml(statusText)}</span>
+              </div>
               <strong class=\"record-amount\">${escapeHtml(money(record.amount))}</strong>
             </div>
-            <div class=\"record-meta\">${escapeHtml(record.date)} | ${escapeHtml(record.category)} | ${escapeHtml(statusText)}</div>
+            <div class=\"record-meta\">${escapeHtml(record.date)} · ${escapeHtml(record.category)}</div>
             <div class=\"record-meta\">${escapeHtml(record.note || "-")}</div>
             <div class=\"record-actions\">
+              <button class=\"btn edit\" type=\"button\" data-edit-finance=\"${escapeHtml(record.id)}\">Edit</button>
               <button class=\"btn delete\" type=\"button\" data-delete-finance=\"${escapeHtml(record.id)}\">Delete</button>
             </div>
           </article>
         `;
       })
       .join("");
+  }
+
+  function startEditRecord(id) {
+    const record = records.find((item) => item.id === id);
+    if (!record) return;
+    editingRecordId = id;
+    financeType.value = record.type || "income";
+    financeStatus.value = record.status || "paid";
+    paymentDate.value = record.date || today();
+    paymentAmount.value = String(record.amount || 0);
+    financeCategory.value = record.category || "";
+    paymentNote.value = record.note || "";
+    addPanel.classList.remove("hidden");
+    toggleAddRecordButton.textContent = "Close form";
+    savePaymentButton.textContent = "Save changes";
+    setText("Editing finance record");
+    addPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   async function deleteRecord(id) {
@@ -406,7 +461,7 @@
     savePaymentButton.disabled = true;
     setText("Saving...");
     try {
-      const id = createId();
+      const id = editingRecordId || createId();
       const recordNote = [clientName ? `Client: ${clientName}` : "", project?.name ? `Project: ${project.name}` : "", reference ? `Ref: ${reference}` : "", note]
         .filter(Boolean)
         .join(" | ");
@@ -446,18 +501,26 @@
         payload,
         updated_at: payload.updatedAt,
       };
-      const res = await fetch(api("finance_records"), {
-        method: "POST",
-        headers: headers({ Prefer: "resolution=merge-duplicates,return=minimal" }),
-        body: JSON.stringify(body),
-      });
+      const res = editingRecordId
+        ? await fetch(api(`finance_records?app_id=eq.${encodeURIComponent(editingRecordId)}`), {
+            method: "PATCH",
+            headers: headers({ Prefer: "return=minimal" }),
+            body: JSON.stringify(body),
+          })
+        : await fetch(api("finance_records"), {
+            method: "POST",
+            headers: headers({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+            body: JSON.stringify(body),
+          });
       if (!res.ok) throw new Error(await res.text());
 
-      setText("Finance record saved");
+      setText(editingRecordId ? "Finance record updated" : "Finance record saved");
       paymentAmount.value = "0";
       paymentReference.value = "";
       paymentNote.value = "";
       financeCategory.value = "";
+      editingRecordId = "";
+      savePaymentButton.textContent = "Save record";
       addPanel.classList.add("hidden");
       toggleAddRecordButton.textContent = "+ Add record";
       await refreshFinance();
@@ -497,6 +560,10 @@
   toggleAddRecordButton.addEventListener("click", () => {
     const hidden = addPanel.classList.toggle("hidden");
     toggleAddRecordButton.textContent = hidden ? "+ Add record" : "Close form";
+    if (hidden) {
+      editingRecordId = "";
+      savePaymentButton.textContent = "Save record";
+    }
     if (!hidden) addPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
@@ -525,10 +592,25 @@
   });
 
   document.addEventListener("click", (event) => {
+    const editBtn = event.target.closest("[data-edit-finance]");
     const btn = event.target.closest("[data-delete-finance]");
+    if (editBtn) {
+      startEditRecord(editBtn.getAttribute("data-edit-finance"));
+      return;
+    }
     if (!btn) return;
     deleteRecord(btn.getAttribute("data-delete-finance"));
   });
+
+  financeBackButton.addEventListener("click", () => {
+    window.location.href = "./mobile-dashboard.html?v=20260521-sync";
+  });
+
+  (function updateHeaderClock() {
+    const now = new Date();
+    financePeriod.textContent = `${now.toLocaleDateString("en-US", { month: "short", year: "numeric" }).toUpperCase()} · FINANCE`;
+    financeTime.textContent = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  })();
 
   init();
 })();

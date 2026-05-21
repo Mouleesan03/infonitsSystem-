@@ -6,8 +6,8 @@
     <title>Project Update - Infonits</title>
     <style>
       :root {
-        --bg: #f2f6ff;
-        --bg-2: #e9f0ff;
+        --bg: #f3f6fc;
+        --bg-2: #eaf1ff;
         --card: #ffffff;
         --text: #111b34;
         --muted: #5f7091;
@@ -27,24 +27,59 @@
           var(--bg);
         color: var(--text);
       }
-      .wrap { max-width: 640px; margin: 0 auto; padding: 14px 12px 24px; }
+      .wrap { width: min(100%, 460px); margin: 0 auto; padding: 12px; }
       .card {
         background: var(--card);
         border: 1px solid #d9e5f6;
-        border-radius: 20px;
-        padding: 14px;
+        border-radius: 22px;
+        padding: 12px;
         box-shadow: 0 12px 30px rgba(16, 32, 76, 0.08);
       }
-      .hero {
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        background: linear-gradient(135deg, #ffffff, #f4f8ff);
-        padding: 12px;
+      .topline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        color: #5f7091;
+        font-size: 0.78rem;
+        font-weight: 800;
       }
-      h1 { margin: 0; font-size: 1.45rem; line-height: 1.1; letter-spacing: -0.015em; }
+      .time-pill {
+        border: 1px solid #dbe6f6;
+        border-radius: 999px;
+        min-width: 54px;
+        text-align: center;
+        padding: 6px 10px;
+        color: #1b2947;
+        background: rgba(255, 255, 255, 0.78);
+      }
+      .hero { margin-top: 12px; }
+      .hero-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 10px;
+      }
+      .back-btn {
+        width: 42px;
+        height: 42px;
+        border: 1px solid #dbe6f6;
+        border-radius: 12px;
+        background: #ffffff;
+        color: #65779b;
+        font-size: 1.75rem;
+        line-height: 1;
+        font-weight: 800;
+        display: grid;
+        place-items: center;
+        cursor: pointer;
+        box-shadow: 0 5px 14px rgba(31, 47, 103, 0.08);
+      }
+      h1 { margin: 0; font-size: 1.9rem; line-height: 1; letter-spacing: -0.05em; }
       h2 { margin: 12px 2px 0; font-size: 1.02rem; line-height: 1.2; letter-spacing: -0.01em; }
-      .muted { margin: 5px 0 0; color: var(--muted); font-size: 0.82rem; }
+      .muted { margin: 6px 0 0; color: #7082a8; font-size: 0.82rem; font-weight: 700; }
       .grid { display: grid; gap: 10px; margin-top: 10px; }
+      .hidden { display: none !important; }
+      .top-actions { margin-top: 10px; }
       .summary-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -54,9 +89,9 @@
       .summary-card {
         border: 1px solid #dce6f5;
         border-left: 4px solid #3b82f6;
-        border-radius: 11px;
-        background: var(--soft);
-        padding: 8px 9px;
+        border-radius: 12px;
+        background: #f8fbff;
+        padding: 10px;
       }
       .summary-card.profit { border-left-color: #14b8a6; }
       .summary-card span {
@@ -67,9 +102,9 @@
       }
       .summary-card strong {
         display: block;
-        margin-top: 3px;
+        margin-top: 6px;
         color: #1b2b5c;
-        font-size: 1.02rem;
+        font-size: 1.18rem;
         line-height: 1.1;
         letter-spacing: -0.01em;
       }
@@ -128,8 +163,111 @@
         font-size: 0.8rem;
       }
       .details-grid strong { color: #1d2e63; font-weight: 700; }
+      .project-list { margin-top: 10px; display: grid; gap: 8px; }
+      .project-item {
+        border: 1px solid #d9e5f6;
+        border-radius: 14px;
+        background: #fff;
+        padding: 10px;
+        border-left: 5px solid #f59e0b;
+      }
+      .project-item-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 8px;
+      }
+      .project-item-title { margin: 0; font-size: 0.95rem; color: #1d2e63; }
+      .project-item-meta { margin-top: 4px; color: #5f6f89; font-size: 0.76rem; }
+      .project-item-value { font-weight: 750; color: #16244f; }
+      .chip {
+        display: inline-flex;
+        border-radius: 999px;
+        padding: 4px 12px;
+        font-size: 0.68rem;
+        font-weight: 800;
+        background: #eef3ff;
+        color: #2c3f66;
+      }
+      .chip.waiting { background: #fdeec8; color: #9a6400; }
+      .chip.paid { background: #d7f6ef; color: #0f8a75; }
+      .chip.partial { background: #e6edff; color: #3756ae; }
+      .chip.completed { background: #e5efe9; color: #2f6a4a; }
+      .project-item-actions { margin-top: 8px; display: flex; justify-content: flex-end; }
+      .project-value-row {
+        margin-top: 6px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: end;
+        gap: 10px;
+      }
+      .project-value-row strong { display: block; color: #172552; font-size: 0.76rem; letter-spacing: 0.02em; }
+      .project-value-row b { color: #152450; font-size: 0.98rem; }
+      .project-profit { color: #129d8a; font-weight: 800; }
+      .project-card-footer {
+        margin-top: 8px;
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 8px;
+      }
+      .more-btn {
+        min-width: 48px;
+        min-height: 36px;
+        border: 1px solid #d6e1f2;
+        border-radius: 12px;
+        background: #f3f7ff;
+        color: #6b7ea2;
+        font-size: 1.15rem;
+        font-weight: 900;
+      }
+      .pager {
+        margin-top: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .pager button {
+        min-width: 34px;
+        min-height: 34px;
+        border: 1px solid #d5e1f5;
+        border-radius: 10px;
+        background: #edf3ff;
+        color: #253353;
+        font-weight: 700;
+      }
+      .pager span {
+        font-size: 0.78rem;
+        color: #5f6f89;
+        font-weight: 600;
+      }
+      .btn.secondary {
+        min-height: 36px;
+        border-radius: 10px;
+        border: 1px solid #d6e1f2;
+        background: #eef4ff;
+        color: #1d2e63;
+        font-weight: 700;
+      }
       .card + .card { margin-top: 10px; }
       .section-title { margin: 0; font-size: 1.02rem; line-height: 1.2; letter-spacing: -0.01em; }
+      .section-row {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      .section-label {
+        color: #6c7ea2;
+        font-size: 0.86rem;
+        font-weight: 900;
+        letter-spacing: 0.02em;
+      }
+      .section-count {
+        color: #6c7ea2;
+        font-size: 0.86rem;
+        font-weight: 900;
+      }
       @media (max-width: 480px) {
         .summary-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
         .summary-card { padding: 7px 8px; border-radius: 10px; }
@@ -146,9 +284,18 @@
   <body>
     <main class="wrap">
       <section class="card">
+        <div class="topline">
+          <span id="projectPeriod">MAY 2026 · PROJECTS</span>
+          <span class="time-pill" id="projectTime">9:41</span>
+        </div>
         <header class="hero">
-          <h1>Project Update</h1>
-          <p class="muted">Fast mobile update for project records.</p>
+          <div class="hero-head">
+            <div>
+              <h1>Project Update</h1>
+              <p class="muted">Fast mobile update for project records.</p>
+            </div>
+            <button class="back-btn" id="projectBackButton" type="button" aria-label="Go back">‹</button>
+          </div>
         </header>
         <section class="summary-grid">
           <article class="summary-card">
@@ -162,8 +309,10 @@
             <small>After project work cost</small>
           </article>
         </section>
-        <h2>Add project update</h2>
-        <div class="grid">
+        <div class="top-actions">
+          <button class="btn" id="toggleAddProjectButton" type="button">+ Add project</button>
+        </div>
+        <div class="grid hidden" id="addProjectPanel">
           <label>Client
             <select id="projectClient"></select>
           </label>
@@ -195,6 +344,16 @@
             <h3>Project details</h3>
             <div class="details-grid" id="projectDetailsContent">Select a project to view details.</div>
           </section>
+        </div>
+        <div class="section-row">
+          <div class="section-label">CURRENT PROJECTS</div>
+          <div class="section-count" id="projectActiveCount">0 active</div>
+        </div>
+        <section class="project-list" id="projectList"></section>
+        <div class="pager">
+          <button id="projectPrevPage" type="button" aria-label="Previous page">‹</button>
+          <span id="projectPageLabel">Page 1 of 1</span>
+          <button id="projectNextPage" type="button" aria-label="Next page">›</button>
         </div>
       </section>
     </main>
