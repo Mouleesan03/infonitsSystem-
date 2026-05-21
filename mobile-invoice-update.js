@@ -226,24 +226,233 @@
     renderInvoices();
   }
 
-  function downloadInvoice(invoice) {
-    const itemRows = (invoice.items || [])
-      .map((item) => {
-        const amount = Number(item.amount || Number(item.quantity || 0) * Number(item.price || 0));
-        return `<tr><td>${escapeHtml(item.title || "Service")}<br><small>${escapeHtml(item.description || "")}</small></td><td>${escapeHtml(String(item.quantity || 1))}</td><td>${escapeHtml(invoiceMoney(invoice, item.price || amount))}</td><td>${escapeHtml(invoiceMoney(invoice, amount))}</td></tr>`;
-      })
-      .join("");
-    const html = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(invoice.invoiceNumber)}</title><style>body{font-family:Arial,sans-serif;margin:24px;color:#111827}.head{display:flex;justify-content:space-between;border-bottom:1px solid #ddd;padding-bottom:12px}h1{margin:0;color:#1d2e63}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border-bottom:1px solid #e5e7eb;padding:10px;text-align:left}th{background:#f8fafc}.total{text-align:right;margin-top:18px;font-size:20px;font-weight:700}@media print{button{display:none}}</style></head><body><div class="head"><div><h1>Invoice</h1><p>${escapeHtml(invoice.invoiceNumber)}</p></div><div><strong>${escapeHtml(invoice.customerName)}</strong><p>${escapeHtml(invoice.invoiceDate || "")}</p><p>Due: ${escapeHtml(invoice.dueDate || "")}</p></div></div><table><thead><tr><th>Service</th><th>Qty</th><th>Price</th><th>Amount</th></tr></thead><tbody>${itemRows}</tbody></table><p class="total">Total: ${escapeHtml(invoiceMoney(invoice, invoiceTotal(invoice)))}</p><p>${escapeHtml(invoice.notes || "")}</p><script>window.print();</script></body></html>`;
-    const blob = new Blob([html], { type: "text/html" });
+  async function downloadInvoice(invoice) {
+    setText("Preparing PDF...");
+    const canvas = renderInvoiceCanvas(invoice);
+    const pdf = buildImagePdf(canvas.toDataURL("image/jpeg", 0.98), canvas.width, canvas.height);
+    const blob = new Blob([pdf], { type: "application/pdf" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `${invoice.invoiceNumber || "invoice"}.html`;
+    link.download = `${invoice.invoiceNumber || "invoice"}-${(invoice.customerName || "client").replace(/[^\w.-]+/g, "-")}.pdf`;
     document.body.appendChild(link);
     link.click();
     link.remove();
     window.open(url, "_blank", "noopener");
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
+    setTimeout(() => URL.revokeObjectURL(url), 120000);
+    setText("PDF downloaded");
+  }
+
+  function renderInvoiceCanvas(invoice) {
+    const canvas = document.createElement("canvas");
+    canvas.width = 1240;
+    canvas.height = 1754;
+    const ctx = canvas.getContext("2d");
+    const navy = "#1d2e63";
+    const orange = "#ff6b2c";
+    const light = "#f4f6fb";
+    const line = "#d7dce7";
+    const gray = "#555555";
+    const dark = "#3f3f46";
+    const items = invoice.items || [];
+    const subtotal = items.reduce((sum, item) => sum + Number(item.amount || Number(item.quantity || 0) * Number(item.price || 0)), 0);
+    const total = invoiceTotal(invoice);
+    const docType = invoice.documentType || "Invoice";
+    const docTitle = docType.toUpperCase();
+
+    const drawText = (value, x, y, size, color = gray, weight = 400, align = "left") => {
+      ctx.fillStyle = color;
+      ctx.font = `${weight} ${size}px Arial, sans-serif`;
+      ctx.textAlign = align;
+      ctx.textBaseline = "alphabetic";
+      ctx.fillText(String(value || ""), x, y);
+    };
+    const wrapText = (value, x, y, maxWidth, lineHeight, size, color = gray, weight = 400) => {
+      ctx.font = `${weight} ${size}px Arial, sans-serif`;
+      const words = String(value || "").split(/\s+/).filter(Boolean);
+      let lineText = "";
+      words.forEach((word) => {
+        const test = `${lineText} ${word}`.trim();
+        if (ctx.measureText(test).width > maxWidth && lineText) {
+          drawText(lineText, x, y, size, color, weight);
+          lineText = word;
+          y += lineHeight;
+        } else {
+          lineText = test;
+        }
+      });
+      if (lineText) drawText(lineText, x, y, size, color, weight);
+      return y + lineHeight;
+    };
+    const fillRound = (x, y, w, h, r, color) => {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+      ctx.fill();
+    };
+    const amountText = (value) => invoiceMoney(invoice, value).replace(".00", "");
+
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = navy;
+    ctx.fillRect(0, 0, canvas.width, 202);
+    ctx.fillStyle = orange;
+    ctx.fillRect(0, 202, canvas.width, 8);
+    drawText("infonits", 100, 126, 52, "#ffffff", 700);
+    drawText(docTitle, 1088, 128, 46, "#ffffff", 700, "right");
+
+    drawText("infonits Pvt Ltd.", 106, 318, 38, navy, 700);
+    drawText("1st Lane Arasady Road, Nallur, Jaffna, Sri Lanka.", 106, 362, 21, gray);
+    wrapText("+94 77 607 9157 | hello@infonits.com | www.infonits.io", 106, 402, 560, 31, 21, gray);
+
+    fillRound(760, 282, 365, 282, 20, light);
+    drawText(`${docTitle} DETAILS`, 792, 330, 22, navy, 700);
+    ctx.strokeStyle = line;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(792, 354);
+    ctx.lineTo(1094, 354);
+    ctx.stroke();
+    [
+      [`${docType} No.:`, `#${invoice.invoiceNumber}`],
+      ["Date:", invoice.invoiceDate || ""],
+      ["Due Date:", invoice.dueDate || ""],
+      ["Status:", invoice.status || ""],
+    ].forEach(([label, value], index) => {
+      const y = 390 + index * 40;
+      drawText(label, 792, y, 18, gray);
+      drawText(value, 1094, y, 18, navy, 700, "right");
+    });
+
+    ctx.fillStyle = navy;
+    ctx.fillRect(106, 540, 16, 132);
+    drawText(docType === "Quotation" ? "PREPARED FOR" : "BILLED TO", 145, 570, 20, navy, 700);
+    drawText(invoice.customerName, 145, 624, 34, dark, 700);
+    wrapText([invoice.customerEmail, invoice.customerAddress, invoice.customerCountry].filter(Boolean).join(" | "), 145, 674, 600, 31, 21, gray);
+
+    ctx.strokeStyle = "#c8ced8";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(106, 720);
+    ctx.lineTo(1134, 720);
+    ctx.stroke();
+
+    ctx.fillStyle = navy;
+    ctx.fillRect(106, 740, 1028, 72);
+    drawText("DESCRIPTION", 126, 786, 20, "#ffffff", 700);
+    drawText("QTY", 748, 786, 20, "#ffffff", 700, "right");
+    drawText("UNIT PRICE", 934, 786, 20, "#ffffff", 700, "right");
+    drawText("AMOUNT", 1116, 786, 20, "#ffffff", 700, "right");
+
+    let rowY = 812;
+    items.forEach((item, index) => {
+      const amount = Number(item.amount || Number(item.quantity || 0) * Number(item.price || 0));
+      const rowHeight = item.description ? 112 : 72;
+      if (index % 2 === 0) {
+        ctx.fillStyle = light;
+        ctx.fillRect(106, rowY, 1028, rowHeight);
+      }
+      drawText(item.title || "Service", 126, rowY + 44, 20, navy, 700);
+      if (item.description) wrapText(item.description, 126, rowY + 82, 470, 24, 16, "#111111", 500);
+      drawText(String(item.quantity || 1), 748, rowY + 44, 20, navy, 700, "right");
+      drawText(amountText(item.price || amount), 934, rowY + 44, 20, navy, 700, "right");
+      drawText(amountText(amount), 1116, rowY + 44, 20, navy, 700, "right");
+      rowY += rowHeight;
+      ctx.strokeStyle = line;
+      ctx.beginPath();
+      ctx.moveTo(106, rowY);
+      ctx.lineTo(1134, rowY);
+      ctx.stroke();
+    });
+
+    const lowerY = Math.max(rowY + 70, 1028);
+    fillRound(106, lowerY, 378, 330, 16, light);
+    drawText("PAYMENT DETAILS", 142, lowerY + 54, 22, navy, 700);
+    wrapText("Bank: Commercial Bank of Ceylon", 142, lowerY + 124, 270, 30, 20, gray);
+    wrapText(`Method: ${invoice.paymentMethod || "-"}`, 142, lowerY + 164, 270, 30, 20, gray);
+    wrapText(`Reference: ${docType} #${invoice.invoiceNumber}`, 142, lowerY + 204, 270, 30, 20, gray);
+
+    const totalsX = 552;
+    const totalsValueX = 1090;
+    drawText("Subtotal", totalsX, lowerY + 22, 22, gray);
+    drawText(amountText(subtotal), totalsValueX, lowerY + 22, 22, gray, 700, "right");
+    drawText("Tax (0%)", totalsX, lowerY + 82, 22, gray);
+    drawText(amountText(0), totalsValueX, lowerY + 82, 22, gray, 700, "right");
+    drawText("Discount", totalsX, lowerY + 142, 22, gray);
+    drawText(amountText(invoice.discount || 0), totalsValueX, lowerY + 142, 22, gray, 700, "right");
+    drawText("Advance paid", totalsX, lowerY + 202, 22, gray);
+    drawText(amountText(invoice.advancePaid || 0), totalsValueX, lowerY + 202, 22, gray, 700, "right");
+    fillRound(totalsX, lowerY + 262, 538, 84, 14, navy);
+    drawText("GRAND TOTAL", totalsX + 32, lowerY + 314, 24, "#ffffff", 700);
+    drawText(amountText(total), totalsX + 510, lowerY + 314, 24, "#ffffff", 700, "right");
+
+    drawText("Notes", 106, lowerY + 410, 24, navy, 700);
+    wrapText(invoice.notes || "Payment is due within 10 days of the invoice date.", 106, lowerY + 460, 600, 34, 20, gray);
+
+    ctx.fillStyle = orange;
+    ctx.fillRect(0, canvas.height - 136, canvas.width, 8);
+    ctx.fillStyle = navy;
+    ctx.fillRect(0, canvas.height - 128, canvas.width, 128);
+    drawText("Thank You for Your Business with Us!", 620, canvas.height - 70, 30, "#ffffff", 700, "center");
+    drawText("www.infonits.io | hello@infonits.com | +94 77 607 9157", 620, canvas.height - 30, 20, "#d9e2ff", 400, "center");
+    return canvas;
+  }
+
+  function buildImagePdf(jpegDataUrl, imageWidth = 1240, imageHeight = 1754) {
+    const encoder = new TextEncoder();
+    const jpegBytes = base64ToBytes(jpegDataUrl.split(",")[1]);
+    const page = { width: 595.28, height: 595.28 * (imageHeight / imageWidth) };
+    const content = `q\n${page.width} 0 0 ${page.height} 0 0 cm\n/Im1 Do\nQ\n`;
+    const objects = [
+      [`<< /Type /Catalog /Pages 2 0 R >>\n`],
+      [`<< /Type /Pages /Kids [3 0 R] /Count 1 >>\n`],
+      [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${page.width} ${page.height}] /Resources << /XObject << /Im1 4 0 R >> >> /Contents 5 0 R >>\n`],
+      [`<< /Type /XObject /Subtype /Image /Width ${imageWidth} /Height ${imageHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${jpegBytes.length} >>\nstream\n`, jpegBytes, "\nendstream\n"],
+      [`<< /Length ${content.length} >>\nstream\n${content}endstream\n`],
+    ];
+    const parts = ["%PDF-1.4\n"];
+    const offsets = [0];
+    let length = encoder.encode(parts[0]).length;
+    objects.forEach((objectParts, index) => {
+      offsets.push(length);
+      const header = `${index + 1} 0 obj\n`;
+      parts.push(header, ...objectParts, "endobj\n");
+      length += encoder.encode(header).length;
+      objectParts.forEach((part) => {
+        length += typeof part === "string" ? encoder.encode(part).length : part.length;
+      });
+      length += encoder.encode("endobj\n").length;
+    });
+    const xrefOffset = length;
+    let trailer = `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+    offsets.slice(1).forEach((offset) => {
+      trailer += `${String(offset).padStart(10, "0")} 00000 n \n`;
+    });
+    trailer += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
+    parts.push(trailer);
+    const totalLength = parts.reduce((sum, part) => sum + (typeof part === "string" ? encoder.encode(part).length : part.length), 0);
+    const output = new Uint8Array(totalLength);
+    let position = 0;
+    parts.forEach((part) => {
+      const bytes = typeof part === "string" ? encoder.encode(part) : part;
+      output.set(bytes, position);
+      position += bytes.length;
+    });
+    return output;
+  }
+
+  function base64ToBytes(base64) {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+    return bytes;
   }
 
   async function saveInvoice() {
