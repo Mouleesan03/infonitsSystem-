@@ -156,6 +156,7 @@ let socialPostAutoSyncTimer = null;
 let lastSocialPostSyncStamp = "";
 let lastProjectSyncStamp = "";
 let lastFinanceSyncStamp = "";
+let lastInvoiceSyncStamp = "";
 
 const DEV_DIAGNOSTICS = Boolean(window.INFONITS_DEBUG);
 const appDiagnostics = {
@@ -997,6 +998,30 @@ async function syncFinanceFromSupabaseIfChanged() {
   }
 }
 
+async function syncInvoicesFromSupabaseIfChanged() {
+  if (!supabaseReady() || !isLoggedIn()) return;
+  try {
+    const stamp = await latestTableStamp("invoices");
+    if (!stamp) return;
+    if (!lastInvoiceSyncStamp) {
+      lastInvoiceSyncStamp = stamp;
+      return;
+    }
+    if (stamp === lastInvoiceSyncStamp) return;
+    lastInvoiceSyncStamp = stamp;
+    const rows = await readTableRows(supabaseDirectCollections.invoices);
+    invoices = rows;
+    bumpDataVersion("invoices");
+    updateOverdueInvoices();
+    requestRender("dashboard");
+    requestRender("invoices");
+    requestRender("quotations");
+    showToast("Invoice data synced");
+  } catch (error) {
+    console.error("Invoice auto-sync failed", error);
+  }
+}
+
 function startSocialPostAutoSync() {
   if (socialPostAutoSyncTimer || !supabaseReady()) return;
   socialPostAutoSyncTimer = window.setInterval(() => {
@@ -1004,10 +1029,12 @@ function startSocialPostAutoSync() {
     syncSocialPostsFromSupabaseIfChanged();
     syncProjectsFromSupabaseIfChanged();
     syncFinanceFromSupabaseIfChanged();
+    syncInvoicesFromSupabaseIfChanged();
   }, 12000);
   syncSocialPostsFromSupabaseIfChanged();
   syncProjectsFromSupabaseIfChanged();
   syncFinanceFromSupabaseIfChanged();
+  syncInvoicesFromSupabaseIfChanged();
 }
 
 function stopSocialPostAutoSync() {
@@ -1017,6 +1044,7 @@ function stopSocialPostAutoSync() {
   lastSocialPostSyncStamp = "";
   lastProjectSyncStamp = "";
   lastFinanceSyncStamp = "";
+  lastInvoiceSyncStamp = "";
 }
 
 function cleanDate(value, fallback = today()) {

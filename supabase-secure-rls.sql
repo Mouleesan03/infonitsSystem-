@@ -47,6 +47,10 @@ for all to authenticated using (public.can_manage_business_data()) with check (p
 create policy "Authenticated staff can manage invoices" on public.invoices
 for all to authenticated using (public.can_manage_business_data()) with check (public.can_manage_business_data());
 
+drop policy if exists "Mobile invoice can sync" on public.invoices;
+create policy "Mobile invoice can sync" on public.invoices
+for all using (true) with check (true);
+
 create policy "Authenticated staff can manage projects" on public.projects
 for all to authenticated using (public.can_manage_business_data()) with check (public.can_manage_business_data());
 
