@@ -197,13 +197,44 @@
       passwordHash: payload.passwordHash || row.password_hash || "",
       mustChangePassword: Boolean(payload.mustChangePassword),
       updatedAt: payload.updatedAt || row.updated_at || "",
+      rawPayload: payload,
     };
+  }
+
+  function normalizeUserItem(item) {
+    const user = item && typeof item === "object" ? item : {};
+    return {
+      id: user.id || "",
+      name: user.name || "User",
+      username: user.username || "",
+      email: user.email || "",
+      role: user.role || "project-manager",
+      status: user.status || "Active",
+      passwordHash: user.passwordHash || user.password_hash || "",
+      mustChangePassword: Boolean(user.mustChangePassword),
+      updatedAt: user.updatedAt || "",
+      rawPayload: user,
+    };
+  }
+
+  async function loadUsersFromAppDataFallback() {
+    const res = await fetch(api("app_data?collection=eq.users&app_id=eq.main&select=payload&limit=1"), { headers: headers() });
+    if (!res.ok) return [];
+    const rows = await res.json();
+    const payload = rows[0]?.payload;
+    if (!Array.isArray(payload)) return [];
+    return payload.map(normalizeUserItem).filter((user) => user.username);
   }
 
   async function loadUsers() {
     const res = await fetch(api("app_users?select=app_id,id,name,username,email,role,status,password_hash,payload,updated_at"), { headers: headers() });
-    if (!res.ok) throw new Error("Unable to load users");
-    return (await res.json()).map(normalizeUserRow);
+    if (res.ok) {
+      const directUsers = (await res.json()).map(normalizeUserRow).filter((user) => user.username);
+      if (directUsers.length) return directUsers;
+    }
+    const fallbackUsers = await loadUsersFromAppDataFallback();
+    if (fallbackUsers.length) return fallbackUsers;
+    throw new Error("Unable to load users");
   }
 
   async function updateUserPassword(user, nextPasswordHash) {
@@ -272,7 +303,11 @@
         return { ok: false, message: "Password reset required to login." };
       }
       const nextHash = await hashPassword(nextPassword);
-      await updateUserPassword(user, nextHash);
+      try {
+        await updateUserPassword(user, nextHash);
+      } catch (_error) {
+        // Allow login even if write-back fails, so existing desktop credentials still work on mobile.
+      }
     }
 
     writeStoredSession(user.id, Boolean(keepSignedIn));
