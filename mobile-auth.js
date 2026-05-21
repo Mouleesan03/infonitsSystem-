@@ -296,19 +296,8 @@
     });
     if (!user) return { ok: false, message: "Invalid username or password." };
 
-    const needsReset = Boolean(user.mustChangePassword) || isLegacyPasswordHash(user.passwordHash || "") || isDefaultPassword(userNameValue, passwordValue);
-    if (needsReset) {
-      const nextPassword = window.prompt("Password reset required. Enter a new password (min 8 characters).", "");
-      if (!nextPassword || String(nextPassword).length < PASSWORD_MIN_LENGTH) {
-        return { ok: false, message: "Password reset required to login." };
-      }
-      const nextHash = await hashPassword(nextPassword);
-      try {
-        await updateUserPassword(user, nextHash);
-      } catch (_error) {
-        // Allow login even if write-back fails, so existing desktop credentials still work on mobile.
-      }
-    }
+    // Mobile login should not block with password-reset prompts.
+    // Desktop keeps the full password hardening flow.
 
     writeStoredSession(user.id, Boolean(keepSignedIn));
     return { ok: true, user };
