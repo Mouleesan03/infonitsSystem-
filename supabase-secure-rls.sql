@@ -56,6 +56,10 @@ for all to authenticated using (public.can_manage_business_data()) with check (p
 create policy "Admin can manage finance" on public.finance_records
 for all to authenticated using (public.current_user_role() = 'admin') with check (public.current_user_role() = 'admin');
 
+drop policy if exists "Mobile finance can sync" on public.finance_records;
+create policy "Mobile finance can sync" on public.finance_records
+for all using (true) with check (true);
+
 create policy "Authenticated staff can manage renewals" on public.renewals
 for all to authenticated using (public.can_manage_business_data()) with check (public.can_manage_business_data());
 

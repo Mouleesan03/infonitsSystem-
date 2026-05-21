@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Project Update - Infonits</title>
+    <style>
+      :root {
+        --bg: #f2f6ff;
+        --bg-2: #e9f0ff;
+        --card: #ffffff;
+        --text: #111b34;
+        --muted: #5f7091;
+        --line: #d6e1f2;
+        --soft: #f7faff;
+        --primary: #1f2f67;
+        --primary-2: #273d7f;
+        --focus: #83a7ff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Poppins, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background:
+          radial-gradient(520px 340px at 100% -12%, #dce9ff 0%, transparent 68%),
+          radial-gradient(680px 380px at -20% 0%, var(--bg-2) 0%, transparent 74%),
+          var(--bg);
+        color: var(--text);
+      }
+      .wrap { max-width: 640px; margin: 0 auto; padding: 14px 12px 24px; }
+      .card {
+        background: var(--card);
+        border: 1px solid #d9e5f6;
+        border-radius: 20px;
+        padding: 14px;
+        box-shadow: 0 12px 30px rgba(16, 32, 76, 0.08);
+      }
+      .hero {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: linear-gradient(135deg, #ffffff, #f4f8ff);
+        padding: 12px;
+      }
+      h1 { margin: 0; font-size: 1.45rem; line-height: 1.1; letter-spacing: -0.015em; }
+      h2 { margin: 12px 2px 0; font-size: 1.02rem; line-height: 1.2; letter-spacing: -0.01em; }
+      .muted { margin: 5px 0 0; color: var(--muted); font-size: 0.82rem; }
+      .grid { display: grid; gap: 10px; margin-top: 10px; }
+      .summary-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+        margin-top: 9px;
+      }
+      .summary-card {
+        border: 1px solid #dce6f5;
+        border-left: 4px solid #3b82f6;
+        border-radius: 11px;
+        background: var(--soft);
+        padding: 8px 9px;
+      }
+      .summary-card.profit { border-left-color: #14b8a6; }
+      .summary-card span {
+        display: block;
+        color: #5f6f89;
+        font-size: 0.72rem;
+        font-weight: 600;
+      }
+      .summary-card strong {
+        display: block;
+        margin-top: 3px;
+        color: #1b2b5c;
+        font-size: 1.02rem;
+        line-height: 1.1;
+        letter-spacing: -0.01em;
+      }
+      .summary-card small {
+        display: block;
+        margin-top: 2px;
+        color: #8aa0bf;
+        font-size: 0.66rem;
+        font-weight: 600;
+      }
+      label { font-size: 0.79rem; font-weight: 650; display: grid; gap: 5px; color: #334766; }
+      input, select, textarea {
+        width: 100%;
+        border: 1px solid #cfdcf0;
+        border-radius: 11px;
+        min-height: 42px;
+        padding: 9px 11px;
+        font: inherit;
+        color: var(--text);
+        background: #fdfefe;
+      }
+      input:focus, select:focus, textarea:focus {
+        border-color: var(--focus);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(131, 167, 255, 0.2);
+        background: #ffffff;
+      }
+      textarea { min-height: 84px; resize: vertical; }
+      .row-2 { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; }
+      .btn {
+        width: 100%;
+        border: 0;
+        border-radius: 12px;
+        min-height: 44px;
+        font: inherit;
+        font-weight: 750;
+        color: #fff;
+        background: linear-gradient(135deg, var(--primary), var(--primary-2));
+        box-shadow: 0 10px 20px rgba(31, 47, 103, 0.24);
+      }
+      .status { margin-top: 2px; font-size: 0.82rem; font-weight: 600; color: #0f172a; min-height: 18px; }
+      .details-card {
+        margin-top: 6px;
+        border: 1px solid #dbe7f8;
+        border-radius: 12px;
+        background: #f7fbff;
+        padding: 10px;
+      }
+      .details-card h3 {
+        margin: 0 0 6px;
+        font-size: 0.9rem;
+      }
+      .details-grid {
+        display: grid;
+        gap: 5px;
+        font-size: 0.8rem;
+      }
+      .details-grid strong { color: #1d2e63; font-weight: 700; }
+      .card + .card { margin-top: 10px; }
+      .section-title { margin: 0; font-size: 1.02rem; line-height: 1.2; letter-spacing: -0.01em; }
+      @media (max-width: 480px) {
+        .summary-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+        .summary-card { padding: 7px 8px; border-radius: 10px; }
+        .summary-card strong { font-size: 0.96rem; }
+        .summary-card span { font-size: 0.68rem; }
+        .summary-card small { font-size: 0.62rem; }
+        .row-2 { grid-template-columns: 1fr; }
+        .card { padding: 12px; border-radius: 16px; }
+        h1 { font-size: 1.3rem; }
+        h2 { font-size: 0.96rem; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <section class="card">
+        <header class="hero">
+          <h1>Project Update</h1>
+          <p class="muted">Fast mobile update for project records.</p>
+        </header>
+        <section class="summary-grid">
+          <article class="summary-card">
+            <span>Total value</span>
+            <strong id="summaryTotalValue">Rs. 0</strong>
+            <small>Active work in this month</small>
+          </article>
+          <article class="summary-card profit">
+            <span>Profit</span>
+            <strong id="summaryProfit">Rs. 0</strong>
+            <small>After project work cost</small>
+          </article>
+        </section>
+        <h2>Add project update</h2>
+        <div class="grid">
+          <label>Client
+            <select id="projectClient"></select>
+          </label>
+          <label>Existing project (optional)
+            <select id="projectExisting"></select>
+          </label>
+          <label>Project name
+            <input id="projectName" placeholder="Social Media Marketing" />
+          </label>
+          <div class="row-2">
+            <label>Month <input id="projectMonth" type="month" /></label>
+            <label>Status
+              <select id="projectStatus">
+                <option value="Waiting">Waiting</option>
+                <option value="Partial">Partial</option>
+                <option value="Paid">Paid</option>
+                <option value="Completed">Completed</option>
+              </select>
+            </label>
+          </div>
+          <div class="row-2">
+            <label>Value (LKR) <input id="projectValueLkr" type="number" min="0" step="0.01" value="0" /></label>
+            <label>Value (USD) <input id="projectValueUsd" type="number" min="0" step="0.01" value="0" /></label>
+          </div>
+          <label>Note <textarea id="projectNote" placeholder="Optional note"></textarea></label>
+          <button class="btn" id="saveProjectButton" type="button">Save project update</button>
+          <p class="status" id="projectStatusText"></p>
+          <section class="details-card" id="projectDetailsCard">
+            <h3>Project details</h3>
+            <div class="details-grid" id="projectDetailsContent">Select a project to view details.</div>
+          </section>
+        </div>
+      </section>
+    </main>
+    <script src="supabase-config.js?v=20260521-sync"></script>
+    <script src="mobile-project-update.js?v=20260521-sync"></script>
+  </body>
+</html>
