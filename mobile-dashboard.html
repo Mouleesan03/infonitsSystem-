@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Mobile Dashboard - Infonits</title>
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
     <style>
       :root {
         --bg: #f4f7fc;
@@ -318,8 +319,10 @@
       </section>
     </main>
     <script src="supabase-config.js?v=20260521-sync"></script>
+    <script src="mobile-auth.js?v=20260521-sync"></script>
     <script>
       (function () {
+        if (!window.InfonitsMobileAuth || !window.InfonitsMobileAuth.requireAuth()) return;
         const cfg = window.INFONITS_SUPABASE || {};
 
         function ready() {
@@ -540,7 +543,8 @@
               savings,
               unpaidCount: unpaidList.length,
             });
-            setSyncMessage(`Live values synced for ${month}.`);
+            const syncTime = new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+            setSyncMessage(`Live values synced for ${month} at ${syncTime}.`);
           } catch (error) {
             console.error(error);
             setSyncMessage("Could not load live values. Check internet/Supabase and refresh.");

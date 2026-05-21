@@ -1,4 +1,5 @@
 (function () {
+  if (!window.InfonitsMobileAuth || !window.InfonitsMobileAuth.requireAuth()) return;
   const cfg = window.INFONITS_SUPABASE || {};
 
   const addPanel = document.getElementById("addRecordPanel");

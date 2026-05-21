@@ -1,4 +1,5 @@
 (function () {
+  if (!window.InfonitsMobileAuth || !window.InfonitsMobileAuth.requireAuth()) return;
   const cfg = window.INFONITS_SUPABASE || {};
   const postClient = document.getElementById("postClient");
   const postProject = document.getElementById("postProject");

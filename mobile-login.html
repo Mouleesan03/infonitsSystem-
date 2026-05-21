@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mobile Login - Infonits</title>
+    <style>
+      :root {
+        --bg: #e9effc;
+        --card: #ffffff;
+        --line: #d5e0f3;
+        --text: #111b45;
+        --muted: #6f7fa2;
+        --primary: #2f4290;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Poppins, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background: linear-gradient(180deg, #eaf0fc 0%, #e6edfa 100%);
+        color: var(--text);
+      }
+      .wrap {
+        width: min(100%, 460px);
+        margin: 0 auto;
+        min-height: 100dvh;
+        padding: max(18px, env(safe-area-inset-top)) 16px 24px;
+      }
+      .logo-row {
+        margin-top: 12px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .logo-box {
+        width: 64px;
+        height: 64px;
+        border-radius: 18px;
+        background: #2f4290;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-size: 1.9rem;
+        font-weight: 800;
+      }
+      .logo-copy strong {
+        display: block;
+        font-size: 2rem;
+        line-height: 1;
+      }
+      .logo-copy span {
+        display: block;
+        margin-top: 2px;
+        color: var(--muted);
+        font-size: 0.92rem;
+        font-weight: 700;
+      }
+      .hero {
+        margin-top: 56px;
+      }
+      .hero b {
+        display: block;
+        color: #7384aa;
+        letter-spacing: 0.02em;
+        font-size: 0.9rem;
+      }
+      .hero h1 {
+        margin: 8px 0 0;
+        font-size: clamp(2.4rem, 10vw, 3.7rem);
+        line-height: 0.95;
+        letter-spacing: -0.05em;
+      }
+      .hero p {
+        margin: 12px 0 0;
+        color: #60739a;
+        font-size: 0.95rem;
+        line-height: 1.4;
+        font-weight: 600;
+      }
+      .form {
+        margin-top: 28px;
+        display: grid;
+        gap: 12px;
+      }
+      .field {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--card);
+        padding: 10px 12px;
+      }
+      .field label {
+        display: block;
+        color: #7183a8;
+        font-size: 0.8rem;
+        font-weight: 800;
+      }
+      .field input {
+        width: 100%;
+        margin-top: 6px;
+        border: 0;
+        outline: none;
+        background: transparent;
+        color: var(--text);
+        font: inherit;
+        font-size: 1.2rem;
+        font-weight: 700;
+      }
+      .pw-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        align-items: center;
+        gap: 8px;
+      }
+      .link-btn {
+        border: 0;
+        background: transparent;
+        color: #2f4290;
+        font: inherit;
+        font-size: 1.1rem;
+        font-weight: 800;
+      }
+      .check-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 2px;
+      }
+      .check-row label {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        color: #4f6188;
+        font-weight: 700;
+      }
+      .check-row input {
+        width: 17px;
+        height: 17px;
+      }
+      .submit {
+        margin-top: 8px;
+        border: 0;
+        border-radius: 16px;
+        min-height: 62px;
+        background: linear-gradient(135deg, #2f4290, #3f57b5);
+        color: #fff;
+        font: inherit;
+        font-size: 1.9rem;
+        font-weight: 800;
+      }
+      .status {
+        min-height: 20px;
+        text-align: center;
+        color: #b42318;
+        font-size: 0.84rem;
+        font-weight: 700;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="wrap">
+      <div class="logo-row">
+        <div class="logo-box">IN</div>
+        <div class="logo-copy">
+          <strong>Infonits</strong>
+          <span>Management · mobile</span>
+        </div>
+      </div>
+      <section class="hero">
+        <b>SECURE ACCESS</b>
+        <h1>Welcome back.</h1>
+        <p>Sign in to update finance, invoices and projects from your phone.</p>
+      </section>
+      <form class="form" id="mobileLoginForm">
+        <div class="field">
+          <label for="mobileLoginUsername">USERNAME</label>
+          <input id="mobileLoginUsername" name="username" autocomplete="username" placeholder="admin" required />
+        </div>
+        <div class="field">
+          <label for="mobileLoginPassword">PASSWORD</label>
+          <div class="pw-row">
+            <input id="mobileLoginPassword" name="password" type="password" autocomplete="current-password" required />
+            <button id="mobileTogglePassword" class="link-btn" type="button">Show</button>
+          </div>
+        </div>
+        <div class="check-row">
+          <label><input id="mobileKeepSignedIn" type="checkbox" checked /> Keep me signed in</label>
+        </div>
+        <button class="submit" type="submit">Sign in</button>
+        <div class="status" id="mobileLoginStatus"></div>
+      </form>
+    </main>
+
+    <script src="supabase-config.js?v=20260521-sync"></script>
+    <script src="mobile-auth.js?v=20260521-sync"></script>
+    <script>
+      (function () {
+        const form = document.getElementById("mobileLoginForm");
+        const usernameInput = document.getElementById("mobileLoginUsername");
+        const passwordInput = document.getElementById("mobileLoginPassword");
+        const keepSignedIn = document.getElementById("mobileKeepSignedIn");
+        const status = document.getElementById("mobileLoginStatus");
+        const togglePasswordButton = document.getElementById("mobileTogglePassword");
+
+        const next = new URLSearchParams(window.location.search).get("next") || "./mobile-dashboard.html?v=20260521-sync";
+
+        togglePasswordButton.addEventListener("click", function () {
+          const isPassword = passwordInput.type === "password";
+          passwordInput.type = isPassword ? "text" : "password";
+          togglePasswordButton.textContent = isPassword ? "Hide" : "Show";
+        });
+
+        form.addEventListener("submit", async function (event) {
+          event.preventDefault();
+          status.textContent = "";
+          const auth = window.InfonitsMobileAuth;
+          if (!auth) {
+            status.textContent = "Login setup is not ready.";
+            return;
+          }
+          const result = await auth.login(usernameInput.value, passwordInput.value, keepSignedIn.checked);
+          if (!result.ok) {
+            status.textContent = result.message || "Login failed.";
+            return;
+          }
+          window.location.href = next;
+        });
+      })();
+    </script>
+  </body>
+</html>

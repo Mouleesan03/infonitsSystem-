@@ -1,4 +1,5 @@
 (function () {
+  if (!window.InfonitsMobileAuth || !window.InfonitsMobileAuth.requireAuth()) return;
   const cfg = window.INFONITS_SUPABASE || {};
   const clientSelect = document.getElementById("projectClient");
   const existingSelect = document.getElementById("projectExisting");
