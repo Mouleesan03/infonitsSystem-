@@ -303,7 +303,7 @@
     ctx.fillRect(0, 0, canvas.width, 202);
     ctx.fillStyle = orange;
     ctx.fillRect(0, 202, canvas.width, 8);
-    drawText("infonits", 100, 126, 52, "#ffffff", 700);
+    drawInfonitsLogo(ctx, 100, 62);
     drawText(docTitle, 1088, 128, 46, "#ffffff", 700, "right");
 
     drawText("infonits Pvt Ltd.", 106, 318, 38, navy, 700);
@@ -371,13 +371,7 @@
     });
 
     const lowerY = Math.max(rowY + 70, 1028);
-    fillRound(106, lowerY, 378, 330, 16, light);
-    drawText("PAYMENT DETAILS", 142, lowerY + 54, 22, navy, 700);
-    wrapText("Bank: Commercial Bank of Ceylon", 142, lowerY + 124, 270, 30, 20, gray);
-    wrapText(`Method: ${invoice.paymentMethod || "-"}`, 142, lowerY + 164, 270, 30, 20, gray);
-    wrapText(`Reference: ${docType} #${invoice.invoiceNumber}`, 142, lowerY + 204, 270, 30, 20, gray);
-
-    const totalsX = 552;
+    const totalsX = 596;
     const totalsValueX = 1090;
     drawText("Subtotal", totalsX, lowerY + 22, 22, gray);
     drawText(amountText(subtotal), totalsValueX, lowerY + 22, 22, gray, 700, "right");
@@ -401,6 +395,25 @@
     drawText("Thank You for Your Business with Us!", 620, canvas.height - 70, 30, "#ffffff", 700, "center");
     drawText("www.infonits.io | hello@infonits.com | +94 77 607 9157", 620, canvas.height - 30, 20, "#d9e2ff", 400, "center");
     return canvas;
+  }
+
+  function drawInfonitsLogo(ctx, x, y) {
+    const dot = 15;
+    const gap = 8;
+    const colors = ["#ffffff", "#ff6b2c", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#ffffff"];
+    for (let row = 0; row < 3; row += 1) {
+      for (let col = 0; col < 3; col += 1) {
+        ctx.fillStyle = colors[row * 3 + col];
+        ctx.beginPath();
+        ctx.roundRect(x + col * (dot + gap), y + row * (dot + gap), dot, dot, 4);
+        ctx.fill();
+      }
+    }
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "700 54px Arial, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillText("infonits", x + 88, y + 58);
   }
 
   function buildImagePdf(jpegDataUrl, imageWidth = 1240, imageHeight = 1754) {
