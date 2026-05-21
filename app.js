@@ -154,6 +154,8 @@ let notificationFocusClient = "";
 let calendarEventModalDate = "";
 let socialPostAutoSyncTimer = null;
 let lastSocialPostSyncStamp = "";
+let lastProjectSyncStamp = "";
+let lastFinanceSyncStamp = "";
 
 const DEV_DIAGNOSTICS = Boolean(window.INFONITS_DEBUG);
 const appDiagnostics = {
@@ -914,6 +916,16 @@ async function latestSocialPostStamp() {
   return String(rows[0]?.updated_at || "");
 }
 
+async function latestTableStamp(table) {
+  const response = await fetch(
+    supabaseTableUrl(table, "?select=updated_at&order=updated_at.desc&limit=1"),
+    { headers: supabaseTableHeaders() },
+  );
+  if (!response.ok) throw new Error(await response.text());
+  const rows = await response.json();
+  return String(rows[0]?.updated_at || "");
+}
+
 async function syncSocialPostsFromSupabaseIfChanged() {
   if (!supabaseReady() || !isLoggedIn()) return;
   try {
@@ -939,19 +951,72 @@ async function syncSocialPostsFromSupabaseIfChanged() {
   }
 }
 
+async function syncProjectsFromSupabaseIfChanged() {
+  if (!supabaseReady() || !isLoggedIn()) return;
+  try {
+    const stamp = await latestTableStamp("projects");
+    if (!stamp) return;
+    if (!lastProjectSyncStamp) {
+      lastProjectSyncStamp = stamp;
+      return;
+    }
+    if (stamp === lastProjectSyncStamp) return;
+    lastProjectSyncStamp = stamp;
+    const rows = await readTableRows(supabaseDirectCollections.projects);
+    projects = rows;
+    bumpDataVersion("projects");
+    requestRender("projects");
+    requestRender("dashboard");
+    requestRender("finance");
+    requestRender("manager");
+    showToast("Project data synced");
+  } catch (error) {
+    console.error("Project auto-sync failed", error);
+  }
+}
+
+async function syncFinanceFromSupabaseIfChanged() {
+  if (!supabaseReady() || !isLoggedIn()) return;
+  try {
+    const stamp = await latestTableStamp("finance_records");
+    if (!stamp) return;
+    if (!lastFinanceSyncStamp) {
+      lastFinanceSyncStamp = stamp;
+      return;
+    }
+    if (stamp === lastFinanceSyncStamp) return;
+    lastFinanceSyncStamp = stamp;
+    const rows = await readTableRows(supabaseDirectCollections.financeRecords);
+    financeRecords = rows;
+    bumpDataVersion("financeRecords");
+    requestRender("finance");
+    requestRender("dashboard");
+    showToast("Finance data synced");
+  } catch (error) {
+    console.error("Finance auto-sync failed", error);
+  }
+}
+
 function startSocialPostAutoSync() {
   if (socialPostAutoSyncTimer || !supabaseReady()) return;
   socialPostAutoSyncTimer = window.setInterval(() => {
     if (document.hidden || !isLoggedIn()) return;
     syncSocialPostsFromSupabaseIfChanged();
+    syncProjectsFromSupabaseIfChanged();
+    syncFinanceFromSupabaseIfChanged();
   }, 12000);
   syncSocialPostsFromSupabaseIfChanged();
+  syncProjectsFromSupabaseIfChanged();
+  syncFinanceFromSupabaseIfChanged();
 }
 
 function stopSocialPostAutoSync() {
   if (!socialPostAutoSyncTimer) return;
   window.clearInterval(socialPostAutoSyncTimer);
   socialPostAutoSyncTimer = null;
+  lastSocialPostSyncStamp = "";
+  lastProjectSyncStamp = "";
+  lastFinanceSyncStamp = "";
 }
 
 function cleanDate(value, fallback = today()) {
@@ -2184,6 +2249,35 @@ function updateMobilePostQr() {
     return;
   }
   const mobileUrl = `${baseOrigin}/mobile-post-update.html`;
+  const encoded = encodeURIComponent(mobileUrl);
+  const primaryQr = `https://quickchart.io/qr?size=220&text=${encoded}`;
+  const fallbackQr = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=${encoded}`;
+  qrImage.onerror = () => {
+    if (qrImage.dataset.fallbackApplied === "yes") return;
+    qrImage.dataset.fallbackApplied = "yes";
+    qrImage.src = fallbackQr;
+  };
+  qrImage.dataset.fallbackApplied = "no";
+  qrImage.src = primaryQr;
+  qrLink.href = mobileUrl;
+  qrLink.textContent = "Open mobile page";
+  qrUrlText.textContent = mobileUrl;
+}
+
+function updateMobileProjectQr() {
+  const qrImage = document.getElementById("mobileProjectQrImage");
+  const qrLink = document.getElementById("mobileProjectQrLink");
+  const qrUrlText = document.getElementById("mobileProjectQrUrl");
+  if (!qrImage || !qrLink || !qrUrlText) return;
+  const baseOrigin = window.location.origin || "";
+  if (!baseOrigin || baseOrigin === "null") {
+    qrImage.removeAttribute("src");
+    qrLink.textContent = "Available after deploy";
+    qrLink.removeAttribute("href");
+    qrUrlText.textContent = "";
+    return;
+  }
+  const mobileUrl = `${baseOrigin}/mobile-project-update.html`;
   const encoded = encodeURIComponent(mobileUrl);
   const primaryQr = `https://quickchart.io/qr?size=220&text=${encoded}`;
   const fallbackQr = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=0&data=${encoded}`;
@@ -4058,6 +4152,7 @@ function showProjectForm() {
   projectFormVisible = true;
   projectForm.classList.remove("is-hidden");
   openProjectModal(editingProjectId ? "edit" : "add");
+  updateMobileProjectQr();
   toggleProjectFormButton.textContent = "+ Add project";
 }
 
