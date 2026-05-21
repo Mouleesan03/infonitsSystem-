@@ -13,6 +13,16 @@
   const detailsContent = document.getElementById("projectDetailsContent");
   const summaryTotalValue = document.getElementById("summaryTotalValue");
   const summaryProfit = document.getElementById("summaryProfit");
+  const toggleAddProjectButton = document.getElementById("toggleAddProjectButton");
+  const addProjectPanel = document.getElementById("addProjectPanel");
+  const projectList = document.getElementById("projectList");
+  const projectPrevPage = document.getElementById("projectPrevPage");
+  const projectNextPage = document.getElementById("projectNextPage");
+  const projectPageLabel = document.getElementById("projectPageLabel");
+  const projectPeriod = document.getElementById("projectPeriod");
+  const projectTime = document.getElementById("projectTime");
+  const projectBackButton = document.getElementById("projectBackButton");
+  const projectActiveCount = document.getElementById("projectActiveCount");
   const paymentClient = document.getElementById("paymentClient");
   const paymentProject = document.getElementById("paymentProject");
   const paymentDate = document.getElementById("paymentDate");
@@ -26,6 +36,9 @@
   let clients = [];
   let projects = [];
   let projectTargets = {};
+  let addProjectOpen = false;
+  let projectPage = 1;
+  const PROJECT_PAGE_SIZE = 5;
 
   function ready() {
     return Boolean(cfg.url && cfg.anonKey);
@@ -164,6 +177,13 @@
     return `${prefix} ${Number(value || 0).toLocaleString("en-US", { maximumFractionDigits: 2 })}`;
   }
 
+  function compactMoney(value, prefix = "Rs.") {
+    const n = Number(value || 0);
+    if (Math.abs(n) >= 1000000) return `${prefix} ${(n / 1000000).toFixed(2).replace(/\.00$/, "")}M`;
+    if (Math.abs(n) >= 1000) return `${prefix} ${(n / 1000).toFixed(0)}k`;
+    return money(n, prefix);
+  }
+
   function isActiveProject(project) {
     return !["Paid", "Completed"].includes(project?.paymentStatus || "Waiting");
   }
@@ -231,8 +251,70 @@
     const activeMonthProjects = monthProjects.filter(isActiveProject);
     const totalValue = activeMonthProjects.reduce((sum, p) => sum + projectValueLkr(p), 0);
     const totalProfit = activeMonthProjects.reduce((sum, p) => sum + projectForMe(p), 0);
-    if (summaryTotalValue) summaryTotalValue.textContent = money(totalValue, "Rs.");
-    if (summaryProfit) summaryProfit.textContent = money(totalProfit, "Rs.");
+    if (summaryTotalValue) summaryTotalValue.textContent = compactMoney(totalValue, "Rs.");
+    if (summaryProfit) summaryProfit.textContent = compactMoney(totalProfit, "Rs.");
+  }
+
+  function statusChipClass(status) {
+    const key = String(status || "").toLowerCase();
+    if (key === "paid") return "paid";
+    if (key === "partial") return "partial";
+    if (key === "completed") return "completed";
+    return "waiting";
+  }
+
+  function renderProjectList() {
+    if (!projectList) return;
+    const month = monthInput.value || thisMonth();
+    const list = projectsForMonth(month).sort((a, b) => String(b.updatedAt || "").localeCompare(String(a.updatedAt || "")));
+    const totalPages = Math.max(1, Math.ceil(list.length / PROJECT_PAGE_SIZE));
+    if (projectPage > totalPages) projectPage = totalPages;
+    const start = (projectPage - 1) * PROJECT_PAGE_SIZE;
+    const pageItems = list.slice(start, start + PROJECT_PAGE_SIZE);
+    const activeCount = list.filter(isActiveProject).length;
+    if (projectActiveCount) projectActiveCount.textContent = `${activeCount} active`;
+    if (projectPageLabel) projectPageLabel.textContent = `Page ${projectPage} of ${totalPages}`;
+    if (projectPrevPage) projectPrevPage.disabled = projectPage <= 1;
+    if (projectNextPage) projectNextPage.disabled = projectPage >= totalPages;
+    if (!list.length) {
+      projectList.innerHTML = `<article class="project-item"><div class="project-item-meta">No projects in ${escapeHtml(month)}.</div></article>`;
+      return;
+    }
+    projectList.innerHTML = pageItems
+      .map(
+        (p) => `
+          <article class="project-item">
+            <div class="project-item-head">
+              <div>
+                <h3 class="project-item-title">${escapeHtml(p.name || "Project")}</h3>
+                <div class="project-item-meta">${escapeHtml(p.clientName || "Client")} · ${escapeHtml(p.month || "-")}</div>
+              </div>
+              <span class="chip ${statusChipClass(p.paymentStatus)}">${escapeHtml((p.paymentStatus || "Waiting").toUpperCase())}</span>
+            </div>
+            <div class="project-value-row">
+              <div>
+                <strong>PROFIT</strong>
+                <div class="project-profit">${escapeHtml(money(projectForMe(p), "Rs."))}</div>
+              </div>
+              <div>
+                <strong>VALUE · LKR</strong>
+                <b>${escapeHtml(money(projectValueLkr(p), "Rs."))}</b>
+              </div>
+            </div>
+            <div class="project-card-footer">
+              <button class="btn secondary" type="button" data-project-edit="${escapeHtml(p.id)}">Edit</button>
+              <button class="more-btn" type="button" aria-label="More actions">...</button>
+            </div>
+          </article>
+        `,
+      )
+      .join("");
+  }
+
+  function setAddProjectPanel(open) {
+    addProjectOpen = Boolean(open);
+    if (addProjectPanel) addProjectPanel.classList.toggle("hidden", !addProjectOpen);
+    if (toggleAddProjectButton) toggleAddProjectButton.textContent = addProjectOpen ? "Close form" : "+ Add project";
   }
 
   function renderProjectDetails(project) {
@@ -337,8 +419,11 @@
       await loadProjectTargets();
       renderProjects();
       updateSummary();
+      projectPage = 1;
+      renderProjectList();
       existingSelect.value = appId;
       fillFromExisting();
+      setAddProjectPanel(false);
     } catch (error) {
       console.error("Project save failed", error);
       setText(`Save failed: ${String(error?.message || error).slice(0, 140)}`, true);
@@ -430,6 +515,9 @@
       renderClients();
       renderProjects();
       updateSummary();
+      projectPage = 1;
+      renderProjectList();
+      setAddProjectPanel(false);
     } catch {
       setText("Failed to load data", true);
     }
@@ -441,8 +529,40 @@
     renderProjectDetails(null);
   });
   existingSelect.addEventListener("change", fillFromExisting);
-  monthInput.addEventListener("change", updateSummary);
+  monthInput.addEventListener("change", () => {
+    projectPage = 1;
+    updateSummary();
+    renderProjectList();
+  });
   saveButton.addEventListener("click", saveProject);
+  toggleAddProjectButton?.addEventListener("click", () => {
+    setAddProjectPanel(!addProjectOpen);
+  });
+  projectList?.addEventListener("click", (event) => {
+    const editButton = event.target.closest("[data-project-edit]");
+    if (!editButton) return;
+    const id = editButton.getAttribute("data-project-edit");
+    existingSelect.value = id || "";
+    fillFromExisting();
+    setAddProjectPanel(true);
+    addProjectPanel?.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+  projectPrevPage?.addEventListener("click", () => {
+    projectPage = Math.max(1, projectPage - 1);
+    renderProjectList();
+  });
+  projectNextPage?.addEventListener("click", () => {
+    projectPage += 1;
+    renderProjectList();
+  });
+  projectBackButton?.addEventListener("click", () => {
+    window.location.href = "./mobile-dashboard.html?v=20260521-sync";
+  });
+  (function updateProjectHeaderClock() {
+    const now = new Date();
+    projectPeriod.textContent = `${now.toLocaleDateString("en-US", { month: "short", year: "numeric" }).toUpperCase()} · PROJECTS`;
+    projectTime.textContent = now.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  })();
   paymentClient?.addEventListener("change", () => {
     const selected = paymentClient.value;
     if (!selected) return renderProjects();
