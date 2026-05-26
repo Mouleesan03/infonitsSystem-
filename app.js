@@ -127,6 +127,7 @@ let editingManagerHandleId = null;
 let editingSocialPostId = null;
 let editingCorrectionId = null;
 let linkedProjectId = null;
+let linkedProjectIds = [];
 let editingServiceLetterId = null;
 let currentUserId = sessionStorage.getItem(AUTH_SESSION_KEY) || "";
 let activeUserSnapshot = null;
@@ -320,6 +321,13 @@ const pmMonthFilter = document.getElementById("pmMonthFilter");
 const calendarMonthFilter = document.getElementById("calendarMonthFilter");
 const statementClientSelect = document.getElementById("statementClientSelect");
 const clientSelect = document.getElementById("clientSelect");
+const clientProjectsSelect = document.getElementById("clientProjectsSelect");
+const addClientProjectsButton = document.getElementById("addClientProjectsButton");
+const selectAllClientProjectsButton = document.getElementById("selectAllClientProjectsButton");
+const clearClientProjectsButton = document.getElementById("clearClientProjectsButton");
+const clientProjectChecklist = document.getElementById("clientProjectChecklist");
+const clientProjectHint = document.getElementById("clientProjectHint");
+const linkedProjectsPreview = document.getElementById("linkedProjectsPreview");
 const previewScale = document.getElementById("previewScale");
 const previewZoomLabel = document.getElementById("previewZoomLabel");
 const invoiceModal = document.getElementById("invoiceModal");
@@ -334,7 +342,7 @@ function updateFullscreenButtonState() {
   toggleFullscreenButton.setAttribute("aria-label", isFullscreen ? "Exit fullscreen" : "Enter fullscreen");
 }
 
-let sidebarCollapsed = localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "yes";
+let sidebarCollapsed = false;
 
 const countries = [
   "Sri Lanka",
@@ -2806,16 +2814,8 @@ async function loginUser(username, password) {
   }
   const legacyPassword = isLegacyPasswordHash(user.passwordHash || "");
   let nextPasswordHash = passwordHash;
-  let mustChangePassword = Boolean(user.mustChangePassword) || legacyPassword || isDefaultPassword(normalizedUsername, passwordValue);
-  if (mustChangePassword) {
-    const newPassword = promptRequiredPasswordReset(user, passwordValue);
-    if (!newPassword) {
-      showToast("Password reset required to login");
-      return false;
-    }
-    nextPasswordHash = await hashPassword(newPassword);
-    mustChangePassword = false;
-  }
+  let mustChangePassword = false;
+  if (legacyPassword) nextPasswordHash = passwordHash;
   currentUserId = user.id;
   const loggedInUser = {
     ...user,
@@ -2985,6 +2985,7 @@ function getFormInvoice() {
     terms: document.getElementById("terms").value.trim(),
     authorizedBy: document.getElementById("authorizedBy").value.trim(),
     items,
+    projectIds: [...new Set(linkedProjectIds)],
     projectId: linkedProjectId,
     updatedAt: new Date().toISOString(),
   };
@@ -3116,6 +3117,7 @@ function updateFormTotals() {
 function resetForm() {
   editingId = null;
   linkedProjectId = null;
+  linkedProjectIds = [];
   form.reset();
   document.getElementById("documentType").value = "Invoice";
   document.getElementById("invoiceNumber").value = generateInvoiceNumber();
@@ -3134,6 +3136,7 @@ function resetForm() {
   document.getElementById("authorizedBy").value = settings.businessName || "Infonits";
   itemsContainer.innerHTML = "";
   addItemRow();
+  syncClientProjectOptions();
   updateFormTotals();
 }
 
@@ -3248,7 +3251,12 @@ function editInvoice(id) {
   if (!invoice) return;
 
   editingId = invoice.id;
-  linkedProjectId = invoice.projectId || null;
+  linkedProjectIds = Array.isArray(invoice.projectIds)
+    ? [...new Set(invoice.projectIds.filter(Boolean))]
+    : invoice.projectId
+      ? [invoice.projectId]
+      : [];
+  linkedProjectId = linkedProjectIds[0] || null;
   document.getElementById("documentType").value = invoice.documentType || "Invoice";
   document.getElementById("invoiceNumber").value = invoice.invoiceNumber;
   document.getElementById("invoiceDate").value = invoice.invoiceDate;
@@ -3267,6 +3275,7 @@ function editInvoice(id) {
   document.getElementById("notes").value = invoice.notes;
   document.getElementById("terms").value = invoice.terms || "";
   document.getElementById("authorizedBy").value = invoice.authorizedBy || "";
+  syncClientProjectOptions(linkedProjectIds);
   itemsContainer.innerHTML = "";
   invoice.items.forEach(addItemRow);
   updateFormTotals();
@@ -3284,6 +3293,7 @@ function createMonthlyCopy(id) {
     invoiceDate: nextDate,
     dueDate: addDays(nextDate, 10),
     status: source.documentType === "Quotation" ? "Draft" : "Unpaid",
+    projectIds: [],
     projectId: null,
     updatedAt: new Date().toISOString(),
   };
@@ -3330,11 +3340,20 @@ function markInvoicePaid(id) {
 }
 
 function markLinkedProjectPaid(invoice) {
-  const project = findProjectForInvoice(invoice);
-  if (!project) return;
-  projects = projects.map((item) =>
-    item.id === project.id ? { ...item, paymentStatus: "Paid", updatedAt: new Date().toISOString() } : item,
-  );
+  const linkedIds = Array.isArray(invoice.projectIds) && invoice.projectIds.length
+    ? invoice.projectIds
+    : invoice.projectId
+      ? [invoice.projectId]
+      : [];
+  let targetIds = [...new Set(linkedIds.filter(Boolean))];
+  if (!targetIds.length) {
+    const fallback = findProjectForInvoice(invoice);
+    if (fallback?.id) targetIds = [fallback.id];
+  }
+  if (!targetIds.length) return;
+  projects = projects.map((item) => (
+    targetIds.includes(item.id) ? { ...item, paymentStatus: "Paid", updatedAt: new Date().toISOString() } : item
+  ));
   saveProjects();
 }
 
@@ -3454,13 +3473,149 @@ function resetClientForm() {
 
 function fillInvoiceClient(clientId) {
   const client = clients.find((item) => item.id === clientId);
-  if (!client) return;
+  if (!client) {
+    linkedProjectId = null;
+    linkedProjectIds = [];
+    syncClientProjectOptions();
+    return;
+  }
+  linkedProjectId = null;
+  linkedProjectIds = [];
   document.getElementById("customerName").value = client.name;
   document.getElementById("customerEmail").value = client.email;
   document.getElementById("customerCountry").value = client.country || "Sri Lanka";
   document.getElementById("customerAddress").value = [client.address, formatPhone(client.phone), client.country]
     .filter(Boolean)
     .join(" | ");
+  syncClientProjectOptions();
+}
+
+function projectsForClientName(clientName) {
+  const target = String(clientName || "").trim().toLowerCase();
+  if (!target) return [];
+  return projects.filter((project) => {
+    const name = String(project.clientName || project.name || "").trim().toLowerCase();
+    return name === target;
+  });
+}
+
+function syncClientProjectOptions(selectedIds = []) {
+  if (!clientProjectsSelect) return;
+  const customerName = document.getElementById("customerName")?.value || "";
+  const options = projectsForClientName(customerName);
+  const selected = new Set((selectedIds || []).filter(Boolean));
+  if (!options.length) {
+    clientProjectsSelect.innerHTML = `<option value="">No projects found for this customer</option>`;
+    if (clientProjectChecklist) clientProjectChecklist.innerHTML = "";
+    if (clientProjectHint) clientProjectHint.textContent = customerName ? "No projects found for this customer." : "Select customer to load projects.";
+    renderLinkedProjectsPreview();
+    return;
+  }
+  clientProjectsSelect.innerHTML = options
+    .map((project) => {
+      const label = `${project.name || "Project"} (${project.month || "no month"})`;
+      return `<option value="${escapeAttribute(project.id)}"${selected.has(project.id) ? " selected" : ""}>${escapeHtml(label)}</option>`;
+    })
+    .join("");
+  if (clientProjectChecklist) {
+    clientProjectChecklist.innerHTML = options
+      .map((project) => `
+        <label class="client-project-checklist-row">
+          <input type="checkbox" value="${escapeAttribute(project.id)}"${selected.has(project.id) ? " checked" : ""} />
+          <span class="client-project-name">${escapeHtml(project.name || "Project")}</span>
+          <span class="client-project-month">${escapeHtml(project.month || "No month")}</span>
+        </label>
+      `)
+      .join("");
+  }
+  if (clientProjectHint) clientProjectHint.textContent = `${selected.size} selected out of ${options.length} project(s).`;
+  renderLinkedProjectsPreview();
+}
+
+function selectedClientProjectIds() {
+  if (clientProjectChecklist) {
+    return [...clientProjectChecklist.querySelectorAll('input[type="checkbox"]:checked')]
+      .map((input) => input.value)
+      .filter(Boolean);
+  }
+  if (!clientProjectsSelect) return [];
+  return [...clientProjectsSelect.selectedOptions].map((option) => option.value).filter(Boolean);
+}
+
+function setChecklistSelection(ids = []) {
+  const picked = new Set((ids || []).filter(Boolean));
+  if (clientProjectChecklist) {
+    [...clientProjectChecklist.querySelectorAll('input[type="checkbox"]')].forEach((input) => {
+      input.checked = picked.has(input.value);
+    });
+  }
+  if (clientProjectsSelect) {
+    [...clientProjectsSelect.options].forEach((option) => {
+      option.selected = picked.has(option.value);
+    });
+  }
+  if (clientProjectHint && clientProjectsSelect) {
+    const total = [...clientProjectsSelect.options].filter((option) => option.value).length;
+    clientProjectHint.textContent = `${picked.size} selected out of ${total} project(s).`;
+  }
+}
+
+function renderLinkedProjectsPreview() {
+  if (!linkedProjectsPreview) return;
+  const linked = linkedProjectIds
+    .map((id) => projects.find((project) => project.id === id))
+    .filter(Boolean);
+  if (!linked.length) {
+    linkedProjectsPreview.innerHTML = "";
+    return;
+  }
+  linkedProjectsPreview.innerHTML = linked
+    .map((project) => `<span class="linked-project-pill">${escapeHtml(project.name || "Project")} • ${escapeHtml(project.month || "No month")}</span>`)
+    .join("");
+}
+
+function addSelectedProjectsToInvoice() {
+  if (!clientProjectsSelect && !clientProjectChecklist) return;
+  const selectedIds = selectedClientProjectIds();
+  if (!selectedIds.length) {
+    showToast("Select at least one project");
+    return;
+  }
+  const existingLinked = new Set(linkedProjectIds);
+  const selectedProjects = selectedIds
+    .map((id) => projects.find((project) => project.id === id))
+    .filter(Boolean);
+  if (!selectedProjects.length) {
+    showToast("No matching projects found");
+    return;
+  }
+  const firstRow = itemsContainer.querySelector(".item-row");
+  if (itemsContainer.children.length === 1 && firstRow) {
+    const emptyTitle = !firstRow.querySelector(".item-title")?.value.trim();
+    const emptyDescription = !firstRow.querySelector(".item-description")?.value.trim();
+    const zeroQty = !Number(firstRow.querySelector(".item-quantity")?.value || 0);
+    const zeroPrice = !Number(firstRow.querySelector(".item-price")?.value || 0);
+    if (emptyTitle && emptyDescription && zeroQty && zeroPrice) firstRow.remove();
+  }
+  const isUsd = document.getElementById("invoiceCurrency").value === "USD";
+  let added = 0;
+  selectedProjects.forEach((project) => {
+    if (existingLinked.has(project.id)) return;
+    addItemRow({
+      title: project.name || "Project",
+      description: project.note || "",
+      quantity: 1,
+      price: isUsd ? Number(project.valueUsd || 0) || projectValueLkr(project) : projectValueLkr(project),
+    });
+    existingLinked.add(project.id);
+    added += 1;
+  });
+  linkedProjectIds = [...existingLinked];
+  linkedProjectId = linkedProjectIds[0] || null;
+  setChecklistSelection(selectedIds);
+  renderLinkedProjectsPreview();
+  updateFormTotals();
+  showToast(added ? `${added} project(s) added to invoice` : "Selected projects are already linked");
 }
 
 function editClient(id) {
@@ -3860,6 +4015,7 @@ function createInvoiceFromProject(id) {
   resetForm();
   const useUsd = Number(project.valueUsd || 0) > 0;
   linkedProjectId = id;
+  linkedProjectIds = [id];
   document.getElementById("customerName").value = clientName;
   document.getElementById("customerEmail").value = client?.email || "";
   document.getElementById("customerCountry").value = client?.country || "Sri Lanka";
@@ -3872,6 +4028,7 @@ function createInvoiceFromProject(id) {
     quantity: 1,
     price: useUsd ? Number(project.valueUsd || 0) : projectValueLkr(project),
   });
+  syncClientProjectOptions(linkedProjectIds);
   updateFormTotals();
   switchView("create");
   showToast("Invoice ready from project");
@@ -4226,7 +4383,8 @@ function renderDashboard() {
   document.getElementById("totalPending").textContent = compactMoney(totals.pending);
   document.getElementById("dashboardOverdueTotal").textContent = compactMoney(totals.overdue);
   document.getElementById("dashboardActiveProjects").textContent = formatNumber(projectsForMonth(today().slice(0, 7)).filter(isActiveProject).length);
-  document.getElementById("dashboardTotalCustomers").textContent = formatNumber(clients.length);
+  const customersKpi = document.getElementById("dashboardTotalCustomers");
+  if (customersKpi) customersKpi.textContent = formatNumber(clients.length);
   const paidPercent = totals.billed ? (totals.paid / totals.billed) * 100 : 0;
   const pendingPercent = totals.billed ? (totals.pending / totals.billed) * 100 : 0;
   const overdueCount = invoiceDocs.filter(
@@ -4550,6 +4708,7 @@ function renderClients() {
   clientSelect.innerHTML = `<option value="">Manual customer</option>${clients
     .map((client) => `<option value="${client.id}">${escapeHtml(client.name)}</option>`)
     .join("")}`;
+  syncClientProjectOptions(linkedProjectIds);
   document.getElementById("projectClientName").innerHTML = `<option value="">Select client</option>${clients
     .map((client) => `<option value="${escapeAttribute(client.name)}">${escapeHtml(client.name)}</option>`)
     .join("")}`;
@@ -6135,15 +6294,63 @@ function renderCalendarEventModal() {
   const label = document.getElementById("calendarEventModalDateLabel");
   if (!list || !label) return;
   label.textContent = calendarEventModalDate ? formatDate(calendarEventModalDate) : "";
+  if (!calendarEventModalDate) {
+    list.innerHTML = `<p class="muted-label">Select a date to view updates and events.</p>`;
+    return;
+  }
+
+  const postedForDay = groupedSocialPosts(
+    socialMediaPosts.filter((post) => String(post.uploadDate || post.scheduledDate || "") === calendarEventModalDate),
+  );
+  const renewalsForDay = renewals.filter((item) => String(item.expiryDate || "") === calendarEventModalDate);
+  const holidayForDay = holidayEventsForYear(Number(calendarEventModalDate.slice(0, 4)))
+    .filter((event) => String(event.date || "") === calendarEventModalDate);
   const dayEvents = calendarEvents.filter((event) => String(event.date || "") === calendarEventModalDate);
-  list.innerHTML = dayEvents.length
+
+  const postedHtml = postedForDay.length
+    ? postedForDay.map((group) => `
+        <article class="calendar-event-item">
+          <strong>${escapeHtml(group.clientName || "Client")} (${formatNumber(group.count || 0)})</strong>
+          <span class="muted-label">${escapeHtml(group.projectName || "Project")}${group.remarks ? ` · ${escapeHtml(group.remarks)}` : ""}</span>
+        </article>
+      `).join("")
+    : `<p class="muted-label">No posted updates for this date.</p>`;
+
+  const renewalHtml = renewalsForDay.length
+    ? renewalsForDay.map((item) => `
+        <article class="calendar-event-item">
+          <strong>Renewal: ${escapeHtml(item.clientName || "Client")}</strong>
+          <span class="muted-label">${escapeHtml(item.name || item.type || "Renewal item")}</span>
+        </article>
+      `).join("")
+    : "";
+
+  const holidayHtml = holidayForDay.length
+    ? holidayForDay.map((event) => `
+        <article class="calendar-event-item">
+          <strong>${escapeHtml(event.name)}</strong>
+          <span class="muted-label">Holiday</span>
+        </article>
+      `).join("")
+    : "";
+
+  const customEventHtml = dayEvents.length
     ? dayEvents.map((event) => `
         <article class="calendar-event-item">
           <strong>${escapeHtml(event.title || "Upcoming event")}</strong>
           <button class="secondary-action" type="button" data-calendar-event-remove="${escapeAttribute(event.id)}">Remove</button>
         </article>
       `).join("")
-    : `<p class="muted-label">No events for this day.</p>`;
+    : `<p class="muted-label">No custom events for this date.</p>`;
+
+  list.innerHTML = `
+    <h3 class="muted-label">Posted updates</h3>
+    ${postedHtml}
+    ${renewalHtml ? `<h3 class="muted-label">Renewals</h3>${renewalHtml}` : ""}
+    ${holidayHtml ? `<h3 class="muted-label">Holidays</h3>${holidayHtml}` : ""}
+    <h3 class="muted-label">Custom events</h3>
+    ${customEventHtml}
+  `;
 }
 
 function openCalendarEventModal(dateValue = "") {
@@ -7026,13 +7233,13 @@ function renderFinance() {
                 ${
                   record.isAuto
                     ? `<span class="muted-label">Auto</span>`
-                    : `<div class="action-row">
+                    : `<div class="action-row icon-actions finance-actions">
                         ${
                           financeRecordIsExpenseLike(record)
-                            ? `<button class="secondary-action" type="button" data-finance-toggle-paid="${record.id}" data-finance-paid-month="${month}">${financeRecordPaidInMonth(record, month) ? "Mark unpaid" : "Mark paid"}</button>`
+                            ? `<button class="icon-action finance-toggle" type="button" title="${financeRecordPaidInMonth(record, month) ? "Mark unpaid" : "Mark paid"}" aria-label="${financeRecordPaidInMonth(record, month) ? "Mark unpaid" : "Mark paid"}" data-finance-toggle-paid="${record.id}" data-finance-paid-month="${month}">${iconPaid()}</button>`
                             : ""
                         }
-                        <button class="danger-action" type="button" data-finance-delete="${record.id}">Delete</button>
+                        <button class="icon-action delete" type="button" title="Delete" aria-label="Delete" data-finance-delete="${record.id}">${iconDelete()}</button>
                       </div>`
                 }
               </td>
@@ -7883,24 +8090,11 @@ function renderPreview() {
 
       <div class="invoice-lower">
         <div>
-          ${
-            settings.showPaymentDetails !== "no"
-              ? `<div class="payment-card">
-                  <h3>PAYMENT DETAILS</h3>
-                  <p>Bank: ${escapeHtml(settings.bankName)}</p>
-                  <p>Account Name: ${escapeHtml(settings.accountName)}</p>
-                  <p>Account No.: ${escapeHtml(settings.accountNumber || "Add account number in settings")} | Branch: ${escapeHtml(settings.bankBranch)}</p>
-                  ${invoice.paymentMethod ? `<p>Method: ${escapeHtml(invoice.paymentMethod)}</p>` : ""}
-                  <p>Reference: ${escapeHtml(documentType)} #${escapeHtml(invoice.invoiceNumber)}</p>
-                </div>`
-              : ""
-          }
-
           <div class="invoice-notes">
             <h3>Notes</h3>
             <p>${escapeHtml(invoice.notes || "Payment is due within 10 days of the invoice date.")}</p>
-            ${invoice.terms ? `<h3>Terms</h3><p>${escapeHtml(invoice.terms)}</p>` : ""}
             ${invoice.authorizedBy ? `<p><strong>Authorized by:</strong> ${escapeHtml(invoice.authorizedBy)}</p>` : ""}
+            ${invoice.terms ? `<p>${escapeHtml(invoice.terms)}</p>` : ""}
             <p>For questions, contact: ${escapeHtml(settings.businessEmail)}${settings.contactPhone ? ` | ${escapeHtml(formatPhone(settings.contactPhone))}` : ""}</p>
           </div>
         </div>
@@ -9363,6 +9557,24 @@ document.getElementById("openNotificationsFromManagerButton")?.addEventListener(
   switchView("notifications");
 });
 clientSelect.addEventListener("change", () => fillInvoiceClient(clientSelect.value));
+document.getElementById("customerName").addEventListener("input", () => {
+  linkedProjectId = null;
+  linkedProjectIds = [];
+  syncClientProjectOptions();
+});
+addClientProjectsButton?.addEventListener("click", addSelectedProjectsToInvoice);
+clientProjectChecklist?.addEventListener("change", () => {
+  const selectedIds = selectedClientProjectIds();
+  setChecklistSelection(selectedIds);
+});
+selectAllClientProjectsButton?.addEventListener("click", () => {
+  if (!clientProjectsSelect) return;
+  const allIds = [...clientProjectsSelect.options].map((option) => option.value).filter(Boolean);
+  setChecklistSelection(allIds);
+});
+clearClientProjectsButton?.addEventListener("click", () => {
+  setChecklistSelection([]);
+});
 
 clientForm.addEventListener("submit", (event) => {
   event.preventDefault();
@@ -9807,6 +10019,8 @@ financeForm.addEventListener("submit", (event) => {
 form.addEventListener("submit", (event) => {
   event.preventDefault();
   const invoice = getFormInvoice();
+  invoice.projectIds = Array.isArray(invoice.projectIds) ? [...new Set(invoice.projectIds.filter(Boolean))] : [];
+  invoice.projectId = invoice.projectIds[0] || null;
   invoice.items = invoice.items.filter((item) => item.title);
 
   if (!invoice.items.length) {
@@ -10105,6 +10319,8 @@ document.getElementById("logoInput").addEventListener("change", (event) => {
 
 async function startApp() {
   appIsStarting = true;
+  localStorage.removeItem(SIDEBAR_COLLAPSED_KEY);
+  sidebarCollapsed = false;
   applySidebarState();
   updateSidebarDateTime();
   window.setInterval(updateSidebarDateTime, 60000);
