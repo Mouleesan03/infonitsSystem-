@@ -422,7 +422,7 @@ button {
 .sidebar {
   background: linear-gradient(180deg, #07113d 0%, #081246 100%);
   color: #d3def8;
-  padding: 10px 10px 8px;
+  padding: 14px 12px 10px;
   display: flex;
   flex-direction: column;
   gap: 10px;
@@ -436,7 +436,8 @@ button {
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
-  padding: 8px 6px 6px;
+  padding: 4px 4px 14px;
+  border-bottom: 1px solid rgba(107, 129, 180, 0.24);
 }
 
 .brand-main {
@@ -447,14 +448,14 @@ button {
 }
 
 .brand-mark {
-  width: 50px;
-  height: 50px;
+  width: 58px;
+  height: 58px;
   display: grid;
   place-items: center;
-  border-radius: 18px;
+  border-radius: 20px;
   background: linear-gradient(180deg, #ff7a38 0%, #ff5b1f 100%);
   color: #ffffff;
-  font-size: 0.78rem;
+  font-size: 0.84rem;
   font-weight: 700;
   box-shadow: 0 16px 28px rgba(255, 107, 44, 0.26);
 }
@@ -463,21 +464,21 @@ button {
   margin: 0;
   font-weight: 700;
   color: #ffffff;
-  font-size: 0.96rem;
+  font-size: 1rem;
   line-height: 1.15;
 }
 
 .brand span {
   color: #90a2cf;
-  font-size: 0.54rem;
+  font-size: 0.44rem;
   display: block;
   margin-top: 3px;
-  line-height: 1.18;
+  line-height: 1.22;
 }
 
 .sidebar-datetime {
-  display: block;
-  margin-top: 6px;
+  display: none;
+  margin-top: 0;
   color: #8fa7dd;
   font-size: 0.52rem;
   letter-spacing: 0.01em;
@@ -487,10 +488,10 @@ button {
 }
 
 .sidebar-toggle {
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border: 1px solid rgba(119, 143, 200, 0.22);
-  border-radius: 16px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   background: rgba(255, 255, 255, 0.06);
@@ -941,9 +942,12 @@ body.user-menu-modal-open::after {
 }
 
 .app-shell.sidebar-collapsed .brand {
+  grid-template-columns: 1fr;
+  justify-items: center;
   justify-content: center;
-  gap: 6px;
-  padding: 4px 0 2px;
+  gap: 10px;
+  padding: 6px 0 10px;
+  border-bottom: 1px solid rgba(107, 129, 180, 0.24);
 }
 
 .app-shell.sidebar-collapsed .brand-main {
@@ -951,27 +955,28 @@ body.user-menu-modal-open::after {
 }
 
 .app-shell.sidebar-collapsed .brand-mark {
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
-  font-size: 0.72rem;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  font-size: 0.8rem;
 }
 
 .app-shell.sidebar-collapsed .sidebar {
-  padding: 6px 7px 8px;
+  padding: 10px 8px;
   align-items: center;
   overflow: hidden;
 }
 
 .app-shell.sidebar-collapsed .sidebar-toggle {
-  width: 34px;
-  height: 34px;
-  border-radius: 13px;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
+  margin-top: 4px;
 }
 
 .app-shell.sidebar-collapsed .sidebar-toggle svg {
-  width: 12px;
-  height: 12px;
+  width: 16px;
+  height: 16px;
 }
 
 .app-shell.sidebar-collapsed .nav-tabs {
@@ -3959,6 +3964,21 @@ body[data-active-view="manager"] .topbar-quick-actions-wrap {
   display: none;
 }
 
+body[data-active-view="manager"] .topbar-actions {
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+body[data-active-view="manager"] .topbar-manager-tools {
+  margin-left: auto;
+  flex-wrap: nowrap;
+}
+
+body[data-active-view="manager"] .topbar-fullscreen-button,
+body[data-active-view="manager"] .notification-icon-button {
+  flex: 0 0 auto;
+}
+
 .pm-platform-field {
   display: grid;
   grid-template-columns: 126px minmax(0, 1fr);
@@ -4461,6 +4481,28 @@ body[data-active-view="manager"] .topbar-quick-actions-wrap {
   margin-bottom: 12px;
 }
 
+.pm-calendar-panel .panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: nowrap;
+}
+
+.pm-calendar-panel .panel-heading h2 {
+  margin: 0;
+  font-size: 0.86rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.pm-calendar-panel .panel-heading .muted-label {
+  margin: 0;
+  font-size: 0.76rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
 .pm-post-records-panel .pm-table-wrap,
 .pm-wide-panel .pm-table-wrap {
   flex: 1;
@@ -4468,6 +4510,9 @@ body[data-active-view="manager"] .topbar-quick-actions-wrap {
 
 .pm-calendar-panel .pm-calendar-grid {
   flex: 1;
+  max-height: 560px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .pm-pagination {
@@ -4507,8 +4552,8 @@ body[data-active-view="manager"] .topbar-quick-actions-wrap {
 }
 
 .pm-calendar-day {
-  min-height: 92px;
-  padding: 7px;
+  min-height: 72px;
+  padding: 5px 6px;
   background: #ffffff;
 }
 
@@ -4528,9 +4573,9 @@ body[data-active-view="manager"] .topbar-quick-actions-wrap {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 5px;
+  margin-bottom: 3px;
   color: #172033;
-  font-size: 0.72rem;
+  font-size: 0.66rem;
   font-weight: 600;
 }
 
@@ -4556,22 +4601,22 @@ body[data-active-view="manager"] .topbar-quick-actions-wrap {
 .pm-calendar-dot-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 5px;
+  gap: 4px;
 }
 
 .pm-calendar-chip-list {
   display: grid;
-  gap: 5px;
+  gap: 3px;
 }
 
 .pm-calendar-chip-tag {
   display: block;
-  padding: 3px 7px;
+  padding: 2px 6px;
   border-radius: 8px;
   color: #ffffff;
-  font-size: 0.62rem;
+  font-size: 0.58rem;
   font-weight: 600;
-  line-height: 1.25;
+  line-height: 1.15;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4610,8 +4655,8 @@ body[data-active-view="manager"] .topbar-quick-actions-wrap {
 
 .pm-calendar-dot {
   position: relative;
-  width: 14px;
-  height: 14px;
+  width: 10px;
+  height: 10px;
   border-radius: 999px;
   box-shadow: 0 0 0 2px #ffffff, 0 0 0 3px rgba(15, 23, 42, 0.08);
 }
@@ -5374,22 +5419,30 @@ textarea {
 
 .project-summary-cards {
   display: grid;
-  grid-template-columns: repeat(2, minmax(160px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(170px, 1fr));
+  gap: 12px;
 }
 
 .project-summary-card {
-  border: 1px solid #e2e8f0;
-  border-left: 4px solid #3478f6;
-  border-radius: 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
   background: #ffffff;
-  min-height: 82px;
-  padding: 12px 16px;
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+  min-height: 86px;
+  padding: 12px 14px;
+  box-shadow: none;
+  border-top: 3px solid #3b82f6;
 }
 
 .project-summary-card.profit {
-  border-left-color: #14b8a6;
+  border-top-color: #14b8a6;
+}
+
+.project-summary-card.outstanding {
+  border-top-color: #f59e0b;
+}
+
+.project-summary-card.rate {
+  border-top-color: #64748b;
 }
 
 .project-summary-card span {
@@ -5401,7 +5454,7 @@ textarea {
   display: block;
   margin-top: 4px;
   color: #172033;
-  font-size: clamp(1.12rem, 1.45vw, 1.48rem);
+  font-size: clamp(1rem, 1.3vw, 1.3rem);
   font-weight: 600;
 }
 
@@ -5415,6 +5468,10 @@ textarea {
 
 .project-summary-card.profit strong {
   color: #0f766e;
+}
+
+.project-summary-card.outstanding strong {
+  color: #9a6700;
 }
 
 .project-month-settings {
@@ -5543,6 +5600,27 @@ textarea {
   padding: 10px 8px;
   font-size: 0.72rem;
   line-height: 1.2;
+  }
+
+@media (max-width: 1600px) {
+  .pm-calendar-panel .pm-calendar-grid {
+    max-height: 500px;
+  }
+
+  .pm-calendar-day {
+    min-height: 64px;
+    padding: 5px;
+  }
+}
+
+@media (max-width: 1360px) {
+  .pm-calendar-panel .pm-calendar-grid {
+    max-height: 440px;
+  }
+
+  .pm-calendar-day {
+    min-height: 56px;
+  }
 }
 
 .project-table td {
@@ -5758,6 +5836,793 @@ textarea {
 .project-status-select.Completed {
   background-color: #e2e8f0;
   color: #334155;
+}
+
+/* Project list rework: clean 7-column layout */
+#projectsView .project-table-wrap {
+  overflow-x: hidden;
+}
+
+#projectsView .project-table {
+  table-layout: auto;
+}
+
+#projectsView .project-table th:nth-child(1),
+#projectsView .project-table td:nth-child(1) {
+  width: 64px;
+  text-align: center;
+}
+
+#projectsView .project-table th:nth-child(2),
+#projectsView .project-table td:nth-child(2) {
+  width: 34%;
+}
+
+#projectsView .project-table th:nth-child(3),
+#projectsView .project-table td:nth-child(3) {
+  width: 16%;
+}
+
+#projectsView .project-table th:nth-child(4),
+#projectsView .project-table td:nth-child(4) {
+  width: 24%;
+}
+
+#projectsView .project-table th:nth-child(5),
+#projectsView .project-table td:nth-child(5) {
+  width: 8%;
+  text-align: center;
+}
+
+#projectsView .project-table th:nth-child(6),
+#projectsView .project-table td:nth-child(6) {
+  width: 10%;
+  text-align: center;
+}
+
+#projectsView .project-table th:nth-child(7),
+#projectsView .project-table td:nth-child(7) {
+  width: 13%;
+  text-align: center;
+}
+
+#projectsView .project-table th,
+#projectsView .project-table td {
+  padding: 14px 10px;
+}
+
+#projectsView .project-row-no {
+  color: #7c879c;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+#projectsView .project-main-cell {
+  min-width: 0;
+}
+
+#projectsView .project-name-text {
+  font-size: 0.95rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+#projectsView .project-meta-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  color: #7a879d;
+  font-size: 0.82rem;
+}
+
+#projectsView .project-client-dot {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #dbe8ff;
+  color: #3150b8;
+  font-size: 0.76rem;
+  font-weight: 700;
+}
+
+#projectsView .project-value-cell strong {
+  display: block;
+  color: #172033;
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+#projectsView .project-value-cell span {
+  display: block;
+  margin-top: 2px;
+  color: #8a93a8;
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+#projectsView .payment-track {
+  display: grid;
+  gap: 8px;
+}
+
+#projectsView .payment-bar {
+  width: 100%;
+  height: 6px;
+  background: #e9ece6;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+#projectsView .payment-bar i {
+  display: block;
+  height: 100%;
+  background: #1f8a43;
+  border-radius: inherit;
+}
+
+#projectsView .payment-track span {
+  color: #6a7389;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+#projectsView .payment-track small {
+  color: #8b95aa;
+  font-size: 0.74rem;
+  font-weight: 500;
+}
+
+#projectsView .worker-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+#projectsView .worker-chip {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #dff5ea;
+  color: #1f8a43;
+  font-weight: 700;
+  font-size: 0.78rem;
+}
+
+#projectsView .worker-name {
+  color: #5f6c84;
+  font-size: 0.78rem;
+  font-weight: 500;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#projectsView .project-status {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 0.86rem;
+}
+
+#projectsView .project-status.Waiting {
+  background: #f8e9b8;
+  color: #8a5b00;
+}
+
+#projectsView .project-table tfoot th {
+  font-size: 0.9rem;
+}
+
+#projectsView .project-table tfoot th:nth-child(2),
+#projectsView .project-table tfoot th:nth-child(3),
+#projectsView .project-table tfoot th:nth-child(4) {
+  color: #1d2e63;
+  font-weight: 700;
+}
+
+/* Final project board style (reference-matched, keep app font family) */
+#projectsView .project-table-wrap {
+  border: 1px solid #e6e9ef;
+  border-radius: 14px;
+  box-shadow: none;
+  background: #ffffff;
+}
+
+#projectsView .project-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+#projectsView .project-table th {
+  background: #fafbfc;
+  color: #8a94a8;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 12px 14px;
+  border-bottom: 1px solid #e8edf3;
+}
+
+#projectsView .project-table td {
+  padding: 14px;
+  border-bottom: 1px solid #e8edf3;
+  vertical-align: middle;
+}
+
+#projectsView .project-table tbody tr:hover {
+  background: #fcfcfd;
+}
+
+#projectsView .project-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+#projectsView .project-table th:nth-child(1),
+#projectsView .project-table td:nth-child(1) {
+  width: 64px;
+  text-align: center;
+}
+
+#projectsView .project-table th:nth-child(2),
+#projectsView .project-table td:nth-child(2) {
+  width: 36%;
+}
+
+#projectsView .project-table th:nth-child(3),
+#projectsView .project-table td:nth-child(3) {
+  width: 14%;
+}
+
+#projectsView .project-table th:nth-child(4),
+#projectsView .project-table td:nth-child(4) {
+  width: 25%;
+}
+
+#projectsView .project-table th:nth-child(5),
+#projectsView .project-table td:nth-child(5) {
+  width: 11%;
+}
+
+#projectsView .project-table th:nth-child(6),
+#projectsView .project-table td:nth-child(6) {
+  width: 9%;
+}
+
+#projectsView .project-table th:nth-child(7),
+#projectsView .project-table td:nth-child(7) {
+  width: 12%;
+  text-align: right;
+}
+
+#projectsView .project-row-no {
+  color: #8a93a3;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+#projectsView .project-name-text {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+#projectsView .project-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 5px;
+  font-size: 0.8rem;
+  color: #8b95a7;
+}
+
+#projectsView .project-client-dot {
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+#projectsView .project-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 9px;
+  border-radius: 7px;
+  border: 1px solid #e5e7eb;
+  background: #f3f4f6;
+  color: #606b7d;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+#projectsView .project-tag-alert {
+  background: #fef3c7;
+  border-color: #facc15;
+  color: #a16207;
+}
+
+#projectsView .project-row-featured {
+  background: linear-gradient(90deg, #fffbeb 0%, #ffffff 65%);
+}
+
+#projectsView .project-value-cell strong {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+#projectsView .project-value-cell span {
+  font-size: 0.8rem;
+  color: #8b95a7;
+}
+
+#projectsView .payment-track {
+  gap: 5px;
+}
+
+#projectsView .payment-bar {
+  height: 6px;
+  background: #ecefeb;
+  border-radius: 999px;
+}
+
+#projectsView .payment-bar i {
+  border-radius: inherit;
+}
+
+#projectsView .payment-bar.is-ok i {
+  background: #1f8a43;
+}
+
+#projectsView .payment-bar.is-mid i {
+  background: #d97706;
+}
+
+#projectsView .payment-bar.is-wait i {
+  background: #cbd5e1;
+}
+
+#projectsView .payment-track span {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #5f6b80;
+}
+
+#projectsView .payment-track small {
+  font-size: 0.76rem;
+  color: #8b95a7;
+}
+
+#projectsView .worker-cell {
+  justify-content: center;
+}
+
+#projectsView .worker-chip {
+  width: 32px;
+  height: 32px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+
+#projectsView .project-status {
+  min-height: 32px;
+  padding: 0 13px;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+#projectsView .project-table .icon-actions {
+  justify-content: flex-end;
+  gap: 4px;
+  opacity: 0.5;
+  transition: opacity 120ms ease;
+}
+
+#projectsView .project-table tbody tr:hover .icon-actions {
+  opacity: 1;
+}
+
+#projectsView .project-table .icon-action {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+}
+
+#projectsView .project-table .icon-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Strict reference palette for project board */
+#projectsView .project-table-wrap {
+  border: 1px solid #e8e8e1;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+#projectsView .project-table th {
+  background: #fafaf6;
+  color: #8a8a86;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid #e8e8e1;
+}
+
+#projectsView .project-table td {
+  border-bottom: 1px solid #e8e8e1;
+}
+
+#projectsView .project-row-featured {
+  background: linear-gradient(90deg, #fefce8 0%, transparent 62%);
+}
+
+#projectsView .project-name-text {
+  font-weight: 600;
+  color: #18181b;
+}
+
+#projectsView .project-meta-line {
+  color: #8a8a86;
+}
+
+#projectsView .project-tag {
+  background: #f0f0ea;
+  border: 1px solid #e8e8e1;
+  color: #52525b;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+#projectsView .project-tag-alert {
+  background: #fef3c7;
+  border-color: #fde68a;
+  color: #92400e;
+}
+
+#projectsView .project-tag-recurring {
+  gap: 4px;
+}
+
+#projectsView .project-tag-icon {
+  font-size: 0.66rem;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+#projectsView .project-value-cell strong {
+  color: #18181b;
+  font-weight: 600;
+}
+
+#projectsView .project-value-cell span {
+  color: #8a8a86;
+}
+
+#projectsView .payment-bar {
+  background: #f0f0ea;
+  height: 6px;
+}
+
+#projectsView .payment-bar.is-ok i {
+  background: #15803d;
+}
+
+#projectsView .payment-bar.is-mid i {
+  background: #d97706;
+}
+
+#projectsView .payment-bar.is-wait i {
+  background: #d6d6ce;
+}
+
+#projectsView .payment-track span {
+  color: #52525b;
+  font-weight: 500;
+}
+
+#projectsView .payment-track small {
+  color: #8a8a86;
+}
+
+#projectsView .project-status {
+  min-height: 34px;
+  font-size: 0.76rem;
+  font-weight: 600;
+}
+
+#projectsView .project-status.Paid {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+#projectsView .project-status.Waiting {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+#projectsView .project-status.Partial {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+#projectsView .project-status.Completed {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+#projectsView .project-table .icon-actions {
+  opacity: 0.42;
+}
+
+#projectsView .project-table tbody tr.project-row-paid {
+  background: linear-gradient(90deg, #ecfdf3 0%, #ffffff 68%);
+}
+
+#projectsView .project-table tbody tr.project-row-paid:hover {
+  background: linear-gradient(90deg, #dcfce7 0%, #ffffff 68%);
+}
+
+#projectsView .project-table tbody tr:hover .icon-actions {
+  opacity: 1;
+}
+
+#projectsView .project-table .icon-action {
+  background: transparent;
+  border: 0;
+  color: #a1a1aa;
+}
+
+#projectsView .project-table .icon-action:hover {
+  background: #f0f0ea;
+  color: #52525b;
+}
+
+/* Screen-fit fix for project board */
+#projectsView .project-table-wrap {
+  max-height: calc(100vh - 200px) !important;
+  overflow: auto !important;
+  border-radius: 14px;
+}
+
+#projectsView .project-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: auto !important;
+}
+
+#projectsView .project-table th:nth-child(1),
+#projectsView .project-table td:nth-child(1) {
+  width: 58px;
+}
+
+#projectsView .project-table th:nth-child(2),
+#projectsView .project-table td:nth-child(2) {
+  width: 33%;
+}
+
+#projectsView .project-table th:nth-child(3),
+#projectsView .project-table td:nth-child(3) {
+  width: 14%;
+}
+
+#projectsView .project-table th:nth-child(4),
+#projectsView .project-table td:nth-child(4) {
+  width: 24%;
+}
+
+#projectsView .project-table th:nth-child(5),
+#projectsView .project-table td:nth-child(5) {
+  width: 8%;
+}
+
+#projectsView .project-table th:nth-child(6),
+#projectsView .project-table td:nth-child(6) {
+  width: 9%;
+}
+
+#projectsView .project-table th:nth-child(7),
+#projectsView .project-table td:nth-child(7) {
+  width: 12%;
+}
+
+#projectsView .project-table th,
+#projectsView .project-table td {
+  padding: 12px 12px;
+}
+
+#projectsView .project-table tfoot th {
+  position: sticky !important;
+  bottom: 0;
+  z-index: 4;
+}
+
+#projectsView .project-table tfoot th {
+  background: #fafaf6;
+  color: #52525b;
+  font-size: 0.7rem;
+  font-weight: 500;
+  border-top: 1px solid #e8e8e1;
+  border-bottom: 0;
+  padding: 8px 10px;
+  box-shadow: 0 -6px 12px rgba(24, 24, 27, 0.04);
+  line-height: 1.2;
+  text-transform: none;
+  letter-spacing: 0.01em;
+}
+
+#projectsView #projectTotalLkr {
+  display: block;
+  color: #18181b;
+  font-weight: 600;
+  font-size: 0.72rem;
+}
+
+#projectsView #projectTotalUsd {
+  display: block;
+  margin-top: 1px;
+  color: #8a8a86;
+  font-weight: 500;
+  font-size: 0.68rem;
+}
+
+#projectsView #projectTotalInline {
+  display: inline-block;
+  color: #18181b;
+  font-weight: 600;
+  font-size: 0.72rem;
+  line-height: 1.05;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+#projectsView #projectFooterPaymentSummary {
+  color: #52525b;
+  font-weight: 500;
+  white-space: normal;
+  line-height: 1.05;
+  font-size: 0.7rem;
+}
+
+#projectsView .project-footer-link {
+  color: #1d4ed8;
+  font-weight: 500;
+  text-align: right;
+  font-size: 0.68rem;
+}
+
+@media (max-width: 1440px) {
+  #projectsView .project-table th,
+  #projectsView .project-table td {
+    padding: 10px 9px;
+  }
+
+  #projectsView .project-name-text {
+    font-size: 0.9rem;
+  }
+
+  #projectsView .project-value-cell strong {
+    font-size: 0.88rem;
+  }
+
+  #projectsView .project-table .icon-action {
+    width: 24px;
+    height: 24px;
+  }
+
+  #projectsView .project-table .icon-action svg {
+    width: 13px;
+    height: 13px;
+  }
+}
+
+
+/* Project board final responsive fit override */
+#projectsView .project-table-wrap {
+  max-height: calc(100dvh - 170px) !important;
+}
+
+#projectsView .project-table th:nth-child(6),
+#projectsView .project-table td:nth-child(6) {
+  width: 10% !important;
+}
+
+#projectsView .project-table th:nth-child(7),
+#projectsView .project-table td:nth-child(7) {
+  width: 10% !important;
+}
+
+#projectsView .project-status {
+  min-height: 28px !important;
+  padding: 0 9px !important;
+  font-size: 0.7rem !important;
+  white-space: nowrap;
+}
+
+#projectsView .project-table tfoot th {
+  padding: 6px 8px !important;
+  font-size: 0.66rem !important;
+  line-height: 1.05 !important;
+}
+
+#projectsView #projectTotalInline {
+  font-size: 0.68rem !important;
+  line-height: 1 !important;
+}
+
+#projectsView #projectFooterPaymentSummary {
+  font-size: 0.64rem !important;
+  line-height: 1.05 !important;
+}
+
+@media (max-width: 1440px) {
+  #projectsView .project-table-wrap {
+    max-height: calc(100dvh - 150px) !important;
+  }
+
+  #projectsView .project-table th,
+  #projectsView .project-table td {
+    padding: 9px 8px !important;
+  }
+
+  #projectsView .project-table th:nth-child(2),
+  #projectsView .project-table td:nth-child(2) {
+    width: 31% !important;
+  }
+
+  #projectsView .project-table th:nth-child(4),
+  #projectsView .project-table td:nth-child(4) {
+    width: 22% !important;
+  }
+
+  #projectsView .project-table th:nth-child(6),
+  #projectsView .project-table td:nth-child(6) {
+    width: 9% !important;
+  }
+
+  #projectsView .project-table th:nth-child(7),
+  #projectsView .project-table td:nth-child(7) {
+    width: 8% !important;
+  }
+}
+
+@media (max-width: 1280px) {
+  #projectsView .project-table-wrap {
+    max-height: calc(100dvh - 140px) !important;
+  }
+
+  #projectsView .project-table {
+    min-width: 1020px;
+  }
+
+  #projectsView .project-status {
+    min-height: 24px !important;
+    padding: 0 7px !important;
+    font-size: 0.64rem !important;
+  }
+
+  #projectsView .project-table tfoot th {
+    padding: 5px 7px !important;
+    font-size: 0.6rem !important;
+  }
 }
 
 .finance-panel {
@@ -6224,6 +7089,7 @@ textarea {
   background: #e0f2fe;
   color: #075985;
 }
+
 
 .backup-panel {
   margin-top: 6px;
@@ -8032,4 +8898,57 @@ textarea {
 #dashboardView .dashboard-metric-grid .metric-copy small {
   color: #8f9ab4;
   font-size: 11px;
+}
+
+/* Release stability: final source of truth for project + post-tracker visuals */
+#projectsView .project-table-wrap {
+  max-height: calc(100dvh - 170px) !important;
+  overflow: auto !important;
+}
+
+#projectsView .project-table tbody tr.project-row-paid {
+  background: linear-gradient(90deg, #ecfdf3 0%, #ffffff 68%) !important;
+}
+
+#projectsView .project-table tbody tr.project-row-paid:hover {
+  background: linear-gradient(90deg, #dcfce7 0%, #ffffff 68%) !important;
+}
+
+#projectsView .project-status {
+  min-height: 28px !important;
+  padding: 0 9px !important;
+  font-size: 0.7rem !important;
+  white-space: nowrap !important;
+}
+
+#projectsView .project-table tfoot th {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 4 !important;
+  padding: 6px 8px !important;
+  font-size: 0.66rem !important;
+  line-height: 1.05 !important;
+}
+
+#projectsView #projectTotalInline {
+  font-size: 0.68rem !important;
+  line-height: 1 !important;
+}
+
+#projectsView #projectFooterPaymentSummary {
+  font-size: 0.64rem !important;
+  line-height: 1.05 !important;
+}
+
+.pm-calendar-panel .panel-heading {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: space-between !important;
+  gap: 10px !important;
+  flex-wrap: nowrap !important;
+}
+
+.pm-calendar-panel .panel-heading h2,
+.pm-calendar-panel .panel-heading .muted-label {
+  white-space: nowrap !important;
 }

@@ -6985,12 +6985,26 @@ function renderProjects() {
     const matchesStatus = status === "All" || project.paymentStatus === status;
     return matchesStatus && haystack.includes(query);
   });
+  const sortedFiltered = [...filtered].sort((a, b) => {
+    const aPaid = isProjectFullyPaid(a) ? 1 : 0;
+    const bPaid = isProjectFullyPaid(b) ? 1 : 0;
+    return aPaid - bPaid;
+  });
   const activeMonthProjects = monthProjects.filter(isActiveProject);
   const activeFilteredProjects = filtered.filter(isActiveProject);
   const monthProjectValue = activeMonthProjects.reduce((sum, project) => sum + projectValueLkr(project), 0);
   const monthProjectProfit = activeMonthProjects.reduce((sum, project) => {
     return sum + projectForMe(project);
   }, 0);
+  const monthOutstanding = activeMonthProjects.reduce((sum, project) => {
+    const total = projectValueLkr(project);
+    const received = Number(project.advance || 0) + Number(project.paidForWork || 0);
+    return sum + Math.max(0, total - received);
+  }, 0);
+  const pendingCount = activeMonthProjects.filter((project) => {
+    const status = String(project.paymentStatus || "Waiting");
+    return status !== "Paid" && status !== "Completed";
+  }).length;
 
   const totals = activeFilteredProjects.reduce(
     (sum, project) => {
@@ -7005,24 +7019,35 @@ function renderProjects() {
     { valueLkr: 0, valueUsd: 0, advance: 0, payForWork: 0, paidForWork: 0, forMe: 0 },
   );
 
-  document.getElementById("projectTable").innerHTML = filtered.length
-    ? filtered
+  document.getElementById("projectTable").innerHTML = sortedFiltered.length
+    ? sortedFiltered
         .map(
           (project, index) => `
-            <tr>
-              <td>${index + 1}</td>
-              <td title="${escapeAttribute(project.clientName || project.name || "")}">${escapeHtml(project.clientName || project.name || "")}</td>
-              <td title="${escapeAttribute(project.name)}">
+            <tr class="${[projectValueLkr(project) >= 500000 ? "project-row-featured" : "", isProjectFullyPaid(project) ? "project-row-paid" : ""]
+              .filter(Boolean)
+              .join(" ")}">
+              <td class="project-row-no">${String(index + 1).padStart(2, "0")}</td>
+              <td title="${escapeAttribute(project.name)}" class="project-main-cell">
                 <strong class="project-name-text">${escapeHtml(project.name)}</strong>
-                ${project.carriedFromMonth ? `<span class="muted-label">${project.carryReason === "monthly" ? "Monthly" : "Pending"} from ${escapeHtml(formatMonth(project.carriedFromMonth))}</span>` : ""}
+                <span class="project-meta-line">
+                  <span class="project-client-dot" style="background:${projectAvatarTone(project.clientName || project.name).bg};color:${projectAvatarTone(project.clientName || project.name).fg};">${escapeHtml(projectClientInitials(project))}</span>
+                  <span>${escapeHtml(project.clientName || project.name || "")}</span>
+                  ${project.repeat === "monthly" ? `<span class="project-tag project-tag-recurring"><span class="project-tag-icon">⟳</span>Recurring</span>` : ""}
+                  ${projectValueLkr(project) >= 500000 ? `<span class="project-tag project-tag-alert">High value</span>` : ""}
+                  ${project.carriedFromMonth ? `<span class="project-tag">${project.carryReason === "monthly" ? "" : "Pending "}${escapeHtml(formatMonth(project.carriedFromMonth))}</span>` : ""}
+                </span>
               </td>
-              <td>${projectMoneyInput(project, "valueLkr", "LKR")}</td>
-              <td>${projectMoneyInput(project, "valueUsd", "USD")}</td>
-              <td>${projectMoneyInput(project, "advance", "LKR")}</td>
-              <td>${projectMoneyInput(project, "payForWork", "LKR")}</td>
-              <td>${projectMoneyInput(project, "paidForWork", "LKR")}</td>
-              <td>${projectStatusSelect(project)}</td>
-              <td title="${escapeAttribute(project.worker)}">${escapeHtml(project.worker)}</td>
+              <td class="project-value-cell">
+                <strong>${compactMoney(projectValueLkr(project), "LKR")}</strong>
+                <span>${compactMoney(Number(project.valueUsd || 0), "USD")}</span>
+              </td>
+              <td class="project-payment-cell">${projectPaymentCell(project)}</td>
+              <td title="${escapeAttribute(project.worker)}" class="project-worker-cell">
+                <div class="worker-cell">
+                  <span class="worker-chip" style="background:${projectAvatarTone(project.worker, !project.worker).bg};color:${projectAvatarTone(project.worker, !project.worker).fg};">${escapeHtml(projectWorkerInitials(project.worker))}</span>
+                </div>
+              </td>
+              <td>${projectStatusBadge(project.paymentStatus || "Waiting")}</td>
               <td>
                 <div class="action-row icon-actions">
                   <button class="icon-action info" title="${escapeAttribute(project.note || "No note")}" aria-label="Project note" type="button">${iconInfo()}</button>
@@ -7036,14 +7061,107 @@ function renderProjects() {
           `,
         )
         .join("")
-    : emptyRow("No projects for this month", 11);
+    : emptyRow("No projects for this month", 7);
 
   document.getElementById("projectTotalLkr").textContent = compactMoney(totals.valueLkr, "LKR");
   document.getElementById("projectTotalUsd").textContent = compactMoney(totals.valueUsd, "USD");
-  document.getElementById("projectTotalAdvance").textContent = compactMoney(totals.advance, "LKR");
-  document.getElementById("projectTotalPayForWork").textContent = compactMoney(totals.payForWork, "LKR");
-  document.getElementById("projectTotalPaidForWork").textContent = compactMoney(totals.paidForWork, "LKR");
-  renderProjectSummary(monthProjectValue, monthProjectProfit, activeMonthProjects.length);
+  const projectTotalInline = document.getElementById("projectTotalInline");
+  if (projectTotalInline) {
+    projectTotalInline.textContent = `${compactMoney(totals.valueLkr, "LKR")} (${compactMoney(totals.valueUsd, "USD")})`;
+  }
+  const projectFooterPaymentSummary = document.getElementById("projectFooterPaymentSummary");
+  if (projectFooterPaymentSummary) {
+    projectFooterPaymentSummary.textContent = `Adv ${compactMoney(totals.advance, "LKR")} · Paid ${compactMoney(
+      totals.paidForWork,
+      "LKR",
+    )} · Cost ${compactMoney(totals.payForWork, "LKR")}`;
+  }
+  const projectFooterMeta = document.getElementById("projectFooterMeta");
+  if (projectFooterMeta) {
+    const monthLabel = month ? formatMonth(month) : formatMonth(today().slice(0, 7));
+    projectFooterMeta.textContent = `${formatNumber(filtered.length)} projects · ${monthLabel} · ${formatNumber(pendingCount)} pending`;
+  }
+  renderProjectSummary(monthProjectValue, monthProjectProfit, monthOutstanding, pendingCount);
+}
+
+function projectClientInitials(project) {
+  const name = (project.clientName || project.name || "").trim();
+  if (!name) return "--";
+  const parts = name.split(/\s+/).filter(Boolean);
+  return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
+}
+
+function projectAvatarTone(seed, fallback = false) {
+  if (fallback) return { bg: "#f1f1eb", fg: "#9a9a92" };
+  const tones = [
+    { bg: "#fde68a", fg: "#854d0e" },
+    { bg: "#dbeafe", fg: "#1e40af" },
+    { bg: "#fed7aa", fg: "#9a3412" },
+    { bg: "#d1fae5", fg: "#065f46" },
+    { bg: "#fee2e2", fg: "#991b1b" },
+    { bg: "#cffafe", fg: "#155e75" },
+    { bg: "#e0e7ff", fg: "#3730a3" },
+    { bg: "#fce7f3", fg: "#9f1239" },
+  ];
+  let hash = 0;
+  String(seed || "")
+    .split("")
+    .forEach((char) => {
+      hash = (hash * 31 + char.charCodeAt(0)) % 100000;
+    });
+  return tones[hash % tones.length];
+}
+
+function projectWorkerInitials(worker) {
+  const name = (worker || "").trim();
+  if (!name) return "+";
+  const parts = name.split(/\s+/).filter(Boolean);
+  return (parts[0][0] + (parts[1]?.[0] || "")).toUpperCase();
+}
+
+function projectPaymentCell(project) {
+  const total = projectValueLkr(project);
+  const advance = Number(project.advance || 0);
+  const payForWork = Number(project.payForWork || 0);
+  const paid = Number(project.paidForWork || 0);
+  const received = advance + paid;
+  const progressBase = Math.max(total, payForWork, 1);
+  const isFullyPaid = isProjectFullyPaid(project);
+  const progress = isFullyPaid ? 100 : Math.max(0, Math.min(100, (received / progressBase) * 100));
+  let label = "Not started";
+  if (isFullyPaid) label = "Fully paid";
+  else if (paid > 0) label = `Rs. ${formatNumber(paid)} paid`;
+  else if (advance > 0) label = `Adv Rs. ${formatNumber(advance)} received`;
+  const barClass = isFullyPaid ? "is-ok" : received > 0 ? "is-mid" : "is-wait";
+  let details = "";
+  if (!isFullyPaid && received > 0) details = `Adv Rs. ${formatNumber(advance)} · paid Rs. ${formatNumber(paid)}`;
+  else if (!isFullyPaid && advance > 0) details = "Awaiting balance";
+  else if (!isFullyPaid) details = "Not started";
+  return `
+    <div class="payment-track">
+      <div class="payment-bar ${barClass}"><i style="width:${progress}%;"></i></div>
+      <span>${escapeHtml(label)}</span>
+      ${details ? `<small>${escapeHtml(details)}</small>` : ""}
+    </div>
+  `;
+}
+
+function isProjectFullyPaid(project) {
+  const total = projectValueLkr(project);
+  const payForWork = Number(project.payForWork || 0);
+  const paid = Number(project.paidForWork || 0);
+  const received = Number(project.advance || 0) + paid;
+  const progressBase = Math.max(total, payForWork, 1);
+  const status = String(project.paymentStatus || "");
+  return status === "Paid" || status === "Completed" || paid >= progressBase || received >= progressBase;
+}
+
+function projectStatusBadge(status) {
+  const cleanStatus = String(status || "Waiting");
+  if (cleanStatus === "Paid") return `<span class="project-status Paid">• Paid</span>`;
+  if (cleanStatus === "Partial") return `<span class="project-status Partial">• Partial</span>`;
+  if (cleanStatus === "Completed") return `<span class="project-status Completed">• Completed</span>`;
+  return `<span class="project-status Waiting">• Waiting</span>`;
 }
 
 function getFinanceFormData() {
@@ -7906,9 +8024,15 @@ function buildSimpleReportPdf(title, rows, subtitle) {
   return buildImagePdf(canvas.toDataURL("image/jpeg", 0.98), canvas.width, canvas.height);
 }
 
-function renderProjectSummary(projectValue, profit, projectCount) {
+function renderProjectSummary(projectValue, profit, outstanding, pendingCount) {
   document.getElementById("projectTotalValueSummary").textContent = compactMoney(projectValue, "LKR");
   document.getElementById("projectProfitSummary").textContent = compactMoney(profit, "LKR");
+  const outstandingNode = document.getElementById("projectOutstandingSummary");
+  const outstandingMeta = document.getElementById("projectOutstandingMeta");
+  const usdRateNode = document.getElementById("projectUsdRateSummary");
+  if (outstandingNode) outstandingNode.textContent = compactMoney(outstanding, "LKR");
+  if (outstandingMeta) outstandingMeta.textContent = `${formatNumber(pendingCount)} pending`;
+  if (usdRateNode) usdRateNode.textContent = `Rs. ${formatNumber(getUsdRate())}`;
 }
 
 function projectMoneyInput(project, field, currency) {

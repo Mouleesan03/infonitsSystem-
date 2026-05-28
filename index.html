@@ -594,6 +594,11 @@
                   <strong id="projectProfitSummary">Rs. 0</strong>
                   <small>After project work cost</small>
                 </article>
+                <article class="project-summary-card outstanding">
+                  <span>Outstanding</span>
+                  <strong id="projectOutstandingSummary">Rs. 0</strong>
+                  <small id="projectOutstandingMeta">0 pending</small>
+                </article>
               </div>
               <div class="project-month-settings">
                 <div class="project-filter-strip">
@@ -690,33 +695,28 @@
               <table class="project-table">
                 <thead>
                   <tr>
-                    <th class="row-number-heading">No.</th>
-                    <th>Client</th>
+                    <th class="row-number-heading">#</th>
                     <th>Project</th>
-                    <th>Value (LKR)</th>
-                    <th>Value (USD)</th>
-                    <th>Advance</th>
-                    <th>Work cost</th>
-                    <th>Paid work</th>
-                    <th>Status</th>
+                    <th>Value</th>
+                    <th>Payment</th>
                     <th>Worker</th>
+                    <th>Status</th>
                     <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody id="projectTable"></tbody>
                 <tfoot>
                   <tr>
-                    <th>Total</th>
+                    <th colspan="2" id="projectFooterMeta">0 projects</th>
+                    <th>
+                      <span id="projectTotalInline">Rs. 0 ($ 0)</span>
+                      <span id="projectTotalLkr" hidden>Rs. 0</span>
+                      <span id="projectTotalUsd" hidden>$ 0</span>
+                    </th>
+                    <th id="projectFooterPaymentSummary">Adv Rs. 0 · Paid Rs. 0 · Cost Rs. 0</th>
                     <th></th>
                     <th></th>
-                    <th id="projectTotalLkr">Rs. 0</th>
-                    <th id="projectTotalUsd">$ 0</th>
-                    <th id="projectTotalAdvance">Rs. 0</th>
-                    <th id="projectTotalPayForWork">Rs. 0</th>
-                    <th id="projectTotalPaidForWork">Rs. 0</th>
-                    <th></th>
-                    <th></th>
-                    <th></th>
+                    <th class="project-footer-link"></th>
                   </tr>
                 </tfoot>
               </table>
