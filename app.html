@@ -1103,10 +1103,13 @@
         </section>
 
         <section class="view" id="financeView">
-          <section class="panel finance-panel">
-            <div class="panel-heading invoice-list-heading">
-              <h2>Monthly Finance</h2>
-              <div class="filters">
+          <section class="panel finance-panel finance-redesign">
+            <div class="panel-heading invoice-list-heading finance-topbar">
+              <div class="finance-title-block">
+                <h2>Monthly Finance</h2>
+                <p id="financeMonthLabel">Workspace</p>
+              </div>
+              <div class="filters finance-filters">
                 <input id="financeMonthFilter" type="month" />
                 <select id="financeTypeFilter">
                   <option value="All">All types</option>
@@ -1119,56 +1122,56 @@
                 <select id="financeCategoryFilter">
                   <option value="All">All categories</option>
                 </select>
-                <button class="secondary-action report-download-button" id="openFinanceRecordModalButton" type="button">
-                  <span>+ Add record</span>
-                </button>
                 <button class="primary-action report-download-button" id="downloadFinanceReportButton" type="button">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" /></svg>
                   <span>Download report</span>
                 </button>
+                <button class="secondary-action report-download-button" id="openFinanceRecordModalButton" type="button">
+                  <span>+ Add record</span>
+                </button>
               </div>
             </div>
 
-            <div class="finance-grid">
-              <article class="finance-card income-card">
-                <span>Project profit</span>
-                <strong id="financeProjectIncome">Rs. 0</strong>
-              </article>
-              <article class="finance-card income-card">
-                <span>Income</span>
-                <strong id="financeOtherIncome">Rs. 0</strong>
-              </article>
-              <article class="finance-card expense-card">
-                <span>Unpaid expenses</span>
-                <strong id="financeExpenses">Rs. 0</strong>
-              </article>
-              <article class="finance-card balance-card">
-                <span>Balance</span>
+            <div class="finance-overview-grid">
+              <article class="finance-hero-card">
+                <p>Net balance this month</p>
                 <strong id="financeBalance">Rs. 0</strong>
+                <div class="finance-hero-metrics">
+                  <div class="finance-hero-metric">
+                    <span>Project profit</span>
+                    <strong id="financeProjectIncome">Rs. 0</strong>
+                  </div>
+                  <div class="finance-hero-metric">
+                    <span>Income</span>
+                    <strong id="financeOtherIncome">Rs. 0</strong>
+                  </div>
+                  <div class="finance-hero-metric is-expense">
+                    <span>Unpaid</span>
+                    <strong id="financeExpenses">Rs. 0</strong>
+                  </div>
+                </div>
               </article>
-              <article class="finance-card saving-card">
-                <span>Savings</span>
-                <strong id="financeSavings">Rs. 0</strong>
-              </article>
-              <article class="finance-card gold-card">
-                <span>Gold assets</span>
-                <strong id="financeGoldAssets">Rs. 0</strong>
+
+              <article class="finance-assets-card">
+                <h3>Where money sits</h3>
+                <div class="finance-assets-body">
+                  <div class="finance-ring" id="financeAssetRing" aria-hidden="true">
+                    <div>
+                      <span>Assets</span>
+                      <strong id="financeAssetsTotal">Rs. 0</strong>
+                    </div>
+                  </div>
+                  <div class="finance-assets-legend">
+                    <div><i class="dot-savings"></i><span>Savings</span><strong id="financeLegendSavings">Rs. 0</strong></div>
+                    <div><i class="dot-gold"></i><span>Gold</span><strong id="financeLegendGold">Rs. 0</strong></div>
+                    <div><i class="dot-income"></i><span>Income</span><strong id="financeLegendIncome">Rs. 0</strong></div>
+                    <div><i class="dot-expenses"></i><span>Expenses</span><strong id="financeLegendExpenses">Rs. 0</strong></div>
+                  </div>
+                </div>
               </article>
             </div>
 
-            <div class="finance-monitor">
-              <div>
-                <h3>Monthly monitor</h3>
-              </div>
-              <div class="finance-bar">
-                <span id="financeIncomeBar" data-monitor-label="Income"></span>
-                <span id="financeExpenseBar" data-monitor-label="Unpaid expenses"></span>
-                <span id="financeSavingBar" data-monitor-label="Savings"></span>
-                <span id="financeGoldBar" data-monitor-label="Gold assets"></span>
-              </div>
-            </div>
-
-            <div class="table-wrap">
+            <div class="table-wrap finance-table-wrap">
               <table>
                 <thead>
                   <tr>
@@ -1235,14 +1238,18 @@
 
             <section class="panel admin-list-panel">
               <div class="panel-heading">
-                <h2>Client list</h2>
-                <div class="filters client-statement-tools">
+                <h2>Client list <span class="client-count-badge" id="clientCountBadge">0 clients</span></h2>
+                <div class="filters client-statement-tools client-toolbar">
+                  <input id="clientSearchInput" placeholder="Search clients or ID..." />
+                  <select id="clientCountryFilter">
+                    <option value="">All countries</option>
+                  </select>
                   <select id="statementClientSelect"></select>
-                  <button class="primary-action report-download-button" id="openClientModalButton" type="button">+ Add customer</button>
                   <button class="secondary-action icon-label-action" id="downloadClientStatementButton" type="button">
                     <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 3h7l4 4v14H7V3Zm7 1v4h4M9 12h6M9 16h6" /></svg>
                     Client statement
                   </button>
+                  <button class="primary-action report-download-button" id="openClientModalButton" type="button">+ Add customer</button>
                 </div>
               </div>
               <div class="table-wrap">
@@ -1254,6 +1261,7 @@
                       <th>Client</th>
                       <th>Contact</th>
                       <th>Country</th>
+                      <th>Status</th>
                       <th>Actions</th>
                     </tr>
                   </thead>

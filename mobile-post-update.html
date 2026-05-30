@@ -59,6 +59,121 @@
       }
       textarea { min-height: 96px; resize: vertical; }
       .row-2 { display: grid; gap: 10px; grid-template-columns: 1fr 1fr; }
+      .calendar-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .calendar-title-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px 14px;
+      }
+      .calendar-title-main {
+        margin: 0;
+        font-size: 0.98rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+      }
+      .calendar-title-sub {
+        margin: 0;
+        color: #64748b;
+        font-size: 0.68rem;
+        font-weight: 600;
+      }
+      .calendar-title {
+        margin: 6px 0 0;
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: #64748b;
+      }
+      .calendar-nav-wrap {
+        display: flex;
+        gap: 6px;
+      }
+      .calendar-nav {
+        border: 1px solid #c7d3e6;
+        background: #f7fbff;
+        color: #1d2e63;
+        border-radius: 9px;
+        min-height: 30px;
+        min-width: 30px;
+        font-weight: 700;
+      }
+      .calendar-shell {
+        margin-top: 10px;
+        border: 1px solid #dbe4f0;
+        border-radius: 12px;
+        overflow: hidden;
+        background: #fff;
+      }
+      .calendar-weekdays,
+      .calendar-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(0, 1fr));
+      }
+      .calendar-weekday {
+        text-align: center;
+        font-size: 0.58rem;
+        color: var(--muted);
+        font-weight: 700;
+        min-height: 22px;
+        display: grid;
+        place-items: center;
+        border-right: 1px solid #dde6f1;
+        border-bottom: 1px solid #dde6f1;
+        background: #f9fbff;
+      }
+      .calendar-weekday:last-child { border-right: 0; }
+      .calendar-day {
+        border: 0;
+        appearance: none;
+        -webkit-appearance: none;
+        border-right: 1px solid #d0dae8;
+        border-bottom: 1px solid #d0dae8;
+        min-height: 40px;
+        padding: 3px 4px 2px;
+        background: #ffffff;
+        font-size: 0.64rem;
+        color: #24314f;
+        text-align: left;
+        position: relative;
+      }
+      .calendar-day:focus { outline: none; }
+      .calendar-grid .calendar-day:nth-child(7n) { border-right: 0; }
+      .calendar-day.empty { background: #fcfdff; }
+      .calendar-day.active {
+        background: #f8fbff;
+      }
+      .calendar-day-top {
+        display: flex;
+        align-items: start;
+        justify-content: space-between;
+      }
+      .calendar-day-num {
+        font-size: 0.64rem;
+        font-weight: 600;
+        color: #1f2937;
+      }
+      .calendar-count {
+        font-size: 0.55rem;
+        font-weight: 600;
+        color: #64748b;
+      }
+      .calendar-dots {
+        margin-top: 2px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 2px;
+      }
+      .calendar-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 999px;
+        box-shadow: 0 0 0 2px #ffffff, 0 0 0 3px rgba(15, 23, 42, 0.08);
+      }
       .btn {
         width: 100%;
         border: 0;
@@ -132,11 +247,31 @@
         .card { padding: 14px; border-radius: 16px; }
         h1 { font-size: 1.8rem; }
         h2 { font-size: 1.5rem; }
+        .calendar-title-main { font-size: 1rem; }
+        .calendar-day { min-height: 36px; }
       }
     </style>
   </head>
   <body>
     <main class="wrap">
+      <section class="card">
+        <div class="calendar-head">
+          <div class="calendar-title-row">
+            <h2 class="calendar-title-main">Post calendar</h2>
+            <p class="calendar-title-sub">Posted updates + upcoming renewals</p>
+          </div>
+          <div class="calendar-nav-wrap">
+            <button class="calendar-nav" id="calPrev" type="button">‹</button>
+            <button class="calendar-nav" id="calNext" type="button">›</button>
+          </div>
+        </div>
+        <p class="calendar-title" id="calTitle">Month</p>
+        <div class="calendar-shell">
+          <div class="calendar-weekdays" id="calWeekdays"></div>
+          <div class="calendar-grid" id="calGrid"></div>
+        </div>
+      </section>
+
       <section class="card" id="formCard">
         <h1>Post Update</h1>
         <p class="muted">Mobile only: add posted update to Post Tracker.</p>

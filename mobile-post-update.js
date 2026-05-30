@@ -11,8 +11,17 @@
   const submitButton = document.getElementById("submitButton");
   const formStatus = document.getElementById("formStatus");
   const successOverlay = document.getElementById("successOverlay");
+  const calGrid = document.getElementById("calGrid");
+  const calWeekdays = document.getElementById("calWeekdays");
+  const calTitle = document.getElementById("calTitle");
+  const calPrev = document.getElementById("calPrev");
+  const calNext = document.getElementById("calNext");
 
   let projectRows = [];
+  let calendarMonth = new Date();
+  let dayDotsByDate = new Map();
+  let clientColors = {};
+  let clientColorsByLower = new Map();
 
   function ready() {
     return Boolean(cfg.url && cfg.anonKey);
@@ -42,6 +51,45 @@
     const month = String(now.getMonth() + 1).padStart(2, "0");
     const day = String(now.getDate()).padStart(2, "0");
     return `${year}-${month}-${day}`;
+  }
+
+  function formatMonthTitle(date) {
+    return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+  }
+
+  function normalizeDate(raw) {
+    const value = String(raw || "").trim();
+    if (!value) return "";
+    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+    const match = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    return match ? match[1] : "";
+  }
+
+  function addDot(date, color) {
+    if (!date || !color) return;
+    const list = dayDotsByDate.get(date) || [];
+    list.push(color);
+    dayDotsByDate.set(date, list);
+  }
+
+  function clientCalendarColor(clientName = "") {
+    const rawName = String(clientName || "").trim();
+    const saved = clientColors[rawName] || clientColorsByLower.get(rawName.toLowerCase()) || "";
+    if (/^#[0-9a-f]{6}$/i.test(saved || "")) return saved;
+    const colors = ["#2563eb", "#7c3aed", "#0f766e", "#db2777", "#ea580c", "#16a34a", "#0891b2", "#4f46e5", "#be123c", "#9333ea"];
+    const seed = [...String(clientName || "Client")].reduce((sum, char) => sum + char.charCodeAt(0), 0);
+    return colors[seed % colors.length];
+  }
+
+  async function loadClientColors() {
+    const res = await fetch(api("app_data?collection=eq.clientColors&app_id=eq.main&select=payload&limit=1"), { headers: headers() });
+    if (!res.ok) return;
+    const rows = await res.json();
+    const payload = rows[0]?.payload;
+    clientColors = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+    clientColorsByLower = new Map(
+      Object.entries(clientColors).map(([name, color]) => [String(name || "").trim().toLowerCase(), color]),
+    );
   }
 
   function ensureDateValue() {
@@ -89,6 +137,87 @@
     const rows = await res.json();
     projectRows = rows.map(normalizeProjectRow).filter((p) => p.id);
     populateClientOptions();
+  }
+
+  async function loadPosts() {
+    const res = await fetch(api("social_media_posts?select=posted_date,post_count,client_name,payload"), { headers: headers() });
+    if (!res.ok) throw new Error("Failed to load posts");
+    const rows = await res.json();
+    dayDotsByDate = new Map();
+    rows.forEach((row) => {
+      const payload = row && row.payload && typeof row.payload === "object" ? row.payload : {};
+      const date = normalizeDate(payload.postedDate || payload.uploadDate || row.posted_date);
+      if (!date) return;
+      const count = Math.max(1, Number(payload.count || row.post_count || 1));
+      const payloadProjectId = String(payload.projectId || "");
+      const mappedClientName = payloadProjectId ? (projectRows.find((p) => p.id === payloadProjectId)?.clientName || "") : "";
+      const clientName = String(payload.clientName || row.client_name || mappedClientName || "Client");
+      const color = clientCalendarColor(clientName);
+      for (let i = 0; i < count; i += 1) {
+        addDot(date, color);
+      }
+    });
+  }
+
+  async function loadRenewals() {
+    const res = await fetch(api("renewals?select=expiry_date,payload,status"), { headers: headers() });
+    if (!res.ok) return;
+    const rows = await res.json();
+    const todayValue = today();
+    rows.forEach((row) => {
+      const payload = row && row.payload && typeof row.payload === "object" ? row.payload : {};
+      const date = normalizeDate(payload.expiryDate || row.expiry_date);
+      if (!date) return;
+      if (date < todayValue) return;
+      const status = String(payload.status || row.status || "").toLowerCase();
+      if (status === "renewed") return;
+      addDot(date, "#7c3aed");
+    });
+  }
+
+  function renderCalendar() {
+    if (!calGrid || !calTitle) return;
+    calTitle.textContent = formatMonthTitle(calendarMonth);
+    const year = calendarMonth.getFullYear();
+    const month = calendarMonth.getMonth();
+    const first = new Date(year, month, 1);
+    const last = new Date(year, month + 1, 0);
+    const startWeekday = first.getDay();
+    const daysInMonth = last.getDate();
+    const selectedDate = normalizeDate(postDate.value || "");
+    const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    if (calWeekdays && !calWeekdays.dataset.ready) {
+      calWeekdays.innerHTML = weekdayLabels.map((label) => `<div class="calendar-weekday">${label}</div>`).join("");
+      calWeekdays.dataset.ready = "1";
+    }
+
+    const cells = [];
+    const totalCells = 42;
+    for (let cell = 0; cell < totalCells; cell += 1) {
+      const day = cell - startWeekday + 1;
+      if (day < 1 || day > daysInMonth) {
+        cells.push(`<div class="calendar-day empty"></div>`);
+        continue;
+      }
+      const dateKey = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+      const dots = dayDotsByDate.get(dateKey) || [];
+      const count = dots.length;
+      const classes = ["calendar-day"];
+      if (selectedDate === dateKey) classes.push("active");
+      cells.push(
+        `<button type="button" class="${classes.join(" ")}" data-cal-date="${dateKey}">
+          <span class="calendar-day-top">
+            <span class="calendar-day-num">${day}</span>
+            ${count ? `<span class="calendar-count">${count}</span>` : ""}
+          </span>
+          <span class="calendar-dots">
+            ${dots.slice(0, 6).map((color) => `<i class="calendar-dot" style="background:${color}"></i>`).join("")}
+          </span>
+        </button>`,
+      );
+    }
+    calGrid.innerHTML = cells.join("");
   }
 
   function trackedProject(project) {
@@ -170,6 +299,7 @@
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(await res.text());
+      const savedDate = date;
       setText("");
       if (successOverlay) {
         successOverlay.classList.add("show");
@@ -179,6 +309,9 @@
       postRemarks.value = "";
       postCount.value = "1";
       ensureDateValue();
+      const dotColor = clientCalendarColor(clientName);
+      for (let i = 0; i < count; i += 1) addDot(savedDate, dotColor);
+      renderCalendar();
       window.setTimeout(() => {
         window.location.reload();
       }, 900);
@@ -196,16 +329,36 @@
     }
     ensureDateValue();
     try {
-      await loadProjects();
+      await Promise.all([loadProjects(), loadClientColors()]);
+      await Promise.all([loadPosts(), loadRenewals()]);
+      renderCalendar();
     } catch {
       setText("Failed to load projects", true);
     }
   }
 
   postClient.addEventListener("change", populateProjectOptions);
+  calPrev?.addEventListener("click", () => {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() - 1, 1);
+    renderCalendar();
+  });
+  calNext?.addEventListener("click", () => {
+    calendarMonth = new Date(calendarMonth.getFullYear(), calendarMonth.getMonth() + 1, 1);
+    renderCalendar();
+  });
+  calGrid?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-cal-date]");
+    if (!button) return;
+    const value = button.dataset.calDate || "";
+    if (!value) return;
+    postDate.value = value;
+    calendarMonth = new Date(`${value}T00:00:00`);
+    renderCalendar();
+  });
   postLink.addEventListener("input", () => {
     if (!postDate.value) ensureDateValue();
   });
+  postDate.addEventListener("change", renderCalendar);
   submitButton.addEventListener("click", savePost);
   init();
 })();

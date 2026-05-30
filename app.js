@@ -320,6 +320,9 @@ const managerHandleSearchInput = document.getElementById("managerHandleSearchInp
 const pmMonthFilter = document.getElementById("pmMonthFilter");
 const calendarMonthFilter = document.getElementById("calendarMonthFilter");
 const statementClientSelect = document.getElementById("statementClientSelect");
+const clientSearchInput = document.getElementById("clientSearchInput");
+const clientCountryFilter = document.getElementById("clientCountryFilter");
+const clientCountBadge = document.getElementById("clientCountBadge");
 const clientSelect = document.getElementById("clientSelect");
 const clientProjectsSelect = document.getElementById("clientProjectsSelect");
 const addClientProjectsButton = document.getElementById("addClientProjectsButton");
@@ -334,6 +337,30 @@ const invoiceModal = document.getElementById("invoiceModal");
 const serviceLetterForm = document.getElementById("serviceLetterForm");
 const serviceLetterEditorModal = document.getElementById("serviceLetterEditorModal");
 const serviceLetterOptionsModal = document.getElementById("serviceLetterOptionsModal");
+let searchPopupBackdrop = null;
+let isDashboardSearchPopupOpen = false;
+
+function ensureSearchPopupBackdrop() {
+  if (searchPopupBackdrop) return searchPopupBackdrop;
+  searchPopupBackdrop = document.createElement("div");
+  searchPopupBackdrop.className = "search-popup-backdrop";
+  searchPopupBackdrop.hidden = true;
+  searchPopupBackdrop.addEventListener("click", hideDashboardSearchPopup);
+  document.body.appendChild(searchPopupBackdrop);
+  return searchPopupBackdrop;
+}
+
+function openDashboardSearchPopup() {
+  const searchPanel = document.querySelector(".dashboard-search-panel");
+  const resultsWrap = document.querySelector(".dashboard-search-results");
+  if (!searchPanel || !resultsWrap) return;
+  ensureSearchPopupBackdrop();
+  isDashboardSearchPopupOpen = true;
+  searchPanel.classList.remove("is-hidden");
+  resultsWrap.classList.remove("is-hidden");
+  if (searchPopupBackdrop) searchPopupBackdrop.hidden = false;
+  positionDashboardSearchPopup();
+}
 
 function updateFullscreenButtonState() {
   if (!toggleFullscreenButton) return;
@@ -2871,6 +2898,7 @@ function switchView(viewName) {
   });
   updateTopbarForView(viewName);
   if (quickActionsMenu) quickActionsMenu.hidden = true;
+  if (viewName !== "dashboard") hideDashboardSearchPopup();
 
   const activeTab = Array.from(navTabs).find((tab) => tab.dataset.view === viewName);
   const activeGroup = activeTab?.closest("[data-nav-group]");
@@ -4438,7 +4466,7 @@ function renderDashboard() {
     button.classList.toggle("is-active", button.dataset.dashboardInvoiceFilter === dashboardInvoiceFilter);
   });
 
-  renderDashboardSearch();
+  if (isDashboardSearchPopupOpen) renderDashboardSearch();
 }
 
 function renderDashboardRevenue(invoiceDocs) {
@@ -4566,22 +4594,24 @@ function renderDashboardTopCustomers(invoiceDocs) {
     : `<p class="muted-label">No customers yet.</p>`;
 }
 
-function renderDashboardSearch() {
+function renderDashboardSearch(forceOpen = false) {
   const query = dashboardSearchInput.value.trim().toLowerCase();
   const table = document.getElementById("dashboardSearchTable");
-  const searchPanel = document.querySelector(".dashboard-search-panel");
-  const resultsWrap = document.querySelector(".dashboard-search-results");
-  if (!query) {
-    searchPanel.classList.add("is-hidden");
-    resultsWrap.classList.add("is-hidden");
-    table.innerHTML = "";
+  if (forceOpen) {
+    openDashboardSearchPopup();
+  } else if (!isDashboardSearchPopupOpen) {
+    return;
+  } else if (!query) {
+    hideDashboardSearchPopup();
     return;
   }
-  searchPanel.classList.remove("is-hidden");
-  resultsWrap.classList.remove("is-hidden");
+  if (!table) return;
+  positionDashboardSearchPopup();
 
-  const results = invoices
+  const results = [...invoices]
+    .sort((a, b) => String(b.updatedAt || b.invoiceDate).localeCompare(String(a.updatedAt || a.invoiceDate)))
     .filter((invoice) => {
+      if (!query) return true;
       const haystack =
         `${invoice.invoiceNumber} ${invoice.documentType || "Invoice"} ${invoice.customerName} ${invoice.customerEmail}`.toLowerCase();
       return haystack.includes(query);
@@ -4591,6 +4621,28 @@ function renderDashboardSearch() {
   table.innerHTML = results.length
     ? results.map((invoice) => dashboardDocumentRow(invoice)).join("")
     : emptyRow("No matching documents", 6);
+}
+
+function positionDashboardSearchPopup() {
+  if (!isDashboardSearchPopupOpen) return;
+  const searchPanel = document.querySelector(".dashboard-search-panel");
+  if (!searchPanel || searchPanel.classList.contains("is-hidden") || !dashboardSearchInput) return;
+  const rect = dashboardSearchInput.getBoundingClientRect();
+  searchPanel.style.left = "50%";
+  searchPanel.style.transform = "translateX(-50%)";
+  searchPanel.style.top = `${rect.bottom + 10}px`;
+}
+
+function hideDashboardSearchPopup() {
+  const searchPanel = document.querySelector(".dashboard-search-panel");
+  const resultsWrap = document.querySelector(".dashboard-search-results");
+  const table = document.getElementById("dashboardSearchTable");
+  if (!searchPanel || !resultsWrap || !table) return;
+  isDashboardSearchPopupOpen = false;
+  searchPanel.classList.add("is-hidden");
+  resultsWrap.classList.add("is-hidden");
+  if (searchPopupBackdrop) searchPopupBackdrop.hidden = true;
+  table.innerHTML = "";
 }
 
 function dashboardDocumentRow(invoice) {
@@ -4715,6 +4767,15 @@ function renderClients() {
   statementClientSelect.innerHTML = `<option value="">Select client</option>${clients
     .map((client) => `<option value="${escapeAttribute(client.name)}">${escapeHtml(client.name)}</option>`)
     .join("")}`;
+  if (clientCountryFilter) {
+    const selectedCountry = clientCountryFilter.value;
+    const countryOptions = [...new Set(clients.map((client) => (client.country || "").trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b))
+      .map((country) => `<option value="${escapeAttribute(country)}">${escapeHtml(country)}</option>`)
+      .join("");
+    clientCountryFilter.innerHTML = `<option value="">All countries</option>${countryOptions}`;
+    clientCountryFilter.value = selectedCountry;
+  }
   document.getElementById("renewalClient").innerHTML = `<option value="">Select client</option>${clients
     .map((client) => `<option value="${escapeAttribute(client.name)}">${escapeHtml(client.name)}</option>`)
     .join("")}`;
@@ -4722,21 +4783,49 @@ function renderClients() {
     .map((client) => `<option value="${escapeAttribute(client.name)}"></option>`)
     .join("");
 
+  const searchQuery = String(clientSearchInput?.value || "").trim().toLowerCase();
+  const countryFilter = String(clientCountryFilter?.value || "").trim();
+  const filteredClients = clients.filter((client) => {
+    const haystack = `${client.clientCode || ""} ${client.name || ""} ${client.email || ""} ${client.phone || ""}`.toLowerCase();
+    const matchesSearch = !searchQuery || haystack.includes(searchQuery);
+    const matchesCountry = !countryFilter || (client.country || "") === countryFilter;
+    return matchesSearch && matchesCountry;
+  });
+
   const table = document.getElementById("clientTable");
-  const totalPages = Math.max(1, Math.ceil(clients.length / CLIENT_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredClients.length / CLIENT_PAGE_SIZE));
   clientPage = Math.min(clientPage, totalPages);
   const start = (clientPage - 1) * CLIENT_PAGE_SIZE;
-  const pageClients = clients.slice(start, start + CLIENT_PAGE_SIZE);
+  const pageClients = filteredClients.slice(start, start + CLIENT_PAGE_SIZE);
   table.innerHTML = pageClients.length
     ? pageClients
         .map(
           (client, index) => `
             <tr>
               <td class="row-number-cell">${start + index + 1}</td>
-              <td>${escapeHtml(client.clientCode)}</td>
-              <td>${escapeHtml(client.name)}</td>
-              <td>${escapeHtml([client.email, formatPhone(client.phone)].filter(Boolean).join(" | "))}</td>
-              <td>${escapeHtml(client.country)}</td>
+              <td><span class="client-id-pill">${escapeHtml(client.clientCode)}</span></td>
+              <td>
+                <div class="client-name-cell">
+                  <span class="client-avatar">${escapeHtml(clientInitials(client.name))}</span>
+                  <div>
+                    <strong>${escapeHtml(client.name)}</strong>
+                    <small>${escapeHtml(client.email || "Customer")}</small>
+                  </div>
+                </div>
+              </td>
+              <td>
+                <div class="client-contact-cell">
+                  <strong>${escapeHtml(client.email || "-")}</strong>
+                  <small>${escapeHtml(formatPhone(client.phone) || "-")}</small>
+                </div>
+              </td>
+              <td>
+                <span class="client-country-cell">
+                  <span class="country-flag" aria-hidden="true">${countryFlag(client.country)}</span>
+                  <span>${escapeHtml(client.country || "-")}</span>
+                </span>
+              </td>
+              <td>${statusBadge(clientStatus(client))}</td>
               <td>
                 <div class="action-row icon-actions">
                   <button class="icon-action invoice" title="Create invoice" aria-label="Create invoice" type="button" data-client-invoice="${client.id}">${iconInvoice()}</button>
@@ -4748,10 +4837,57 @@ function renderClients() {
           `,
         )
         .join("")
-    : emptyRow("No saved clients yet", 6);
+    : emptyRow("No saved clients found", 7);
+  if (clientCountBadge) {
+    clientCountBadge.textContent = `${filteredClients.length} client${filteredClients.length === 1 ? "" : "s"}`;
+  }
   document.getElementById("clientPrevPage").disabled = clientPage <= 1;
   document.getElementById("clientNextPage").disabled = clientPage >= totalPages;
-  document.getElementById("clientPageLabel").textContent = `Page ${clientPage} of ${totalPages}`;
+  const from = filteredClients.length ? start + 1 : 0;
+  const to = Math.min(start + CLIENT_PAGE_SIZE, filteredClients.length);
+  document.getElementById("clientPageLabel").textContent = `Showing ${from}-${to} of ${filteredClients.length} clients`;
+}
+
+function clientInitials(name = "") {
+  const words = String(name)
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2);
+  if (!words.length) return "CL";
+  return words.map((word) => word[0]).join("").toUpperCase();
+}
+
+function clientStatus(client) {
+  const status = String(client?.status || "").trim();
+  if (status) return status;
+  return client?.email ? "Active" : "Lead";
+}
+
+function countryFlag(countryName = "") {
+  const key = String(countryName || "").trim().toLowerCase();
+  const flagMap = {
+    "sri lanka": "🇱🇰",
+    canada: "🇨🇦",
+    "united kingdom": "🇬🇧",
+    uk: "🇬🇧",
+    australia: "🇦🇺",
+    switzerland: "🇨🇭",
+    india: "🇮🇳",
+    "united states": "🇺🇸",
+    usa: "🇺🇸",
+    germany: "🇩🇪",
+    france: "🇫🇷",
+    italy: "🇮🇹",
+    japan: "🇯🇵",
+    singapore: "🇸🇬",
+    malaysia: "🇲🇾",
+    uae: "🇦🇪",
+    "saudi arabia": "🇸🇦",
+    qatar: "🇶🇦",
+    "new zealand": "🇳🇿",
+  };
+  return flagMap[key] || "🌍";
 }
 
 function renderEmployees() {
@@ -7295,26 +7431,33 @@ function renderFinance() {
   const incomePercent = totalFlow ? Math.round((totalIncome / totalFlow) * 100) : 0;
   const expensePercent = totalFlow ? Math.round((unpaidExpenses / totalFlow) * 100) : 0;
   const savingPercent = totalFlow ? Math.round((savings / totalFlow) * 100) : 0;
+  const goldPercent = Math.max(0, 100 - incomePercent - expensePercent - savingPercent);
 
   document.getElementById("financeProjectIncome").textContent = compactMoney(projectSummary.income, "LKR");
   document.getElementById("financeOtherIncome").textContent = compactMoney(otherIncome, "LKR");
   document.getElementById("financeExpenses").textContent = compactMoney(unpaidExpenses, "LKR");
   document.getElementById("financeBalance").textContent = compactMoney(balance, "LKR");
-  document.getElementById("financeSavings").textContent = compactMoney(savings, "LKR");
-  document.getElementById("financeGoldAssets").textContent = compactMoney(goldAssets, "LKR");
-  document.getElementById("financeIncomeBar").style.width = `${incomePercent}%`;
-  document.getElementById("financeExpenseBar").style.width = `${expensePercent}%`;
-  document.getElementById("financeSavingBar").style.width = `${savingPercent}%`;
-  document.getElementById("financeGoldBar").style.width = `${Math.max(0, 100 - incomePercent - expensePercent - savingPercent)}%`;
-  setFinanceBarTooltip("financeIncomeBar", "Income", totalIncome, incomePercent);
-  setFinanceBarTooltip("financeExpenseBar", "Unpaid expenses", unpaidExpenses, expensePercent);
-  setFinanceBarTooltip("financeSavingBar", "Savings", savings, savingPercent);
-  setFinanceBarTooltip(
-    "financeGoldBar",
-    "Gold assets",
-    goldAssets,
-    Math.max(0, 100 - incomePercent - expensePercent - savingPercent),
-  );
+  const monthLabel = document.getElementById("financeMonthLabel");
+  if (monthLabel) monthLabel.textContent = `Workspace · ${formatMonth(month)}`;
+  const financeLegendSavings = document.getElementById("financeLegendSavings");
+  const financeLegendGold = document.getElementById("financeLegendGold");
+  const financeLegendIncome = document.getElementById("financeLegendIncome");
+  const financeLegendExpenses = document.getElementById("financeLegendExpenses");
+  if (financeLegendSavings) financeLegendSavings.textContent = compactMoney(savings, "LKR");
+  if (financeLegendGold) financeLegendGold.textContent = compactMoney(goldAssets, "LKR");
+  if (financeLegendIncome) financeLegendIncome.textContent = compactMoney(totalIncome, "LKR");
+  if (financeLegendExpenses) financeLegendExpenses.textContent = compactMoney(unpaidExpenses, "LKR");
+  const assetsTotal = document.getElementById("financeAssetsTotal");
+  if (assetsTotal) assetsTotal.textContent = shortAmount(savings + goldAssets);
+  const financeAssetRing = document.getElementById("financeAssetRing");
+  if (financeAssetRing) {
+    financeAssetRing.style.background = `conic-gradient(
+      #3b82f6 0% ${savingPercent}%,
+      #f59e0b ${savingPercent}% ${savingPercent + goldPercent}%,
+      #10b981 ${savingPercent + goldPercent}% ${savingPercent + goldPercent + incomePercent}%,
+      #ef4444 ${savingPercent + goldPercent + incomePercent}% 100%
+    )`;
+  }
 
   const autoRows = [
     {
@@ -7343,7 +7486,7 @@ function renderFinance() {
               <td class="row-number-cell">${start + index + 1}</td>
               <td>${formatDate(financeRecordDisplayDate(record, month))}</td>
               <td><span class="finance-type ${record.type}">${financeTypeLabel(record.type)}</span></td>
-              <td>${escapeHtml(record.category)}</td>
+              <td><span class="finance-category-cell" title="${escapeAttribute(record.category || "Category")}">${financeCategoryIcon(record)}</span></td>
               <td>${escapeHtml([record.note, record.repeat === "monthly" ? "Monthly" : ""].filter(Boolean).join(" | "))}</td>
               <td>${compactMoney(record.amount, "LKR")}</td>
               <td><span class="finance-status ${financeRecordPaidInMonth(record, month) ? "paid" : "unpaid"}">${financeStatusLabel(record, month)}</span></td>
@@ -7373,6 +7516,7 @@ function renderFinance() {
 
 function setFinanceBarTooltip(id, label, amount, percent) {
   const element = document.getElementById(id);
+  if (!element) return;
   element.dataset.monitorLabel = `${label}: ${compactMoney(amount, "LKR")} (${formatPercent(percent)})`;
   element.title = element.dataset.monitorLabel;
 }
@@ -7416,6 +7560,17 @@ function financeTypeLabel(type) {
     loan: "Loan",
   };
   return labels[type] || "Record";
+}
+
+function financeCategoryIcon(record) {
+  const type = String(record?.type || "").toLowerCase();
+  const category = String(record?.category || "").toLowerCase();
+  if (type === "income") return category.includes("project") ? "📈" : "💵";
+  if (type === "expense") return "🧾";
+  if (type === "saving") return "💳";
+  if (type === "gold") return "🪙";
+  if (type === "loan") return "🤝";
+  return "•";
 }
 
 function financeSummaryForMonth(month) {
@@ -9542,7 +9697,19 @@ invoiceMonthFilter.addEventListener("change", () => {
   invoicePage = 1;
   renderInvoiceTable();
 });
-dashboardSearchInput.addEventListener("input", renderDashboardSearch);
+dashboardSearchInput.addEventListener("input", () => {
+  if (document.body.dataset.activeView !== "dashboard") return;
+  renderDashboardSearch(true);
+});
+dashboardSearchInput.addEventListener("click", () => {
+  if (document.body.dataset.activeView !== "dashboard") return;
+  renderDashboardSearch(true);
+});
+dashboardSearchInput.addEventListener("keydown", (event) => {
+  if (event.key !== "Escape") return;
+  dashboardSearchInput.value = "";
+  hideDashboardSearchPopup();
+});
 quotationSearchInput.addEventListener("input", renderQuotationTable);
 quotationStatusFilter.addEventListener("change", renderQuotationTable);
 quotationMonthFilter.addEventListener("change", renderQuotationTable);
@@ -9659,6 +9826,14 @@ document.getElementById("clientPrevPage").addEventListener("click", () => {
 });
 document.getElementById("clientNextPage").addEventListener("click", () => {
   clientPage += 1;
+  renderClients();
+});
+clientSearchInput?.addEventListener("input", () => {
+  clientPage = 1;
+  renderClients();
+});
+clientCountryFilter?.addEventListener("change", () => {
+  clientPage = 1;
   renderClients();
 });
 document.getElementById("invoicePrevPage").addEventListener("click", () => {
@@ -10168,6 +10343,15 @@ form.addEventListener("submit", (event) => {
 });
 
 document.body.addEventListener("click", (event) => {
+  if (!event.target.closest("#dashboardSearchInput") && !event.target.closest(".dashboard-search-panel")) {
+    hideDashboardSearchPopup();
+  }
+  if (
+    event.target.closest(".dashboard-search-panel") &&
+    event.target.closest("[data-select], [data-edit], [data-paid], [data-monthly], [data-delete], [data-convert]")
+  ) {
+    hideDashboardSearchPopup();
+  }
   if (!event.target.closest(".user-menu-wrap")) closeUserMenu();
   if (quickActionsMenu && !event.target.closest(".topbar-quick-actions-wrap")) quickActionsMenu.hidden = true;
   if (appShell.classList.contains("is-locked")) return;
@@ -10336,6 +10520,8 @@ document.body.addEventListener("click", (event) => {
     }
   }
 });
+window.addEventListener("resize", positionDashboardSearchPopup);
+window.addEventListener("scroll", positionDashboardSearchPopup, true);
 
 document.body.addEventListener("change", (event) => {
   if (appShell.classList.contains("is-locked")) return;
