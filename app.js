@@ -21,6 +21,14 @@ const CALENDAR_EVENTS_KEY = "infonits.calendarEvents";
 const CLOUD_BACKUP_KEY = "infonits.cloudBackup";
 const SIDEBAR_COLLAPSED_KEY = "infonits.sidebarCollapsed";
 const ACTIVE_VIEW_KEY = "infonits.activeView";
+const MONTH_FILTER_KEYS = {
+  invoice: "infonits.monthFilter.invoice",
+  quotation: "infonits.monthFilter.quotation",
+  project: "infonits.monthFilter.project",
+  finance: "infonits.monthFilter.finance",
+  manager: "infonits.monthFilter.manager",
+  calendar: "infonits.monthFilter.calendar",
+};
 const FINANCE_PAGE_SIZE = 7;
 const RECENT_INVOICE_PAGE_SIZE = 7;
 const CLIENT_PAGE_SIZE = 10;
@@ -139,6 +147,7 @@ let projectFormVisible = false;
 let financePage = 1;
 let recentInvoicesPage = 1;
 let dashboardInvoiceFilter = "All";
+let invoiceProjectSyncLock = false;
 let clientPage = 1;
 let invoicePage = 1;
 let pmProjectPage = 1;
@@ -331,6 +340,7 @@ const clearClientProjectsButton = document.getElementById("clearClientProjectsBu
 const clientProjectChecklist = document.getElementById("clientProjectChecklist");
 const clientProjectHint = document.getElementById("clientProjectHint");
 const linkedProjectsPreview = document.getElementById("linkedProjectsPreview");
+const linkedProjectMonthLabel = document.getElementById("linkedProjectMonthLabel");
 const previewScale = document.getElementById("previewScale");
 const previewZoomLabel = document.getElementById("previewZoomLabel");
 const invoiceModal = document.getElementById("invoiceModal");
@@ -851,8 +861,79 @@ function normalizeObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function toIsoDateTime(value, fallback = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T00:00:00`) : new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return fallback;
+  return parsed.toISOString();
+}
+
+function normalizeInvoiceCreatedAt(invoice) {
+  const createdAt = toIsoDateTime(invoice?.createdAt || invoice?.created_at || "", "");
+  return {
+    ...invoice,
+    createdAt,
+  };
+}
+
+function forceCurrentMonthFilters() {
+  const currentMonth = today().slice(0, 7);
+  const monthInputs = [
+    invoiceMonthFilter,
+    quotationMonthFilter,
+    projectMonthFilter,
+    financeMonthFilter,
+    pmMonthFilter,
+    calendarMonthFilter,
+  ];
+  monthInputs.forEach((input) => {
+    if (input) input.value = currentMonth;
+  });
+}
+
+function saveMonthFilterPreference(key, value) {
+  if (!key) return;
+  const month = String(value || "");
+  if (!/^\d{4}-\d{2}$/.test(month)) return;
+  localStorage.setItem(key, month);
+}
+
+function loadMonthFilterPreference(key) {
+  if (!key) return "";
+  const saved = String(localStorage.getItem(key) || "");
+  return /^\d{4}-\d{2}$/.test(saved) ? saved : "";
+}
+
+function applySavedMonthFilters() {
+  const mapping = [
+    [invoiceMonthFilter, MONTH_FILTER_KEYS.invoice],
+    [quotationMonthFilter, MONTH_FILTER_KEYS.quotation],
+    [projectMonthFilter, MONTH_FILTER_KEYS.project],
+    [financeMonthFilter, MONTH_FILTER_KEYS.finance],
+    [pmMonthFilter, MONTH_FILTER_KEYS.manager],
+    [calendarMonthFilter, MONTH_FILTER_KEYS.calendar],
+  ];
+  mapping.forEach(([input, key]) => {
+    if (!input) return;
+    const saved = loadMonthFilterPreference(key);
+    if (saved) input.value = saved;
+  });
+}
+
+function forceCurrentMonthFiltersAndRender() {
+  forceCurrentMonthFilters();
+  pmProjectPage = 1;
+  pmPostPage = 1;
+  pmNotificationPage = 1;
+  invoicePage = 1;
+  recentInvoicesPage = 1;
+  financePage = 1;
+  renderSections(["invoices", "quotations", "projects", "finance", "manager", "calendar", "dashboard"]);
+}
+
 function normalizeLoadedState() {
-  invoices = normalizeArray(invoices);
+  invoices = normalizeArray(invoices).map((invoice) => normalizeInvoiceCreatedAt(invoice));
   projects = normalizeArray(projects);
   renewals = normalizeArray(renewals);
   socialMediaPosts = normalizeArray(socialMediaPosts);
@@ -1045,7 +1126,7 @@ async function syncInvoicesFromSupabaseIfChanged() {
     if (stamp === lastInvoiceSyncStamp) return;
     lastInvoiceSyncStamp = stamp;
     const rows = await readTableRows(supabaseDirectCollections.invoices);
-    invoices = rows;
+    invoices = normalizeArray(rows).map((invoice) => normalizeInvoiceCreatedAt(invoice));
     bumpDataVersion("invoices");
     updateOverdueInvoices();
     requestRender("dashboard");
@@ -1232,7 +1313,7 @@ const supabaseDirectCollections = {
     table: "invoices",
     get: () => invoices,
     set: (rows) => {
-      invoices = rows;
+      invoices = normalizeArray(rows).map((invoice) => normalizeInvoiceCreatedAt(invoice));
     },
     toRow: (invoice, index) => ({
       app_id: payloadId(invoice, `invoice-${index + 1}`),
@@ -2037,7 +2118,11 @@ function formatMonth(monthValue) {
 }
 
 function today() {
-  return new Date().toISOString().slice(0, 10);
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function addDays(dateString, days) {
@@ -2881,6 +2966,20 @@ function matchesMonth(dateString, monthValue) {
   return !monthValue || String(dateString || "").startsWith(monthValue);
 }
 
+function isWithinLastDays(dateString, days) {
+  const value = String(dateString || "").trim();
+  if (!value) return false;
+  const parsed = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T00:00:00`) : new Date(value);
+  if (Number.isNaN(parsed.getTime())) return false;
+  const now = new Date(`${today()}T00:00:00`);
+  const diffDays = Math.floor((now.getTime() - parsed.getTime()) / (24 * 60 * 60 * 1000));
+  return diffDays >= 0 && diffDays <= days;
+}
+
+function invoiceRecentDate(invoice) {
+  return invoice?.invoiceDate || "";
+}
+
 function switchView(viewName) {
   if (!userCanAccess(viewName)) {
     showToast("This user cannot access that section");
@@ -2974,6 +3073,114 @@ function invoiceTotalInLkr(invoice) {
   const month = String(invoice.invoiceDate || today()).slice(0, 7);
   const rate = projectUsdRateForMonth(month) || projectUsdRateForMonth(today().slice(0, 7)) || 319.6;
   return total * rate;
+}
+
+function valueChanged(a, b, epsilon = 0.01) {
+  return Math.abs(Number(a || 0) - Number(b || 0)) > epsilon;
+}
+
+function primaryProjectIdFromInvoice(invoice = {}) {
+  if (invoice.projectId) return invoice.projectId;
+  if (Array.isArray(invoice.projectIds) && invoice.projectIds.length) return invoice.projectIds[0];
+  return "";
+}
+
+function persistPrimaryProjectLink(invoice, projectId) {
+  if (!invoice || !projectId) return false;
+  let changed = false;
+  const currentIds = Array.isArray(invoice.projectIds) ? [...new Set(invoice.projectIds.filter(Boolean))] : [];
+  if (invoice.projectId !== projectId) {
+    invoice.projectId = projectId;
+    changed = true;
+  }
+  if (!currentIds.length || currentIds[0] !== projectId) {
+    invoice.projectIds = [projectId, ...currentIds.filter((id) => id !== projectId)];
+    changed = true;
+  }
+  if (!changed) return false;
+  invoices = invoices.map((item) => (item.id === invoice.id ? { ...item, projectId: invoice.projectId, projectIds: [...invoice.projectIds] } : item));
+  return true;
+}
+
+function syncProjectValueFromInvoice(invoice) {
+  if (!invoice || invoiceProjectSyncLock) return;
+  invoiceProjectSyncLock = true;
+  try {
+    let projectId = primaryProjectIdFromInvoice(invoice);
+    if (!projectId) {
+      const fallback = findProjectForInvoice(invoice);
+      if (fallback?.id) {
+        projectId = fallback.id;
+        persistPrimaryProjectLink(invoice, fallback.id);
+      }
+    }
+    if (!projectId) return;
+    const project = projects.find((item) => item.id === projectId);
+    if (!project) return;
+
+    const invoiceTotal = Number(calculateTotals(invoice).total || 0);
+    const isUsdInvoice = invoiceCurrency(invoice) === "USD";
+    const nextValueUsd = isUsdInvoice ? invoiceTotal : Number(project.valueUsd || 0);
+    const monthForRate = project.month || String(invoice.invoiceDate || today()).slice(0, 7);
+    const nextValueLkr = isUsdInvoice ? convertedProjectUsd(invoiceTotal, monthForRate) : invoiceTotal;
+
+    if (!valueChanged(project.valueLkr, nextValueLkr) && !valueChanged(project.valueUsd, nextValueUsd)) return;
+    projects = projects.map((item) => (
+      item.id === projectId
+        ? { ...item, valueLkr: nextValueLkr, valueUsd: nextValueUsd, updatedAt: new Date().toISOString() }
+        : item
+    ));
+    saveProjects();
+  } finally {
+    invoiceProjectSyncLock = false;
+  }
+}
+
+function projectAmountForInvoice(project, invoice) {
+  if (!project || !invoice) return 0;
+  if (invoiceCurrency(invoice) !== "USD") return Number(projectValueLkr(project) || 0);
+  const usdValue = Number(project.valueUsd || 0);
+  if (usdValue > 0) return usdValue;
+  const month = String(invoice.invoiceDate || project.month || today()).slice(0, 7);
+  const rate = projectUsdRateForMonth(month) || projectUsdRateForMonth(today().slice(0, 7)) || 319.6;
+  return rate > 0 ? Number(projectValueLkr(project) || 0) / rate : 0;
+}
+
+function syncInvoiceValueFromProject(projectId) {
+  if (!projectId || invoiceProjectSyncLock) return;
+  const project = projects.find((item) => item.id === projectId);
+  if (!project) return;
+  invoiceProjectSyncLock = true;
+  try {
+    let changed = false;
+    invoices = invoices.map((invoice) => {
+      const primaryId = primaryProjectIdFromInvoice(invoice);
+      if (primaryId !== projectId) return invoice;
+      if (!Array.isArray(invoice.items) || !invoice.items.length) return invoice;
+      const targetAmount = Number(projectAmountForInvoice(project, invoice) || 0);
+      const projectName = String(project.name || "").trim().toLowerCase();
+      let index = invoice.items.findIndex((item) => String(item.title || "").trim().toLowerCase() === projectName);
+      if (index < 0) index = 0;
+      const currentItem = invoice.items[index] || {};
+      const qty = Number(currentItem.quantity || 0);
+      const nextItem = { ...currentItem };
+      if (qty > 0) {
+        const nextPrice = targetAmount / qty;
+        if (!valueChanged(currentItem.price, nextPrice) && Number(currentItem.amount || 0) === 0) return invoice;
+        nextItem.price = nextPrice;
+        nextItem.amount = 0;
+      } else {
+        if (!valueChanged(currentItem.amount, targetAmount)) return invoice;
+        nextItem.amount = targetAmount;
+      }
+      const nextItems = invoice.items.map((item, itemIndex) => (itemIndex === index ? nextItem : item));
+      changed = true;
+      return { ...invoice, items: nextItems, updatedAt: new Date().toISOString() };
+    });
+    if (changed) saveInvoices();
+  } finally {
+    invoiceProjectSyncLock = false;
+  }
 }
 
 function addFinanceRecordOnce(record) {
@@ -3335,11 +3542,13 @@ function createMonthlyCopy(id) {
 function deleteInvoice(id) {
   const invoice = invoices.find((item) => item.id === id);
   if (!invoice) return;
+  const linkedProjectTargetId = resolveInvoiceStatusProjectTargetId(invoice);
 
   const confirmed = confirm(`Delete ${invoice.invoiceNumber}?`);
   if (!confirmed) return;
 
   invoices = invoices.filter((item) => item.id !== id);
+  revertLinkedProjectToWaitingIfNoInvoices(linkedProjectTargetId);
   deleteSupabaseRecord("invoices", id);
   if (selectedInvoiceId === id) {
     selectedInvoiceId = invoices[0]?.id || null;
@@ -3368,19 +3577,62 @@ function markInvoicePaid(id) {
 }
 
 function markLinkedProjectPaid(invoice) {
-  const linkedIds = Array.isArray(invoice.projectIds) && invoice.projectIds.length
-    ? invoice.projectIds
-    : invoice.projectId
-      ? [invoice.projectId]
-      : [];
-  let targetIds = [...new Set(linkedIds.filter(Boolean))];
-  if (!targetIds.length) {
+  let targetId = resolveInvoiceStatusProjectTargetId(invoice);
+  if (!targetId) {
     const fallback = findProjectForInvoice(invoice);
-    if (fallback?.id) targetIds = [fallback.id];
+    if (fallback?.id) {
+      persistPrimaryProjectLink(invoice, fallback.id);
+      saveInvoices();
+      targetId = resolveInvoiceStatusProjectTargetId(invoice) || fallback.id;
+    }
   }
-  if (!targetIds.length) return;
+  if (!targetId) return;
   projects = projects.map((item) => (
-    targetIds.includes(item.id) ? { ...item, paymentStatus: "Paid", updatedAt: new Date().toISOString() } : item
+    item.id === targetId ? { ...item, paymentStatus: "Paid", updatedAt: new Date().toISOString() } : item
+  ));
+  saveProjects();
+}
+
+function markLinkedProjectWaiting(invoice) {
+  let targetId = resolveInvoiceStatusProjectTargetId(invoice);
+  if (!targetId) {
+    const fallback = findProjectForInvoice(invoice);
+    if (fallback?.id) {
+      persistPrimaryProjectLink(invoice, fallback.id);
+      saveInvoices();
+      targetId = resolveInvoiceStatusProjectTargetId(invoice) || fallback.id;
+    }
+  }
+  if (!targetId) return;
+  projects = projects.map((item) => (
+    item.id === targetId ? { ...item, paymentStatus: "Waiting", updatedAt: new Date().toISOString() } : item
+  ));
+  saveProjects();
+}
+
+function markLinkedProjectCompleted(invoice) {
+  let targetId = resolveInvoiceStatusProjectTargetId(invoice);
+  if (!targetId) {
+    const fallback = findProjectForInvoice(invoice);
+    if (fallback?.id) {
+      persistPrimaryProjectLink(invoice, fallback.id);
+      saveInvoices();
+      targetId = resolveInvoiceStatusProjectTargetId(invoice) || fallback.id;
+    }
+  }
+  if (!targetId) return;
+  projects = projects.map((item) => (
+    item.id === targetId ? { ...item, paymentStatus: "Completed", updatedAt: new Date().toISOString() } : item
+  ));
+  saveProjects();
+}
+
+function revertLinkedProjectToWaitingIfNoInvoices(targetProjectId) {
+  if (!targetProjectId) return;
+  const stillLinked = invoices.some((item) => resolveInvoiceStatusProjectTargetId(item) === targetProjectId);
+  if (stillLinked) return;
+  projects = projects.map((project) => (
+    project.id === targetProjectId ? { ...project, paymentStatus: "Waiting", updatedAt: new Date().toISOString() } : project
   ));
   saveProjects();
 }
@@ -3399,12 +3651,25 @@ function findProjectForInvoice(invoice) {
   });
 }
 
+function resolveInvoiceStatusProjectTargetId(invoice) {
+  let targetProject = null;
+  const primaryId = primaryProjectIdFromInvoice(invoice);
+  if (primaryId) targetProject = projects.find((project) => project.id === primaryId) || null;
+  if (!targetProject) targetProject = findProjectForInvoice(invoice) || null;
+  if (!targetProject) return "";
+  return targetProject.id || "";
+}
+
 function updateInvoiceStatus(id, status) {
+  const currentInvoice = invoices.find((item) => item.id === id);
+  if (!currentInvoice) return;
   if (status === "Paid") {
     markInvoicePaid(id);
     return;
   }
-  invoices = invoices.map((item) => (item.id === id ? { ...item, status, updatedAt: new Date().toISOString() } : item));
+  const updatedInvoice = { ...currentInvoice, status, updatedAt: new Date().toISOString() };
+  invoices = invoices.map((item) => (item.id === id ? updatedInvoice : item));
+  markLinkedProjectWaiting(updatedInvoice);
   saveInvoices();
   renderAll();
   showToast("Invoice status updated");
@@ -3595,11 +3860,17 @@ function renderLinkedProjectsPreview() {
     .filter(Boolean);
   if (!linked.length) {
     linkedProjectsPreview.innerHTML = "";
+    if (linkedProjectMonthLabel) linkedProjectMonthLabel.textContent = "";
     return;
   }
   linkedProjectsPreview.innerHTML = linked
     .map((project) => `<span class="linked-project-pill">${escapeHtml(project.name || "Project")} • ${escapeHtml(project.month || "No month")}</span>`)
     .join("");
+  const primaryLinked = linked.find((project) => project.id === linkedProjectId) || linked[0];
+  if (linkedProjectMonthLabel) {
+    const monthLabel = primaryLinked?.month ? formatMonth(primaryLinked.month) : "Unknown month";
+    linkedProjectMonthLabel.textContent = `Linked project month: ${monthLabel}`;
+  }
 }
 
 function addSelectedProjectsToInvoice() {
@@ -3915,6 +4186,9 @@ function updateProjectMoney(id, field, value) {
     return updated;
   });
   saveProjects();
+  if (field === "valueLkr" || field === "valueUsd") {
+    syncInvoiceValueFromProject(id);
+  }
   renderProjects();
   renderFinance();
 }
@@ -4005,6 +4279,10 @@ function ensureProjectForMonth(id) {
   return savedProject.id;
 }
 
+function invoiceLinkProjectId(projectId) {
+  return ensureProjectForMonth(projectId);
+}
+
 function createNextMonthProject(id) {
   id = ensureProjectForMonth(id);
   const project = projects.find((item) => item.id === id);
@@ -4034,16 +4312,18 @@ function createNextMonthProject(id) {
 }
 
 function createInvoiceFromProject(id) {
-  id = ensureProjectForMonth(id);
-  const project = projects.find((item) => item.id === id);
+  const linkProjectId = invoiceLinkProjectId(id);
+  const resolvedId = linkProjectId || id;
+  const project = projects.find((item) => item.id === resolvedId);
   if (!project) return;
   const clientName = project.clientName || project.name;
   const client = clients.find((item) => item.name.trim().toLowerCase() === clientName.trim().toLowerCase());
 
   resetForm();
   const useUsd = Number(project.valueUsd || 0) > 0;
-  linkedProjectId = id;
-  linkedProjectIds = [id];
+  linkedProjectId = resolvedId;
+  linkedProjectIds = [resolvedId];
+  if (clientSelect) clientSelect.value = client?.id || "";
   document.getElementById("customerName").value = clientName;
   document.getElementById("customerEmail").value = client?.email || "";
   document.getElementById("customerCountry").value = client?.country || "Sri Lanka";
@@ -4384,7 +4664,18 @@ function toggleProjectForm() {
 function renderDashboard() {
   const invoiceDocs = invoices.filter((invoice) => (invoice.documentType || "Invoice") === "Invoice");
   const now = today();
-  const totals = invoiceDocs.reduce(
+  const currentMonth = now.slice(0, 7);
+  const monthInvoiceDocs = invoiceDocs.filter((invoice) => String(invoice.invoiceDate || "").startsWith(currentMonth));
+  const carryForwardPendingDocs = invoiceDocs.filter((invoice) => {
+    const invoiceMonth = String(invoice.invoiceDate || "").slice(0, 7);
+    if (!invoiceMonth || invoiceMonth >= currentMonth) return false;
+    const status = String(invoice.status || "");
+    return status === "Sent" || status === "Unpaid" || status === "Overdue";
+  });
+  const overdueAllMonths = invoiceDocs.filter(
+    (invoice) => invoice.status === "Overdue" || (invoice.status === "Unpaid" && invoice.dueDate && invoice.dueDate < now),
+  );
+  const totals = monthInvoiceDocs.reduce(
     (summary, invoice) => {
       const invoiceTotal = invoiceTotalInLkr(invoice);
       summary.count += 1;
@@ -4404,22 +4695,30 @@ function renderDashboard() {
     },
     { count: 0, billed: 0, paid: 0, pending: 0, overdue: 0 },
   );
+  const carryForwardPendingTotal = carryForwardPendingDocs.reduce((sum, invoice) => sum + invoiceTotalInLkr(invoice), 0);
+  totals.pending += carryForwardPendingTotal;
 
-  document.getElementById("totalInvoices").textContent = formatNumber(totals.count);
+  const totalInvoicesWithCarry = totals.count + carryForwardPendingDocs.length;
+  document.getElementById("totalInvoices").textContent = formatNumber(totalInvoicesWithCarry);
   document.getElementById("totalBilled").textContent = compactMoney(totals.billed);
   document.getElementById("totalPaid").textContent = compactMoney(totals.paid);
   document.getElementById("totalPending").textContent = compactMoney(totals.pending);
-  document.getElementById("dashboardOverdueTotal").textContent = compactMoney(totals.overdue);
-  document.getElementById("dashboardActiveProjects").textContent = formatNumber(projectsForMonth(today().slice(0, 7)).filter(isActiveProject).length);
+  const overdueTotalAllMonths = overdueAllMonths.reduce((sum, invoice) => sum + invoiceTotalInLkr(invoice), 0);
+  document.getElementById("dashboardOverdueTotal").textContent = compactMoney(overdueTotalAllMonths);
+  const dashboardInvoiceHelper = document.getElementById("dashboardInvoiceHelper");
+  if (dashboardInvoiceHelper) {
+    dashboardInvoiceHelper.textContent = `${formatNumber(carryForwardPendingDocs.length)} carry forward`;
+  }
+  const waitingProjectCount = projectsForMonth(currentMonth).filter((project) => String(project.paymentStatus || "Waiting") === "Waiting").length;
+  document.getElementById("dashboardActiveProjects").textContent = formatNumber(waitingProjectCount);
   const customersKpi = document.getElementById("dashboardTotalCustomers");
   if (customersKpi) customersKpi.textContent = formatNumber(clients.length);
   const paidPercent = totals.billed ? (totals.paid / totals.billed) * 100 : 0;
-  const pendingPercent = totals.billed ? (totals.pending / totals.billed) * 100 : 0;
-  const overdueCount = invoiceDocs.filter(
-    (invoice) => invoice.status === "Overdue" || (invoice.status === "Unpaid" && invoice.dueDate && invoice.dueDate < now),
-  ).length;
+  const pendingBase = totals.billed + carryForwardPendingTotal;
+  const pendingPercent = pendingBase ? (totals.pending / pendingBase) * 100 : 0;
+  const overdueCount = overdueAllMonths.length;
   document.getElementById("dashboardPaidHelper").textContent = `${formatNumber(paidPercent, 1)}% of billed`;
-  document.getElementById("dashboardPendingHelper").textContent = `${formatNumber(pendingPercent, 1)}% of billed`;
+  document.getElementById("dashboardPendingHelper").textContent = `${formatNumber(pendingPercent, 1)}% pending (incl. carry-forward)`;
   document.getElementById("dashboardOverdueHelper").textContent = `${formatNumber(overdueCount)} invoices`;
 
   renderDashboardRevenue(invoiceDocs);
@@ -4429,8 +4728,9 @@ function renderDashboard() {
 
   const table = document.getElementById("recentInvoicesTable");
   const recent = [...invoiceDocs]
+    .filter((invoice) => invoice.status === "Overdue" || isWithinLastDays(invoiceRecentDate(invoice), 20))
     .filter((invoice) => dashboardInvoiceFilter === "All" || invoice.status === dashboardInvoiceFilter)
-    .sort((a, b) => String(b.updatedAt || b.invoiceDate).localeCompare(String(a.updatedAt || a.invoiceDate)));
+    .sort((a, b) => String(invoiceRecentDate(b)).localeCompare(String(invoiceRecentDate(a))));
   const totalPages = Math.max(1, Math.ceil(recent.length / RECENT_INVOICE_PAGE_SIZE));
   recentInvoicesPage = Math.min(recentInvoicesPage, totalPages);
   const start = (recentInvoicesPage - 1) * RECENT_INVOICE_PAGE_SIZE;
@@ -4458,7 +4758,7 @@ function renderDashboard() {
           `;
         })
         .join("")
-    : emptyRow("No invoices yet", 8);
+    : emptyRow("No invoices in last 20 days or overdue", 8);
   document.getElementById("recentInvoicesPrevPage").disabled = recentInvoicesPage <= 1;
   document.getElementById("recentInvoicesNextPage").disabled = recentInvoicesPage >= totalPages;
   document.getElementById("recentInvoicesPageLabel").textContent = `Page ${recentInvoicesPage} of ${totalPages}`;
@@ -4670,22 +4970,40 @@ function dashboardDocumentRow(invoice) {
 }
 
 function renderInvoiceTable() {
+  const currentMonth = today().slice(0, 7);
+  if (!invoiceMonthFilter.value) invoiceMonthFilter.value = currentMonth;
   const query = searchInput.value.trim().toLowerCase();
   const status = statusFilter.value;
   const month = invoiceMonthFilter.value;
-  const filtered = invoices.filter((invoice) => {
+  const filteredMonthRows = [];
+  const carryForwardRows = [];
+  const pendingStatuses = new Set(["Sent", "Unpaid", "Overdue"]);
+  invoices.forEach((invoice) => {
     const matchesStatus = status === "All" || invoice.status === status;
     const matchesType = (invoice.documentType || "Invoice") === "Invoice";
+    const invoiceMonth = String(invoice.invoiceDate || "").slice(0, 7);
     const matchesSelectedMonth = matchesMonth(invoice.invoiceDate, month);
+    const isCarryForward = invoiceMonth && invoiceMonth < month && pendingStatuses.has(String(invoice.status || ""));
     const haystack = `${invoice.invoiceNumber} ${invoice.customerName} ${invoice.customerEmail}`.toLowerCase();
-    return matchesStatus && matchesType && matchesSelectedMonth && haystack.includes(query);
+    if (!(matchesStatus && matchesType && haystack.includes(query))) return;
+    if (matchesSelectedMonth) {
+      filteredMonthRows.push({ ...invoice, __carryForward: false });
+      return;
+    }
+    if (isCarryForward) {
+      carryForwardRows.push({ ...invoice, __carryForward: true });
+      return;
+    }
   });
+  const visibleRows = [...filteredMonthRows, ...carryForwardRows].sort((a, b) => String(b.invoiceDate || "").localeCompare(String(a.invoiceDate || "")));
+  const invoiceCarryForwardNote = document.getElementById("invoiceCarryForwardNote");
+  if (invoiceCarryForwardNote) invoiceCarryForwardNote.textContent = `Carry forward: ${formatNumber(carryForwardRows.length)}`;
 
   const table = document.getElementById("invoiceTable");
-  const totalPages = Math.max(1, Math.ceil(filtered.length / INVOICE_PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / INVOICE_PAGE_SIZE));
   invoicePage = Math.min(invoicePage, totalPages);
   const start = (invoicePage - 1) * INVOICE_PAGE_SIZE;
-  const pageInvoices = filtered.slice(start, start + INVOICE_PAGE_SIZE);
+  const pageInvoices = visibleRows.slice(start, start + INVOICE_PAGE_SIZE);
   table.innerHTML = pageInvoices.length
     ? pageInvoices.map((invoice, index) => documentRow(invoice, false, start + index + 1)).join("")
     : emptyRow("No matching invoices", 8);
@@ -4695,6 +5013,8 @@ function renderInvoiceTable() {
 }
 
 function renderQuotationTable() {
+  const currentMonth = today().slice(0, 7);
+  if (!quotationMonthFilter.value) quotationMonthFilter.value = currentMonth;
   const query = quotationSearchInput.value.trim().toLowerCase();
   const status = quotationStatusFilter.value;
   const month = quotationMonthFilter.value;
@@ -4716,10 +5036,11 @@ function documentRow(invoice, includeType = false, rowNumber = null) {
   const totals = calculateTotals(invoice);
   const numberCell = rowNumber === null ? "" : `<td class="row-number-cell">${rowNumber}</td>`;
   const typeCell = includeType ? `<td>${escapeHtml(invoice.documentType || "Invoice")}</td>` : "";
+  const carryForwardLabel = invoice.__carryForward ? `<span class="carry-forward-tag">Carry forward</span>` : "";
   return `
     <tr>
       ${numberCell}
-      <td>${escapeHtml(invoice.invoiceNumber)}</td>
+      <td>${escapeHtml(invoice.invoiceNumber)} ${carryForwardLabel}</td>
       ${typeCell}
       <td>${escapeHtml(invoice.customerName)}</td>
       <td>${formatDate(invoice.invoiceDate)}</td>
@@ -7118,7 +7439,12 @@ function renderProjects() {
   const monthProjects = projectsForMonth(month);
   const filtered = monthProjects.filter((project) => {
     const haystack = `${project.name} ${project.clientName || ""} ${project.note} ${project.worker}`.toLowerCase();
-    const matchesStatus = status === "All" || project.paymentStatus === status;
+    const isRecurring = String(project.repeat || "no") === "monthly";
+    const matchesStatus =
+      status === "All" ||
+      project.paymentStatus === status ||
+      (status === "Recurring" && isRecurring) ||
+      (status === "Non-recurring" && !isRecurring);
     return matchesStatus && haystack.includes(query);
   });
   const sortedFiltered = [...filtered].sort((a, b) => {
@@ -7289,7 +7615,7 @@ function isProjectFullyPaid(project) {
   const received = Number(project.advance || 0) + paid;
   const progressBase = Math.max(total, payForWork, 1);
   const status = String(project.paymentStatus || "");
-  return status === "Paid" || status === "Completed" || paid >= progressBase || received >= progressBase;
+  return status === "Paid" || paid >= progressBase || received >= progressBase;
 }
 
 function projectStatusBadge(status) {
@@ -7424,19 +7750,26 @@ function renderFinance() {
     .reduce((sum, record) => sum + financeRecordOutstandingAmount(record, month), 0);
   const paidExpenses = monthRecords.reduce((sum, record) => sum + financeRecordPaidAmount(record, month), 0);
   const totalIncome = projectSummary.income + otherIncome;
-  const balanceIncome = otherIncome;
   const unpaidExpenses = unpaidManualExpenses + unpaidLoans;
-  const balance = balanceIncome - paidExpenses;
-  const totalFlow = totalIncome + unpaidExpenses + savings + goldAssets;
+  const totalExpenses = paidExpenses + unpaidExpenses;
+  const monthlyProfit = otherIncome - totalExpenses;
+  const balance = totalIncome - paidExpenses;
+  const totalFlow = totalIncome + totalExpenses + savings + goldAssets;
   const incomePercent = totalFlow ? Math.round((totalIncome / totalFlow) * 100) : 0;
-  const expensePercent = totalFlow ? Math.round((unpaidExpenses / totalFlow) * 100) : 0;
+  const expensePercent = totalFlow ? Math.round((totalExpenses / totalFlow) * 100) : 0;
   const savingPercent = totalFlow ? Math.round((savings / totalFlow) * 100) : 0;
   const goldPercent = Math.max(0, 100 - incomePercent - expensePercent - savingPercent);
 
   document.getElementById("financeProjectIncome").textContent = compactMoney(projectSummary.income, "LKR");
   document.getElementById("financeOtherIncome").textContent = compactMoney(otherIncome, "LKR");
-  document.getElementById("financeExpenses").textContent = compactMoney(unpaidExpenses, "LKR");
+  document.getElementById("financeExpenses").textContent = compactMoney(totalExpenses, "LKR");
   document.getElementById("financeBalance").textContent = compactMoney(balance, "LKR");
+  const financeMonthlyProfit = document.getElementById("financeMonthlyProfit");
+  if (financeMonthlyProfit) financeMonthlyProfit.textContent = compactMoney(monthlyProfit, "LKR");
+  const financeLoanExpenseSplit = document.getElementById("financeLoanExpenseSplit");
+  if (financeLoanExpenseSplit) {
+    financeLoanExpenseSplit.textContent = `Loan ${compactMoney(unpaidLoans, "LKR")} + Expense ${compactMoney(unpaidManualExpenses, "LKR")}`;
+  }
   const monthLabel = document.getElementById("financeMonthLabel");
   if (monthLabel) monthLabel.textContent = `Workspace · ${formatMonth(month)}`;
   const financeLegendSavings = document.getElementById("financeLegendSavings");
@@ -7446,7 +7779,7 @@ function renderFinance() {
   if (financeLegendSavings) financeLegendSavings.textContent = compactMoney(savings, "LKR");
   if (financeLegendGold) financeLegendGold.textContent = compactMoney(goldAssets, "LKR");
   if (financeLegendIncome) financeLegendIncome.textContent = compactMoney(totalIncome, "LKR");
-  if (financeLegendExpenses) financeLegendExpenses.textContent = compactMoney(unpaidExpenses, "LKR");
+  if (financeLegendExpenses) financeLegendExpenses.textContent = compactMoney(totalExpenses, "LKR");
   const assetsTotal = document.getElementById("financeAssetsTotal");
   if (assetsTotal) assetsTotal.textContent = shortAmount(savings + goldAssets);
   const financeAssetRing = document.getElementById("financeAssetRing");
@@ -9694,6 +10027,7 @@ statusFilter.addEventListener("change", () => {
   renderInvoiceTable();
 });
 invoiceMonthFilter.addEventListener("change", () => {
+  saveMonthFilterPreference(MONTH_FILTER_KEYS.invoice, invoiceMonthFilter.value);
   invoicePage = 1;
   renderInvoiceTable();
 });
@@ -9712,21 +10046,27 @@ dashboardSearchInput.addEventListener("keydown", (event) => {
 });
 quotationSearchInput.addEventListener("input", renderQuotationTable);
 quotationStatusFilter.addEventListener("change", renderQuotationTable);
-quotationMonthFilter.addEventListener("change", renderQuotationTable);
+quotationMonthFilter.addEventListener("change", () => {
+  saveMonthFilterPreference(MONTH_FILTER_KEYS.quotation, quotationMonthFilter.value);
+  renderQuotationTable();
+});
 projectSearchInput.addEventListener("input", renderProjects);
 projectMonthFilter.addEventListener("change", () => {
+  saveMonthFilterPreference(MONTH_FILTER_KEYS.project, projectMonthFilter.value);
   updateProjectMonthFields();
   renderProjects();
 });
 projectStatusFilter.addEventListener("change", renderProjects);
 projectUsdRate.addEventListener("input", convertProjectUsdToLkr);
 pmMonthFilter.addEventListener("change", () => {
+  saveMonthFilterPreference(MONTH_FILTER_KEYS.manager, pmMonthFilter.value);
   pmProjectPage = 1;
   pmPostPage = 1;
   pmNotificationPage = 1;
   renderProjectManagerWorkspace();
 });
 calendarMonthFilter?.addEventListener("change", () => {
+  saveMonthFilterPreference(MONTH_FILTER_KEYS.calendar, calendarMonthFilter.value);
   renderUnifiedCalendarView();
 });
 document.getElementById("unifiedCalendarGrid")?.addEventListener("click", (event) => {
@@ -9781,6 +10121,7 @@ toggleProjectFormButton.addEventListener("click", toggleProjectForm);
 document.getElementById("projectValueUsd").addEventListener("input", convertProjectUsdToLkr);
 document.getElementById("projectMonth").addEventListener("change", convertProjectUsdToLkr);
 financeMonthFilter.addEventListener("change", () => {
+  saveMonthFilterPreference(MONTH_FILTER_KEYS.finance, financeMonthFilter.value);
   financePage = 1;
   renderFinance();
 });
@@ -10292,6 +10633,7 @@ projectForm.addEventListener("submit", (event) => {
   }
 
   saveProjects();
+  syncInvoiceValueFromProject(project.id);
   resetProjectForm();
   renderProjects();
   renderManagerHandles();
@@ -10315,7 +10657,7 @@ financeForm.addEventListener("submit", (event) => {
   showToast("Finance record saved");
 });
 
-form.addEventListener("submit", (event) => {
+form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const invoice = getFormInvoice();
   invoice.projectIds = Array.isArray(invoice.projectIds) ? [...new Set(invoice.projectIds.filter(Boolean))] : [];
@@ -10336,7 +10678,15 @@ form.addEventListener("submit", (event) => {
   }
 
   selectedInvoiceId = invoice.id;
+  markLinkedProjectCompleted(invoice);
+  syncProjectValueFromInvoice(invoice);
   saveInvoices();
+  try {
+    await writeCollectionToSupabaseWithRetry("invoices");
+  } catch (error) {
+    console.error(error);
+    showToast("Invoice saved locally. Cloud sync retrying...");
+  }
   resetForm();
   renderAll();
   switchView("dashboard");
@@ -10663,6 +11013,7 @@ async function startApp() {
   resetCorrectionForm();
   resetFinanceForm();
   resetServiceLetterForm();
+  applySavedMonthFilters();
   activeUserSnapshot = currentUser();
   appIsStarting = false;
   document.body.classList.remove("app-loading");

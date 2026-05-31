@@ -2212,7 +2212,7 @@ h2 {
   display: none;
   place-items: center;
   padding: 10px;
-  z-index: 100;
+  z-index: 1200;
 }
 
 .invoice-modal.is-open {
@@ -2867,6 +2867,20 @@ h2 {
   font-weight: 700;
   color: #3f4d67;
   background: #edf2fb;
+}
+
+.carry-forward-tag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #fef3c7;
+  border: 1px solid #fcd34d;
+  color: #92400e;
+  font-size: 0.72rem;
+  font-weight: 600;
+  vertical-align: middle;
 }
 
 #clientsView .client-toolbar {
@@ -5134,6 +5148,13 @@ body[data-active-view="manager"] .notification-icon-button {
   padding: 3px 9px;
 }
 
+.linked-project-month-label {
+  margin: 2px 2px 0;
+  color: #475569;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
 #addClientProjectsButton {
   min-height: 36px;
   padding: 0 14px;
@@ -5731,6 +5752,76 @@ textarea {
 .project-month-settings #toggleProjectFormButton {
   min-width: 126px;
   background: #0e1a41;
+}
+
+/* Projects controls: modern + simple refresh */
+#projectsView .project-month-settings {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid #d6deea;
+  border-radius: 14px;
+  background: #f8fbff;
+  box-shadow: none;
+}
+
+#projectsView .project-filter-strip,
+#projectsView .project-action-strip {
+  display: grid;
+  gap: 8px;
+  align-items: center;
+}
+
+#projectsView .project-filter-strip {
+  grid-template-columns: minmax(190px, 1.1fr) minmax(150px, 0.55fr) minmax(150px, 0.58fr);
+}
+
+#projectsView .project-action-strip {
+  grid-template-columns: minmax(90px, 0.3fr) minmax(108px, 0.34fr) minmax(96px, 0.28fr) minmax(92px, 0.27fr) minmax(130px, 0.42fr);
+}
+
+#projectsView .project-filter-strip input,
+#projectsView .project-filter-strip select,
+#projectsView .project-action-strip input,
+#projectsView .project-month-settings button {
+  min-height: 44px;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+#projectsView .project-filter-strip input,
+#projectsView .project-filter-strip select,
+#projectsView .project-action-strip input {
+  padding: 0 12px;
+  border: 1px solid #c8d3e5;
+  background: #ffffff;
+  color: #1e293b;
+}
+
+#projectsView #projectSearchInput::placeholder,
+#projectsView #projectUsdRate::placeholder {
+  color: #8a97ae;
+  font-weight: 500;
+}
+
+#projectsView .project-month-settings button {
+  min-width: 0;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid #c8d3e5;
+  background: #eaf1fb;
+  color: #1f2a44;
+}
+
+#projectsView .project-month-settings #toggleProjectFormButton {
+  border-color: #1c2f6b;
+  background: #1c2f6b;
+  color: #ffffff;
+}
+
+#projectsView .project-month-settings #toggleProjectFormButton:hover {
+  background: #223982;
 }
 
 .project-table {
@@ -6572,8 +6663,8 @@ textarea {
 }
 
 #projectsView .project-status.Completed {
-  background: #dcfce7;
-  color: #15803d;
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 #projectsView .project-table .icon-actions {
@@ -7391,26 +7482,37 @@ textarea {
 #financeView .finance-hero-metrics {
   margin-top: 16px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 10px;
 }
 
 #financeView .finance-hero-metric {
   border-radius: 14px;
   background: rgba(114, 142, 216, 0.18);
-  padding: 14px 16px;
+  padding: 12px 14px;
 }
 
 #financeView .finance-hero-metric span {
   color: #9db3e1;
   font-weight: 550;
+  font-size: 0.95rem;
 }
 
 #financeView .finance-hero-metric strong {
   display: block;
-  margin-top: 6px;
+  margin-top: 5px;
   color: #9dc5ff;
-  font-size: 1.75rem;
+  font-size: 1.1rem;
+  line-height: 1.35;
+}
+
+#financeView .finance-hero-metric small {
+  display: block;
+  margin-top: 4px;
+  color: #9db3e1;
+  font-size: 0.76rem;
+  font-weight: 450;
+  line-height: 1.25;
 }
 
 #financeView .finance-hero-metric:first-child strong {
@@ -7419,6 +7521,10 @@ textarea {
 
 #financeView .finance-hero-metric.is-expense strong {
   color: #ffb8a4;
+}
+
+#financeView .finance-hero-metric.is-profit strong {
+  color: #cfd7ff;
 }
 
 #financeView .finance-assets-card {

@@ -431,6 +431,7 @@
                   <button class="secondary-action" id="addClientProjectsButton" type="button">+ Add selected projects</button>
                 </div>
                 <div class="wide" id="linkedProjectsPreview"></div>
+                <p class="linked-project-month-label" id="linkedProjectMonthLabel"></p>
                 <label>
                   Customer name
                   <input id="customerName" name="customerName" required />
@@ -504,7 +505,10 @@
         <section class="view" id="invoicesView">
           <section class="panel invoice-view-panel">
             <div class="panel-heading invoice-list-heading">
+              <div>
                 <h2>Invoices</h2>
+                <span class="muted-label" id="invoiceCarryForwardNote">Carry forward: 0</span>
+              </div>
               <div class="filters">
                 <input id="searchInput" placeholder="Search invoices" />
                 <input id="invoiceMonthFilter" type="month" />
@@ -610,6 +614,8 @@
                     <option value="Partial">Partial</option>
                     <option value="Paid">Paid</option>
                     <option value="Completed">Completed</option>
+                    <option value="Recurring">Recurring</option>
+                    <option value="Non-recurring">Non-recurring</option>
                   </select>
                 </div>
                 <div class="project-action-strip">
@@ -1141,8 +1147,14 @@
                     <strong id="financeOtherIncome">Rs. 0</strong>
                   </div>
                   <div class="finance-hero-metric is-expense">
-                    <span>Unpaid</span>
+                    <span>Loan + expense</span>
                     <strong id="financeExpenses">Rs. 0</strong>
+                    <small id="financeLoanExpenseSplit">Loan Rs. 0 + Expense Rs. 0</small>
+                  </div>
+                  <div class="finance-hero-metric is-profit">
+                    <span>Profit this month</span>
+                    <strong id="financeMonthlyProfit">Rs. 0</strong>
+                    <small>Paid income - total expenses</small>
                   </div>
                 </div>
               </article>
