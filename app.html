@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Infonits Invoice Manager</title>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20260513-ui-qa-pass-v2" />
+    <link rel="stylesheet" href="styles.css?v=20260602-pin-login-v10" />
   </head>
   <body class="app-loading" data-active-view="dashboard">
     <section class="app-preloader" id="appPreloader" aria-live="polite">
@@ -44,6 +44,28 @@
             </button>
           </div>
         </label>
+        <label class="login-remember">
+          <input id="loginRememberDevice" type="checkbox" />
+          <span>Remember this device with PIN</span>
+        </label>
+        <label class="login-field login-pin-setup is-hidden" id="loginPinSetupField">
+          <span>Set PIN</span>
+          <div class="login-input-wrap">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M7 11V8a5 5 0 0 1 10 0v3M5 11h14v10H5V11Zm7 4v2" /></svg>
+            <input id="loginSetupPin" autocomplete="off" inputmode="numeric" maxlength="6" pattern="[0-9]{4,6}" placeholder="4-6 digit PIN" type="password" />
+          </div>
+        </label>
+        <div class="trusted-login-panel is-hidden" id="trustedLoginPanel">
+          <div>
+            <span>Quick PIN</span>
+            <strong id="trustedLoginName">Saved user</strong>
+          </div>
+          <div class="trusted-login-actions">
+            <input id="trustedLoginPin" autocomplete="off" inputmode="numeric" maxlength="6" pattern="[0-9]{4,6}" placeholder="PIN" type="password" />
+            <button class="secondary-action" id="trustedLoginButton" type="button">Unlock</button>
+            <button class="login-forget-button" id="trustedLoginForgetButton" type="button">Forget</button>
+          </div>
+        </div>
         <button class="primary-action login-submit" type="submit"><span>Login</span><span aria-hidden="true">→</span></button>
       </form>
     </section>
@@ -1152,14 +1174,14 @@
                     <strong id="financeOtherIncome">Rs. 0</strong>
                   </div>
                   <div class="finance-hero-metric is-expense">
-                    <span>Loan + expense</span>
+                    <span>Expenses</span>
                     <strong id="financeExpenses">Rs. 0</strong>
-                    <small id="financeLoanExpenseSplit">Loan Rs. 0 + Expense Rs. 0</small>
+                    <small id="financeLoanExpenseSplit">Unpaid expenses this month</small>
                   </div>
                   <div class="finance-hero-metric is-profit">
-                    <span>Profit this month</span>
+                    <span>Loan</span>
                     <strong id="financeMonthlyProfit">Rs. 0</strong>
-                    <small>Paid income - total expenses</small>
+                    <small>Outstanding loan this month</small>
                   </div>
                 </div>
               </article>
@@ -1910,6 +1932,6 @@
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="supabase-config.js?v=20260513-doc-width-pdf-fix"></script>
-    <script src="app.js?v=20260513-docs-pdf-rework-v7"></script>
+    <script src="app.js?v=20260602-pin-login-v10"></script>
   </body>
 </html>

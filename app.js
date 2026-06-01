@@ -11,6 +11,7 @@ const EMPLOYEES_KEY = "infonits.employees";
 const USERS_KEY = "infonits.users";
 const CURRENT_USER_KEY = "infonits.currentUserId";
 const AUTH_SESSION_KEY = "infonits.loggedInUserId";
+const TRUSTED_LOGIN_KEY = "infonits.trustedPinLogin";
 const MANAGER_HANDLES_KEY = "infonits.managerHandles";
 const SOCIAL_POSTS_KEY = "infonits.socialMediaPosts";
 const CORRECTIONS_KEY = "infonits.corrections";
@@ -167,6 +168,7 @@ let lastSocialPostSyncStamp = "";
 let lastProjectSyncStamp = "";
 let lastFinanceSyncStamp = "";
 let lastInvoiceSyncStamp = "";
+let invoicePdfDownloadInProgress = false;
 
 const DEV_DIAGNOSTICS = Boolean(window.INFONITS_DEBUG);
 const appDiagnostics = {
@@ -296,6 +298,14 @@ const sidebarToggleButton = document.getElementById("sidebarToggleButton");
 const loginScreen = document.getElementById("loginScreen");
 const appPreloader = document.getElementById("appPreloader");
 const loginForm = document.getElementById("loginForm");
+const loginRememberDevice = document.getElementById("loginRememberDevice");
+const loginPinSetupField = document.getElementById("loginPinSetupField");
+const loginSetupPin = document.getElementById("loginSetupPin");
+const trustedLoginPanel = document.getElementById("trustedLoginPanel");
+const trustedLoginName = document.getElementById("trustedLoginName");
+const trustedLoginPin = document.getElementById("trustedLoginPin");
+const trustedLoginButton = document.getElementById("trustedLoginButton");
+const trustedLoginForgetButton = document.getElementById("trustedLoginForgetButton");
 const toggleFullscreenButton = document.getElementById("toggleFullscreenButton");
 const quickActionsButton = document.getElementById("quickActionsButton");
 const quickActionsMenu = document.getElementById("quickActionsMenu");
@@ -703,6 +713,65 @@ function isDefaultUsername(username = "") {
   return ["admin", "manager", "designer", "developer"].includes(String(username || "").trim().toLowerCase());
 }
 
+function cleanPin(pin = "") {
+  return String(pin || "").replace(/\D/g, "").slice(0, 6);
+}
+
+function pinIsValid(pin = "") {
+  return /^\d{4,6}$/.test(cleanPin(pin));
+}
+
+async function trustedPinHash(userId, pin) {
+  return hashPassword(`trusted-pin:${userId}:${cleanPin(pin)}`);
+}
+
+function loadTrustedLogin() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(TRUSTED_LOGIN_KEY) || "null");
+    if (!saved || !saved.userId || !saved.pinHash || !saved.expiresAt) return null;
+    if (new Date(saved.expiresAt).getTime() <= Date.now()) {
+      clearTrustedLogin();
+      return null;
+    }
+    return saved;
+  } catch {
+    return null;
+  }
+}
+
+async function saveTrustedLogin(user, pin) {
+  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const trusted = {
+    userId: user.id,
+    username: user.username || "",
+    name: user.name || user.username || "Saved user",
+    pinHash: await trustedPinHash(user.id, pin),
+    createdAt: new Date().toISOString(),
+    expiresAt,
+  };
+  localStorage.setItem(TRUSTED_LOGIN_KEY, JSON.stringify(trusted));
+}
+
+function clearTrustedLogin() {
+  localStorage.removeItem(TRUSTED_LOGIN_KEY);
+  if (trustedLoginPin) trustedLoginPin.value = "";
+  renderTrustedLoginPanel();
+}
+
+function renderTrustedLoginPanel() {
+  if (!trustedLoginPanel || !trustedLoginName) return;
+  const trusted = loadTrustedLogin();
+  const user = trusted ? users.find((item) => item.id === trusted.userId && item.status !== "Disabled") : null;
+  trustedLoginPanel.classList.toggle("is-hidden", !user);
+  if (user) trustedLoginName.textContent = user.name || user.username || trusted.name || "Saved user";
+}
+
+function togglePinSetupField() {
+  const enabled = Boolean(loginRememberDevice?.checked);
+  loginPinSetupField?.classList.toggle("is-hidden", !enabled);
+  if (!enabled && loginSetupPin) loginSetupPin.value = "";
+}
+
 function normalizeUser(user) {
   const username = user.username || String(user.name || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "user";
   return {
@@ -808,15 +877,10 @@ function saveCalendarEvents() {
 }
 
 function loadServiceLetterRecords() {
-  try {
-    return JSON.parse(localStorage.getItem(SERVICE_LETTER_RECORDS_KEY) || "[]");
-  } catch {
-    return [];
-  }
+  return [];
 }
 
 function saveServiceLetterRecords() {
-  localStorage.setItem(SERVICE_LETTER_RECORDS_KEY, JSON.stringify(serviceLetterRecords));
   syncCollectionToSupabase("serviceLetterRecords");
 }
 
@@ -1650,6 +1714,20 @@ async function writeCollectionToSupabaseWithRetry(collection, options = {}) {
   throw lastError || new Error(`Supabase save failed: ${collection}`);
 }
 
+async function writeCollectionItemToSupabaseWithRetry(collection, item, index = 0) {
+  let lastError = null;
+  for (let attempt = 0; attempt <= WRITE_RETRY_ATTEMPTS; attempt += 1) {
+    try {
+      return await writeCollectionItemToSupabase(collection, item, index);
+    } catch (error) {
+      lastError = error;
+      if (attempt >= WRITE_RETRY_ATTEMPTS) break;
+      await new Promise((resolve) => window.setTimeout(resolve, WRITE_RETRY_DELAY_MS * (attempt + 1)));
+    }
+  }
+  throw lastError || new Error(`Supabase save failed: ${collection}`);
+}
+
 function syncAllCollectionsToSupabase() {
   Object.keys(supabaseDirectCollections).forEach(syncCollectionToSupabase);
   Object.keys(supabaseAppDataCollections).forEach(syncCollectionToSupabase);
@@ -1710,7 +1788,23 @@ async function insertSupabaseRows(table, rows) {
     headers: supabaseTableHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
     body: JSON.stringify(rows),
   });
-  if (!response.ok) throw new Error(await response.text());
+  if (response.ok) return;
+  const batchError = await response.text();
+  const failedRows = [];
+  for (const row of rows) {
+    const singleResponse = await fetch(supabaseTableUrl(table, "?on_conflict=app_id"), {
+      method: "POST",
+      headers: supabaseTableHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+      body: JSON.stringify(row),
+    });
+    if (!singleResponse.ok) {
+      failedRows.push({ app_id: row.app_id || "", error: await singleResponse.text() });
+    }
+  }
+  if (failedRows.length) {
+    const first = failedRows[0];
+    throw new Error(`Batch failed for ${table}. First row error (${first.app_id || "unknown"}): ${first.error}. Batch error: ${batchError}`);
+  }
 }
 
 async function writeCollectionToSupabase(collection, options = {}) {
@@ -1749,6 +1843,14 @@ async function writeCollectionToSupabase(collection, options = {}) {
     return true;
   }
   return false;
+}
+
+async function writeCollectionItemToSupabase(collection, item, index = 0) {
+  if (!supabaseReady()) return false;
+  const direct = supabaseDirectCollections[collection];
+  if (!direct) return false;
+  await insertSupabaseRows(direct.table, [direct.toRow(item, index)]);
+  return true;
 }
 
 async function readTableRows(config) {
@@ -1892,6 +1994,7 @@ function removeOldLocalData() {
     PM_NOTIFICATIONS_KEY,
     MONTHLY_POST_REPORTS_KEY,
     CALENDAR_EVENTS_KEY,
+    SERVICE_LETTER_RECORDS_KEY,
     CLOUD_BACKUP_KEY,
   ].forEach((key) => localStorage.removeItem(key));
 }
@@ -1910,6 +2013,7 @@ function oldLocalDataExists() {
     MANAGER_HANDLES_KEY,
     SOCIAL_POSTS_KEY,
     CALENDAR_EVENTS_KEY,
+    SERVICE_LETTER_RECORDS_KEY,
     SETTINGS_KEY,
   ].some((key) => localStorage.getItem(key) !== null);
 }
@@ -1933,7 +2037,6 @@ async function migrateOldLocalDataToSupabase() {
     pmNotifications: readOldLocalJson(PM_NOTIFICATIONS_KEY, []),
     monthlyPostReports: readOldLocalJson(MONTHLY_POST_REPORTS_KEY, []),
     calendarEvents: readOldLocalJson(CALENDAR_EVENTS_KEY, []),
-    serviceLetterRecords: readOldLocalJson(SERVICE_LETTER_RECORDS_KEY, []),
     settings: readOldLocalJson(SETTINGS_KEY, {}),
   };
   let moved = false;
@@ -1953,7 +2056,6 @@ async function migrateOldLocalDataToSupabase() {
   if (!pmNotifications.length && oldData.pmNotifications.length) { pmNotifications = oldData.pmNotifications; moved = true; }
   if (!monthlyPostReports.length && oldData.monthlyPostReports.length) { monthlyPostReports = oldData.monthlyPostReports; moved = true; }
   if (!calendarEvents.length && oldData.calendarEvents.length) { calendarEvents = oldData.calendarEvents; moved = true; }
-  if (!serviceLetterRecords.length && oldData.serviceLetterRecords.length) { serviceLetterRecords = oldData.serviceLetterRecords; moved = true; }
   if (Object.keys(oldData.settings).length) { settings = { ...defaultSettings, ...settings, ...oldData.settings }; moved = true; }
   removeOldLocalData();
   if (!moved) return false;
@@ -2912,10 +3014,16 @@ function populateUserAccessOptions(selected = roleDefaultAccess["project-manager
     .join("");
 }
 
-async function loginUser(username, password) {
+async function loginUser(username, password, options = {}) {
   ensureDefaultAdminUser();
   const normalizedUsername = String(username || "").trim().toLowerCase();
   const passwordValue = String(password || "").trim();
+  const rememberDevice = Boolean(options.rememberDevice);
+  const setupPin = cleanPin(options.setupPin || "");
+  if (rememberDevice && !pinIsValid(setupPin)) {
+    showToast("Enter a 4-6 digit PIN for this device");
+    return false;
+  }
   const passwordHash = await hashPassword(passwordValue);
   const user = users.find((item) => {
     return String(item.username || "").trim().toLowerCase() === normalizedUsername && passwordMatches(item, passwordValue, passwordHash) && item.status !== "Disabled";
@@ -2938,14 +3046,52 @@ async function loginUser(username, password) {
   };
   users = users.map((item) => (item.id === user.id ? loggedInUser : item));
   saveUsers();
+  if (rememberDevice) await saveTrustedLogin(loggedInUser, setupPin);
   activeUserSnapshot = loggedInUser;
   sessionStorage.setItem(AUTH_SESSION_KEY, currentUserId);
   loginForm.reset();
+  if (loginRememberDevice) loginRememberDevice.checked = false;
+  togglePinSetupField();
+  renderTrustedLoginPanel();
   openAuthenticatedApp();
   scheduleIdleLogout();
   handleLoginAlerts(loggedInUser);
   playLoginSound();
   showToast(`Welcome ${loggedInUser.name}`);
+  return true;
+}
+
+async function loginWithTrustedPin() {
+  const trusted = loadTrustedLogin();
+  const pin = cleanPin(trustedLoginPin?.value || "");
+  if (!trusted) {
+    showToast("No saved PIN login on this device");
+    renderTrustedLoginPanel();
+    return false;
+  }
+  if (!pinIsValid(pin)) {
+    showToast("Enter your 4-6 digit PIN");
+    return false;
+  }
+  const user = users.find((item) => item.id === trusted.userId && item.status !== "Disabled");
+  if (!user) {
+    clearTrustedLogin();
+    showToast("Saved user is no longer available");
+    return false;
+  }
+  const pinHash = await trustedPinHash(user.id, pin);
+  if (pinHash !== trusted.pinHash) {
+    showToast("Invalid PIN");
+    return false;
+  }
+  currentUserId = user.id;
+  activeUserSnapshot = user;
+  sessionStorage.setItem(AUTH_SESSION_KEY, currentUserId);
+  if (trustedLoginPin) trustedLoginPin.value = "";
+  openAuthenticatedApp();
+  scheduleIdleLogout();
+  handleLoginAlerts(user);
+  showToast(`Welcome ${user.name}`);
   return true;
 }
 
@@ -2959,6 +3105,8 @@ function logoutUser() {
   localStorage.removeItem(ACTIVE_VIEW_KEY);
   document.body.dataset.activeView = "dashboard";
   loginForm.reset();
+  togglePinSetupField();
+  renderTrustedLoginPanel();
   applyAccessControl();
 }
 
@@ -3226,10 +3374,11 @@ function getFormInvoice() {
   };
 }
 
-function addItemRow(item = { title: "", description: "", quantity: 1, price: 0, amount: 0 }) {
+function addItemRow(item = { title: "", description: "", quantity: "", price: "", amount: "" }) {
   const title = item.title || item.description || "";
   const description = item.title ? item.description || "" : "";
-  const amount = Number(item.amount || 0) || Number(item.quantity || 0) * Number(item.price || 0);
+  const calculatedAmount = Number(item.quantity || 0) * Number(item.price || 0);
+  const amount = Number(item.amount || 0) || calculatedAmount || "";
   const row = document.createElement("div");
   row.className = "item-row";
   row.innerHTML = `
@@ -3252,11 +3401,11 @@ function addItemRow(item = { title: "", description: "", quantity: 1, price: 0, 
     </label>
     <label>
       Qty
-      <input class="item-quantity" min="0" step="0.01" type="number" value="${item.quantity}" />
+      <input class="item-quantity" min="0" step="0.01" type="number" value="${escapeAttribute(item.quantity ?? "")}" />
     </label>
     <label>
       Price
-      <input class="item-price" min="0" step="0.01" type="number" value="${item.price}" />
+      <input class="item-price" min="0" step="0.01" type="number" value="${escapeAttribute(item.price ?? "")}" />
     </label>
     <label>
       Amount
@@ -3276,13 +3425,15 @@ function addItemRow(item = { title: "", description: "", quantity: 1, price: 0, 
     updateFormTotals();
   });
   row.querySelector(".item-quantity").addEventListener("input", () => {
-    row.querySelector(".item-amount").value =
-      Number(row.querySelector(".item-quantity").value || 0) * Number(row.querySelector(".item-price").value || 0);
+    const quantity = Number(row.querySelector(".item-quantity").value || 0);
+    const price = Number(row.querySelector(".item-price").value || 0);
+    if (quantity && price) row.querySelector(".item-amount").value = quantity * price;
     updateFormTotals();
   });
   row.querySelector(".item-price").addEventListener("input", () => {
-    row.querySelector(".item-amount").value =
-      Number(row.querySelector(".item-quantity").value || 0) * Number(row.querySelector(".item-price").value || 0);
+    const quantity = Number(row.querySelector(".item-quantity").value || 0);
+    const price = Number(row.querySelector(".item-price").value || 0);
+    if (quantity && price) row.querySelector(".item-amount").value = quantity * price;
     updateFormTotals();
   });
   row.querySelector(".item-title").addEventListener("input", updateFormTotals);
@@ -3338,8 +3489,7 @@ function updateFormTotals() {
   [...itemsContainer.querySelectorAll(".item-row")].forEach((row) => {
     const quantity = Number(row.querySelector(".item-quantity").value || 0);
     const price = Number(row.querySelector(".item-price").value || 0);
-    const amount = Number(row.querySelector(".item-amount").value || 0) || quantity * price;
-    row.querySelector(".item-amount").value = amount;
+    if (quantity && price) row.querySelector(".item-amount").value = quantity * price;
   });
 
   document.getElementById("formSubtotal").textContent = money(totals.subtotal, currency);
@@ -3367,7 +3517,7 @@ function resetForm() {
   document.getElementById("taxRate").value = 0;
   document.getElementById("discount").value = 0;
   document.getElementById("advancePaid").value = 0;
-  document.getElementById("terms").value = "50% advance may be required before work starts. Final files, hosting access, or deployment will be completed after payment clearance.";
+  document.getElementById("terms").value = "";
   document.getElementById("authorizedBy").value = settings.businessName || "Infonits";
   itemsContainer.innerHTML = "";
   addItemRow();
@@ -4329,12 +4479,17 @@ function createInvoiceFromProject(id) {
   document.getElementById("customerCountry").value = client?.country || "Sri Lanka";
   document.getElementById("customerAddress").value = [client?.address, formatPhone(client?.phone), client?.country].filter(Boolean).join(" | ");
   document.getElementById("invoiceCurrency").value = useUsd ? "USD" : "LKR";
+  const projectInvoiceDate = today();
+  document.getElementById("invoiceDate").value = projectInvoiceDate;
+  document.getElementById("dueDate").value = addDays(projectInvoiceDate, 10);
+  document.getElementById("invoiceNumber").value = generateDocumentNumber("Invoice", projectInvoiceDate);
   itemsContainer.innerHTML = "";
   addItemRow({
     title: project.name,
     description: project.note || "",
-    quantity: 1,
-    price: useUsd ? Number(project.valueUsd || 0) : projectValueLkr(project),
+    quantity: "",
+    price: "",
+    amount: useUsd ? Number(project.valueUsd || 0) : projectValueLkr(project),
   });
   syncClientProjectOptions(linkedProjectIds);
   updateFormTotals();
@@ -7721,6 +7876,14 @@ function financeRecordPaidAmount(record, month) {
   return financeRecordPaidInMonth(record, month) ? Number(record.amount || 0) : 0;
 }
 
+function paidInvoiceIncomeForMonth(month) {
+  return financeRecords
+    .filter((record) => record.type === "income")
+    .filter((record) => financeRecordAppliesToMonth(record, month))
+    .filter((record) => String(record.sourceId || "").startsWith("invoice-paid-"))
+    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
+}
+
 function financeStatusLabel(record, month) {
   if (!financeRecordIsExpenseLike(record)) return "Recorded";
   return financeRecordPaidInMonth(record, month) ? "Paid / done" : "Unpaid / pending";
@@ -7748,27 +7911,29 @@ function renderFinance() {
   const unpaidLoans = monthRecords
     .filter((record) => record.type === "loan")
     .reduce((sum, record) => sum + financeRecordOutstandingAmount(record, month), 0);
+  const paidManualExpenses = monthRecords
+    .filter((record) => record.type === "expense")
+    .reduce((sum, record) => sum + financeRecordPaidAmount(record, month), 0);
   const paidExpenses = monthRecords.reduce((sum, record) => sum + financeRecordPaidAmount(record, month), 0);
-  const totalIncome = projectSummary.income + otherIncome;
-  const unpaidExpenses = unpaidManualExpenses + unpaidLoans;
-  const totalExpenses = paidExpenses + unpaidExpenses;
-  const monthlyProfit = otherIncome - totalExpenses;
-  const balance = totalIncome - paidExpenses;
-  const totalFlow = totalIncome + totalExpenses + savings + goldAssets;
+  const paidInvoiceIncome = paidInvoiceIncomeForMonth(month);
+  const totalIncome = projectSummary.income + paidInvoiceIncome;
+  const totalExpenses = unpaidManualExpenses;
+  const balance = paidInvoiceIncome - paidManualExpenses;
+  const totalFlow = totalIncome + totalExpenses + unpaidLoans + savings + goldAssets;
   const incomePercent = totalFlow ? Math.round((totalIncome / totalFlow) * 100) : 0;
-  const expensePercent = totalFlow ? Math.round((totalExpenses / totalFlow) * 100) : 0;
+  const expensePercent = totalFlow ? Math.round(((totalExpenses + unpaidLoans) / totalFlow) * 100) : 0;
   const savingPercent = totalFlow ? Math.round((savings / totalFlow) * 100) : 0;
   const goldPercent = Math.max(0, 100 - incomePercent - expensePercent - savingPercent);
 
   document.getElementById("financeProjectIncome").textContent = compactMoney(projectSummary.income, "LKR");
-  document.getElementById("financeOtherIncome").textContent = compactMoney(otherIncome, "LKR");
+  document.getElementById("financeOtherIncome").textContent = compactMoney(paidInvoiceIncome, "LKR");
   document.getElementById("financeExpenses").textContent = compactMoney(totalExpenses, "LKR");
   document.getElementById("financeBalance").textContent = compactMoney(balance, "LKR");
   const financeMonthlyProfit = document.getElementById("financeMonthlyProfit");
-  if (financeMonthlyProfit) financeMonthlyProfit.textContent = compactMoney(monthlyProfit, "LKR");
+  if (financeMonthlyProfit) financeMonthlyProfit.textContent = compactMoney(unpaidLoans, "LKR");
   const financeLoanExpenseSplit = document.getElementById("financeLoanExpenseSplit");
   if (financeLoanExpenseSplit) {
-    financeLoanExpenseSplit.textContent = `Loan ${compactMoney(unpaidLoans, "LKR")} + Expense ${compactMoney(unpaidManualExpenses, "LKR")}`;
+    financeLoanExpenseSplit.textContent = "Unpaid expenses this month";
   }
   const monthLabel = document.getElementById("financeMonthLabel");
   if (monthLabel) monthLabel.textContent = `Workspace · ${formatMonth(month)}`;
@@ -7779,7 +7944,7 @@ function renderFinance() {
   if (financeLegendSavings) financeLegendSavings.textContent = compactMoney(savings, "LKR");
   if (financeLegendGold) financeLegendGold.textContent = compactMoney(goldAssets, "LKR");
   if (financeLegendIncome) financeLegendIncome.textContent = compactMoney(totalIncome, "LKR");
-  if (financeLegendExpenses) financeLegendExpenses.textContent = compactMoney(totalExpenses, "LKR");
+  if (financeLegendExpenses) financeLegendExpenses.textContent = compactMoney(totalExpenses + unpaidLoans, "LKR");
   const assetsTotal = document.getElementById("financeAssetsTotal");
   if (assetsTotal) assetsTotal.textContent = shortAmount(savings + goldAssets);
   const financeAssetRing = document.getElementById("financeAssetRing");
@@ -7911,21 +8076,29 @@ function financeSummaryForMonth(month) {
   const monthRecords = financeRecords.filter((record) => financeRecordAppliesToMonth(record, month));
   const sumType = (type) =>
     monthRecords.filter((record) => record.type === type).reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const otherIncome = sumType("income");
-  const unpaidExpenses = monthRecords.reduce((sum, record) => sum + financeRecordOutstandingAmount(record, month), 0);
+  const invoiceIncome = paidInvoiceIncomeForMonth(month);
+  const unpaidExpenses = monthRecords
+    .filter((record) => record.type === "expense")
+    .reduce((sum, record) => sum + financeRecordOutstandingAmount(record, month), 0);
+  const unpaidLoans = monthRecords
+    .filter((record) => record.type === "loan")
+    .reduce((sum, record) => sum + financeRecordOutstandingAmount(record, month), 0);
+  const paidManualExpenses = monthRecords
+    .filter((record) => record.type === "expense")
+    .reduce((sum, record) => sum + financeRecordPaidAmount(record, month), 0);
   const paidExpenses = monthRecords.reduce((sum, record) => sum + financeRecordPaidAmount(record, month), 0);
   const savings = sumType("saving");
   const gold = sumType("gold");
-  const income = otherIncome;
   return {
     projectProfit: projectSummary.income,
-    otherIncome,
-    income,
+    otherIncome: invoiceIncome,
+    income: invoiceIncome,
     expenses: unpaidExpenses,
+    loans: unpaidLoans,
     paidExpenses,
     savings,
     gold,
-    balance: otherIncome - paidExpenses,
+    balance: invoiceIncome - paidManualExpenses,
   };
 }
 
@@ -8437,10 +8610,11 @@ function downloadFinanceReport() {
   const summary = financeSummaryForMonth(month);
   const rows = [
     ["Project profit", summary.projectProfit],
-    ["Income", summary.otherIncome],
-    ["Unpaid expenses", summary.expenses],
+    ["Income from paid invoices", summary.otherIncome],
+    ["Outstanding expenses", summary.expenses],
+    ["Outstanding loans", summary.loans],
     ["Paid / done expenses", summary.paidExpenses],
-    ["Balance (income - paid expenses)", summary.balance],
+    ["Net balance (income - expenses)", summary.balance],
     ["Savings", summary.savings],
     ["Gold assets", summary.gold],
   ];
@@ -8756,6 +8930,8 @@ function renderSettings() {
 }
 
 async function downloadInvoicePdf(invoice) {
+  if (invoicePdfDownloadInProgress) return;
+  invoicePdfDownloadInProgress = true;
   try {
     showToast("Preparing PDF...");
     const canvas = await getInvoiceCanvas(invoice);
@@ -8768,6 +8944,10 @@ async function downloadInvoicePdf(invoice) {
   } catch (error) {
     console.error(error);
     showToast("PDF download failed");
+  } finally {
+    window.setTimeout(() => {
+      invoicePdfDownloadInProgress = false;
+    }, 800);
   }
 }
 
@@ -8802,10 +8982,7 @@ function saveBlob(data, filename, type) {
     view: window,
   });
   link.dispatchEvent(clickEvent);
-  window.setTimeout(() => {
-    link.click();
-    link.remove();
-  }, 0);
+  window.setTimeout(() => link.remove(), 0);
   window.setTimeout(() => URL.revokeObjectURL(url), 120000);
   return { blob, url };
 }
@@ -10287,7 +10464,27 @@ managerHandleSearchInput.addEventListener("input", renderManagerHandles);
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   getAudioContext();
-  await loginUser(document.getElementById("loginUsername").value, document.getElementById("loginPassword").value);
+  await loginUser(document.getElementById("loginUsername").value, document.getElementById("loginPassword").value, {
+    rememberDevice: Boolean(loginRememberDevice?.checked),
+    setupPin: loginSetupPin?.value || "",
+  });
+});
+loginRememberDevice?.addEventListener("change", togglePinSetupField);
+loginSetupPin?.addEventListener("input", () => {
+  loginSetupPin.value = cleanPin(loginSetupPin.value);
+});
+trustedLoginPin?.addEventListener("input", () => {
+  trustedLoginPin.value = cleanPin(trustedLoginPin.value);
+});
+trustedLoginPin?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  loginWithTrustedPin();
+});
+trustedLoginButton?.addEventListener("click", loginWithTrustedPin);
+trustedLoginForgetButton?.addEventListener("click", () => {
+  clearTrustedLogin();
+  showToast("PIN login removed from this device");
 });
 document.getElementById("loginPasswordToggle").addEventListener("click", () => {
   const passwordInput = document.getElementById("loginPassword");
@@ -10669,27 +10866,36 @@ form.addEventListener("submit", async (event) => {
     return;
   }
 
+  const previousInvoices = [...invoices];
   if (editingId) {
     invoices = invoices.map((item) => (item.id === editingId ? invoice : item));
-    showToast("Invoice updated");
   } else {
     invoices.unshift(invoice);
-    showToast("Invoice saved");
   }
 
-  selectedInvoiceId = invoice.id;
-  markLinkedProjectCompleted(invoice);
-  syncProjectValueFromInvoice(invoice);
-  saveInvoices();
   try {
-    await writeCollectionToSupabaseWithRetry("invoices");
+    selectedInvoiceId = invoice.id;
+    const invoiceIndex = invoices.findIndex((item) => item.id === invoice.id);
+    await writeCollectionItemToSupabaseWithRetry("invoices", invoice, invoiceIndex < 0 ? 0 : invoiceIndex);
+    markLinkedProjectCompleted(invoice);
+    syncProjectValueFromInvoice(invoice);
+    const invoiceMonth = String(invoice.invoiceDate || "").slice(0, 7);
+    if (invoiceMonthFilter && /^\d{4}-\d{2}$/.test(invoiceMonth)) {
+      invoiceMonthFilter.value = invoiceMonth;
+      saveMonthFilterPreference(MONTH_FILTER_KEYS.invoice, invoiceMonth);
+    }
+    showToast(editingId ? "Invoice updated" : "Invoice saved");
   } catch (error) {
+    invoices = previousInvoices;
+    selectedInvoiceId = previousInvoices[0]?.id || null;
     console.error(error);
-    showToast("Invoice saved locally. Cloud sync retrying...");
+    showToast("Invoice save failed in Supabase. Please retry.");
+    renderAll();
+    return;
   }
   resetForm();
   renderAll();
-  switchView("dashboard");
+  switchView((invoice.documentType || "Invoice") === "Quotation" ? "quotations" : "invoices");
 });
 
 document.body.addEventListener("click", (event) => {
@@ -10990,7 +11196,6 @@ async function startApp() {
   setupAdminFormModals();
   const supabaseLoaded = await loadAllDataFromSupabase();
   if (supabaseLoaded) {
-    await migrateOldLocalDataToSupabase();
     ensureDefaultAdminUser();
     seedDefaultServices();
   } else {
@@ -11015,6 +11220,8 @@ async function startApp() {
   resetServiceLetterForm();
   applySavedMonthFilters();
   activeUserSnapshot = currentUser();
+  renderTrustedLoginPanel();
+  togglePinSetupField();
   appIsStarting = false;
   document.body.classList.remove("app-loading");
   if (isLoggedIn()) {

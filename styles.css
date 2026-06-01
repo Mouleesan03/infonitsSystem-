@@ -322,6 +322,75 @@ body:not(.app-loading) .app-preloader:not(.is-hidden) {
   height: 21px;
 }
 
+.login-remember {
+  display: flex !important;
+  grid-template-columns: none !important;
+  align-items: center;
+  gap: 10px !important;
+  color: #334155 !important;
+  font-size: 0.95rem !important;
+}
+
+.login-remember input {
+  width: 18px;
+  min-height: 18px;
+  accent-color: #1d2e63;
+}
+
+.login-pin-setup.is-hidden,
+.trusted-login-panel.is-hidden {
+  display: none;
+}
+
+.trusted-login-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #d7e0ec;
+  border-radius: 16px;
+  background: #f8fbff;
+}
+
+.trusted-login-panel span {
+  display: block;
+  color: #64748b;
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.trusted-login-panel strong {
+  color: #111b34;
+}
+
+.trusted-login-actions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+}
+
+.trusted-login-actions input {
+  min-height: 44px;
+  border: 1px solid #d7e0ec;
+  border-radius: 12px;
+  padding: 0 14px;
+  background: #ffffff;
+}
+
+.trusted-login-actions .secondary-action,
+.login-forget-button {
+  min-height: 44px;
+  border-radius: 12px;
+}
+
+.login-forget-button {
+  border: 1px solid #fecaca;
+  background: #fff1f2;
+  color: #b91c1c;
+  padding: 0 14px;
+  font-weight: 800;
+}
+
 .login-card .primary-action.login-submit {
   min-height: 62px;
   display: grid;
