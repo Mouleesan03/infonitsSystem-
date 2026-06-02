@@ -87,6 +87,7 @@ const accessSections = [
   { id: "logins", label: "Portal Access" },
   { id: "finance", label: "Finance" },
   { id: "documents", label: "Documents" },
+  { id: "reports", label: "Reports" },
   { id: "users", label: "Users & Access" },
   { id: "settings", label: "Settings" },
 ];
@@ -256,6 +257,7 @@ const views = {
   documents: document.getElementById("documentsView"),
   logins: document.getElementById("loginsView"),
   finance: document.getElementById("financeView"),
+  reports: document.getElementById("reportsView"),
   users: document.getElementById("usersView"),
   settings: document.getElementById("settingsView"),
 };
@@ -721,8 +723,8 @@ function pinIsValid(pin = "") {
   return /^\d{4,6}$/.test(cleanPin(pin));
 }
 
-async function trustedPinHash(userId, pin) {
-  return hashPassword(`trusted-pin:${userId}:${cleanPin(pin)}`);
+async function trustedPinHash(user, pin) {
+  return hashPassword(`trusted-pin:${user.id}:${user.passwordHash || ""}:${cleanPin(pin)}`);
 }
 
 function loadTrustedLogin() {
@@ -740,12 +742,13 @@ function loadTrustedLogin() {
 }
 
 async function saveTrustedLogin(user, pin) {
-  const expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const expiresAt = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
   const trusted = {
     userId: user.id,
     username: user.username || "",
     name: user.name || user.username || "Saved user",
-    pinHash: await trustedPinHash(user.id, pin),
+    userPasswordHash: user.passwordHash || "",
+    pinHash: await trustedPinHash(user, pin),
     createdAt: new Date().toISOString(),
     expiresAt,
   };
@@ -993,7 +996,7 @@ function forceCurrentMonthFiltersAndRender() {
   invoicePage = 1;
   recentInvoicesPage = 1;
   financePage = 1;
-  renderSections(["invoices", "quotations", "projects", "finance", "manager", "calendar", "dashboard"]);
+  renderSections(["invoices", "quotations", "projects", "finance", "reports", "manager", "calendar", "dashboard"]);
 }
 
 function normalizeLoadedState() {
@@ -1668,6 +1671,7 @@ const supabaseAppDataCollections = {
 const supabaseSyncTimers = {};
 let pendingSupabaseSaves = 0;
 const collectionWriteLocks = {};
+const recentDownloadKeys = new Map();
 
 function setSupabaseSaveStatus(status) {
   const labels = {
@@ -1851,6 +1855,20 @@ async function writeCollectionItemToSupabase(collection, item, index = 0) {
   if (!direct) return false;
   await insertSupabaseRows(direct.table, [direct.toRow(item, index)]);
   return true;
+}
+
+async function writeProjectToSupabaseNow(projectId) {
+  if (!projectId) return false;
+  const index = projects.findIndex((project) => project.id === projectId);
+  if (index < 0) return false;
+  return writeCollectionItemToSupabaseWithRetry("projects", projects[index], index);
+}
+
+async function writeFinanceRecordToSupabaseNow(recordId) {
+  if (!recordId) return false;
+  const index = financeRecords.findIndex((record) => record.id === recordId);
+  if (index < 0) return false;
+  return writeCollectionItemToSupabaseWithRetry("financeRecords", financeRecords[index], index);
 }
 
 async function readTableRows(config) {
@@ -2748,6 +2766,7 @@ const topbarViewMeta = {
   clients: { context: "Customer records and statements", showSearch: false, showQuickActions: true },
   projects: { context: "Projects and delivery tracking", showSearch: false, showQuickActions: true },
   manager: { context: "Post tracker and team progress", showSearch: false, showQuickActions: false },
+  reports: { context: "Monthly and yearly business reports", showSearch: false, showQuickActions: false },
   notifications: { context: "Alerts and task updates", showSearch: false, showQuickActions: false },
   calendar: { context: "Calendar and reminders", showSearch: false, showQuickActions: false },
 };
@@ -3079,7 +3098,12 @@ async function loginWithTrustedPin() {
     showToast("Saved user is no longer available");
     return false;
   }
-  const pinHash = await trustedPinHash(user.id, pin);
+  if ((trusted.userPasswordHash || "") !== (user.passwordHash || "")) {
+    clearTrustedLogin();
+    showToast("Password changed. Please login again.");
+    return false;
+  }
+  const pinHash = await trustedPinHash(user, pin);
   if (pinHash !== trusted.pinHash) {
     showToast("Invalid PIN");
     return false;
@@ -3215,12 +3239,34 @@ function invoiceCurrency(invoice = {}) {
   return invoice.currency || settings.currencyLabel || "LKR";
 }
 
-function invoiceTotalInLkr(invoice) {
+function normalizedCurrency(currency = "LKR") {
+  return String(currency || "LKR").trim().toUpperCase();
+}
+
+function currencyRateToLkr(currency, month = today().slice(0, 7)) {
+  const code = normalizedCurrency(currency);
+  if (code === "LKR") return 1;
+  if (code === "USD" || code === "CAD") return projectUsdRateForMonth(month) || projectUsdRateForMonth(today().slice(0, 7)) || 319.6;
+  return 0;
+}
+
+function invoiceReportAmount(invoice) {
   const total = calculateTotals(invoice).total;
-  if (invoiceCurrency(invoice) !== "USD") return total;
+  const currency = normalizedCurrency(invoiceCurrency(invoice));
   const month = String(invoice.invoiceDate || today()).slice(0, 7);
-  const rate = projectUsdRateForMonth(month) || projectUsdRateForMonth(today().slice(0, 7)) || 319.6;
-  return total * rate;
+  const rate = currencyRateToLkr(currency, month);
+  return {
+    total,
+    currency,
+    rate,
+    lkr: rate ? total * rate : 0,
+    converted: currency !== "LKR" && rate > 0,
+    needsRate: currency !== "LKR" && !rate,
+  };
+}
+
+function invoiceTotalInLkr(invoice) {
+  return invoiceReportAmount(invoice).lkr;
 }
 
 function valueChanged(a, b, epsilon = 0.01) {
@@ -3333,9 +3379,10 @@ function syncInvoiceValueFromProject(projectId) {
 
 function addFinanceRecordOnce(record) {
   if (record.sourceId && financeRecords.some((item) => item.sourceId === record.sourceId)) return false;
-  financeRecords.unshift({ id: createId(), updatedAt: new Date().toISOString(), repeat: "none", ...record });
+  const savedRecord = { id: createId(), updatedAt: new Date().toISOString(), repeat: "none", ...record };
+  financeRecords.unshift(savedRecord);
   saveFinanceRecords();
-  return true;
+  return savedRecord;
 }
 
 function getFormInvoice() {
@@ -3360,7 +3407,7 @@ function getFormInvoice() {
     customerName: document.getElementById("customerName").value.trim(),
     customerEmail: document.getElementById("customerEmail").value.trim(),
     customerCountry: document.getElementById("customerCountry").value,
-    customerAddress: document.getElementById("customerAddress").value.trim(),
+    customerAddress: "",
     taxRate: Number(document.getElementById("taxRate").value || 0),
     discount: Number(document.getElementById("discount").value || 0),
     advancePaid: Number(document.getElementById("advancePaid").value || 0),
@@ -3382,36 +3429,41 @@ function addItemRow(item = { title: "", description: "", quantity: "", price: ""
   const row = document.createElement("div");
   row.className = "item-row";
   row.innerHTML = `
-    <label>
-      Saved item
-      <select class="item-suggestion">
-        <option value="">Choose saved item</option>
-        ${getItemTemplates()
-          .map((template, index) => `<option value="${index}">${escapeHtml(template.title)}</option>`)
-          .join("")}
-      </select>
-    </label>
-    <label>
+    <label class="item-title-field">
       Item title
       <input class="item-title" list="itemTitleSuggestions" required value="${escapeAttribute(title)}" />
     </label>
-    <label>
+    <label class="item-description-field">
       Description
       <textarea class="item-description" list="itemDescriptionSuggestions" rows="2">${escapeHtml(description)}</textarea>
     </label>
-    <label>
-      Qty
-      <input class="item-quantity" min="0" step="0.01" type="number" value="${escapeAttribute(item.quantity ?? "")}" />
-    </label>
-    <label>
-      Price
-      <input class="item-price" min="0" step="0.01" type="number" value="${escapeAttribute(item.price ?? "")}" />
-    </label>
-    <label>
+    <label class="item-amount-field">
       Amount
       <input class="item-amount" min="0" step="0.01" type="number" value="${amount}" />
     </label>
     <button class="icon-button remove-item" title="Remove item" type="button">x</button>
+    <details class="item-extra-fields">
+      <summary>More options: saved item, qty, price</summary>
+      <div class="item-extra-grid">
+        <label class="item-saved-field">
+          Saved item
+          <select class="item-suggestion">
+            <option value="">Choose saved item</option>
+            ${getItemTemplates()
+              .map((template, index) => `<option value="${index}">${escapeHtml(template.title)}</option>`)
+              .join("")}
+          </select>
+        </label>
+        <label class="item-qty-field item-optional-field">
+          Qty
+          <input class="item-quantity" min="0" step="0.01" type="number" value="${escapeAttribute(item.quantity ?? "")}" />
+        </label>
+        <label class="item-price-field item-optional-field">
+          Price
+          <input class="item-price" min="0" step="0.01" type="number" value="${escapeAttribute(item.price ?? "")}" />
+        </label>
+      </div>
+    </details>
   `;
   itemsContainer.appendChild(row);
   row.querySelector(".item-suggestion").addEventListener("change", (event) => {
@@ -3513,6 +3565,7 @@ function resetForm() {
   document.getElementById("paymentMethod").value = "";
   document.getElementById("invoiceCurrency").value = settings.currencyLabel;
   document.getElementById("customerCountry").value = "Sri Lanka";
+  document.getElementById("customerAddress").value = "";
   clientSelect.value = "";
   document.getElementById("taxRate").value = 0;
   document.getElementById("discount").value = 0;
@@ -3567,7 +3620,7 @@ function parseAiPrompt(prompt) {
     customerName: matchedClient?.name || customerName,
     customerEmail: matchedClient?.email || "",
     customerCountry: matchedClient?.country || "Sri Lanka",
-    customerAddress: [matchedClient?.address, formatPhone(matchedClient?.phone), matchedClient?.country].filter(Boolean).join(" | "),
+    customerAddress: "",
     title,
     description: prompt,
   };
@@ -3612,7 +3665,7 @@ function fillDocumentDraft(draft) {
   document.getElementById("customerName").value = draft.customerName;
   document.getElementById("customerEmail").value = draft.customerEmail;
   document.getElementById("customerCountry").value = draft.customerCountry;
-  document.getElementById("customerAddress").value = draft.customerAddress;
+  document.getElementById("customerAddress").value = "";
   itemsContainer.innerHTML = "";
   addItemRow({
     title: draft.title,
@@ -3653,7 +3706,7 @@ function editInvoice(id) {
   document.getElementById("customerName").value = invoice.customerName;
   document.getElementById("customerEmail").value = invoice.customerEmail;
   document.getElementById("customerCountry").value = invoice.customerCountry || "Sri Lanka";
-  document.getElementById("customerAddress").value = invoice.customerAddress;
+  document.getElementById("customerAddress").value = "";
   document.getElementById("taxRate").value = invoice.taxRate;
   document.getElementById("discount").value = invoice.discount;
   document.getElementById("advancePaid").value = invoice.advancePaid || 0;
@@ -3708,20 +3761,45 @@ function deleteInvoice(id) {
   showToast("Invoice deleted");
 }
 
-function markInvoicePaid(id) {
+async function markInvoicePaid(id) {
   const invoice = invoices.find((item) => item.id === id);
   if (!invoice) return;
+  const previousInvoices = [...invoices];
   invoices = invoices.map((item) => (item.id === id ? { ...item, status: "Paid", updatedAt: new Date().toISOString() } : item));
+  const updatedInvoice = invoices.find((item) => item.id === id) || invoice;
+  const invoiceIndex = invoices.findIndex((item) => item.id === id);
+  try {
+    await writeCollectionItemToSupabaseWithRetry("invoices", updatedInvoice, invoiceIndex < 0 ? 0 : invoiceIndex);
+  } catch (error) {
+    invoices = previousInvoices;
+    console.error(error);
+    showToast("Invoice paid status save failed. Please retry.");
+    renderAll();
+    return;
+  }
   saveInvoices();
-  markLinkedProjectPaid(invoice);
-  addFinanceRecordOnce({
+  markLinkedProjectPaid(updatedInvoice);
+  const financeRecord = addFinanceRecordOnce({
     sourceId: `invoice-paid-${id}`,
     type: "income",
     date: today(),
     category: "Client payment",
-    amount: invoiceTotalInLkr(invoice),
-    note: `Payment received for ${invoice.invoiceNumber} - ${invoice.customerName}`,
+    amount: invoiceTotalInLkr(updatedInvoice),
+    note: `Payment received for ${updatedInvoice.invoiceNumber} - ${updatedInvoice.customerName}`,
   });
+  if (financeRecord?.id) {
+    writeFinanceRecordToSupabaseNow(financeRecord.id).catch((error) => {
+      console.error(error);
+      showToast("Finance income save failed. Please retry.");
+    });
+  }
+  const targetProjectId = resolveInvoiceStatusProjectTargetId(updatedInvoice);
+  if (targetProjectId) {
+    writeProjectToSupabaseNow(targetProjectId).catch((error) => {
+      console.error(error);
+      showToast("Project status save failed. Please retry.");
+    });
+  }
   renderAll();
   showToast("Invoice marked paid and added to Finance");
 }
@@ -3927,9 +4005,7 @@ function fillInvoiceClient(clientId) {
   document.getElementById("customerName").value = client.name;
   document.getElementById("customerEmail").value = client.email;
   document.getElementById("customerCountry").value = client.country || "Sri Lanka";
-  document.getElementById("customerAddress").value = [client.address, formatPhone(client.phone), client.country]
-    .filter(Boolean)
-    .join(" | ");
+  document.getElementById("customerAddress").value = "";
   syncClientProjectOptions();
 }
 
@@ -4477,7 +4553,7 @@ function createInvoiceFromProject(id) {
   document.getElementById("customerName").value = clientName;
   document.getElementById("customerEmail").value = client?.email || "";
   document.getElementById("customerCountry").value = client?.country || "Sri Lanka";
-  document.getElementById("customerAddress").value = [client?.address, formatPhone(client?.phone), client?.country].filter(Boolean).join(" | ");
+  document.getElementById("customerAddress").value = "";
   document.getElementById("invoiceCurrency").value = useUsd ? "USD" : "LKR";
   const projectInvoiceDate = today();
   document.getElementById("invoiceDate").value = projectInvoiceDate;
@@ -7876,12 +7952,64 @@ function financeRecordPaidAmount(record, month) {
   return financeRecordPaidInMonth(record, month) ? Number(record.amount || 0) : 0;
 }
 
-function paidInvoiceIncomeForMonth(month) {
+function addCurrencyTotal(map, currency, amount) {
+  const value = Number(amount || 0);
+  if (!value) return;
+  const code = normalizedCurrency(currency);
+  map.set(code, (map.get(code) || 0) + value);
+}
+
+function formatCurrencyTotals(map) {
+  return [...(map || new Map()).entries()]
+    .filter(([, amount]) => Number(amount || 0))
+    .map(([currency, amount]) => compactMoney(amount, currency))
+    .join(" + ");
+}
+
+function formatReportMoney(lkrAmount, foreignTotals = new Map()) {
+  const parts = [];
+  if (Number(lkrAmount || 0)) parts.push(compactMoney(lkrAmount, "LKR"));
+  const foreign = formatCurrencyTotals(foreignTotals);
+  if (foreign) parts.push(foreign);
+  return parts.length ? parts.join(" + ") : compactMoney(0, "LKR");
+}
+
+function combineCurrencyTotals(...maps) {
+  const combined = new Map();
+  maps.forEach((map) => {
+    (map || new Map()).forEach((amount, currency) => addCurrencyTotal(combined, currency, amount));
+  });
+  return combined;
+}
+
+function invoiceFromPaidFinanceRecord(record) {
+  const id = String(record.sourceId || "").replace(/^invoice-paid-/, "");
+  return id ? invoices.find((invoice) => invoice.id === id) : null;
+}
+
+function paidInvoiceIncomeDetailsForMonth(month) {
   return financeRecords
     .filter((record) => record.type === "income")
     .filter((record) => financeRecordAppliesToMonth(record, month))
     .filter((record) => String(record.sourceId || "").startsWith("invoice-paid-"))
-    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
+    .reduce(
+      (summary, record) => {
+        const invoice = invoiceFromPaidFinanceRecord(record);
+        if (!invoice) {
+          summary.lkr += Number(record.amount || 0);
+          return summary;
+        }
+        const amount = invoiceReportAmount(invoice);
+        if (amount.needsRate) addCurrencyTotal(summary.foreign, amount.currency, amount.total);
+        else summary.lkr += amount.lkr;
+        return summary;
+      },
+      { lkr: 0, foreign: new Map() },
+    );
+}
+
+function paidInvoiceIncomeForMonth(month) {
+  return paidInvoiceIncomeDetailsForMonth(month).lkr;
 }
 
 function financeStatusLabel(record, month) {
@@ -8076,7 +8204,8 @@ function financeSummaryForMonth(month) {
   const monthRecords = financeRecords.filter((record) => financeRecordAppliesToMonth(record, month));
   const sumType = (type) =>
     monthRecords.filter((record) => record.type === type).reduce((sum, record) => sum + Number(record.amount || 0), 0);
-  const invoiceIncome = paidInvoiceIncomeForMonth(month);
+  const invoiceIncomeDetails = paidInvoiceIncomeDetailsForMonth(month);
+  const invoiceIncome = invoiceIncomeDetails.lkr;
   const unpaidExpenses = monthRecords
     .filter((record) => record.type === "expense")
     .reduce((sum, record) => sum + financeRecordOutstandingAmount(record, month), 0);
@@ -8093,6 +8222,7 @@ function financeSummaryForMonth(month) {
     projectProfit: projectSummary.income,
     otherIncome: invoiceIncome,
     income: invoiceIncome,
+    foreignIncome: invoiceIncomeDetails.foreign,
     expenses: unpaidExpenses,
     loans: unpaidLoans,
     paidExpenses,
@@ -8100,6 +8230,513 @@ function financeSummaryForMonth(month) {
     gold,
     balance: invoiceIncome - paidManualExpenses,
   };
+}
+
+function reportPeriod() {
+  const type = document.getElementById("reportsPeriodType")?.value || "monthly";
+  const month = document.getElementById("reportsMonthFilter")?.value || today().slice(0, 7);
+  const year = String(document.getElementById("reportsYearFilter")?.value || today().slice(0, 4));
+  const months =
+    type === "yearly"
+      ? Array.from({ length: 12 }, (_, index) => `${year}-${String(index + 1).padStart(2, "0")}`)
+      : [month];
+  return {
+    type,
+    month,
+    year,
+    months,
+    label: type === "yearly" ? year : formatMonth(month),
+    filename: type === "yearly" ? year : month,
+  };
+}
+
+function reportDateMatchesPeriod(dateString, period) {
+  const value = String(dateString || "");
+  if (!value) return false;
+  return period.type === "yearly" ? value.startsWith(period.year) : value.startsWith(period.month);
+}
+
+function reportPaidExpensesForMonth(month) {
+  return financeRecords
+    .filter((record) => record.type === "expense")
+    .filter((record) => financeRecordAppliesToMonth(record, month))
+    .reduce((sum, record) => sum + financeRecordPaidAmount(record, month), 0);
+}
+
+function reportFinanceForPeriod(period = reportPeriod()) {
+  return period.months.reduce(
+    (summary, month) => {
+      const monthSummary = financeSummaryForMonth(month);
+      const paidExpenses = reportPaidExpensesForMonth(month);
+      summary.paidIncome += monthSummary.income;
+      summary.projectProfit += monthSummary.projectProfit;
+      summary.paidExpenses += paidExpenses;
+      summary.unpaidExpenses += monthSummary.expenses;
+      summary.outstandingLoan += monthSummary.loans;
+      summary.savings += monthSummary.savings;
+      summary.gold += monthSummary.gold;
+      summary.netBalance += monthSummary.income - paidExpenses;
+      monthSummary.foreignIncome.forEach((amount, currency) => addCurrencyTotal(summary.foreignIncome, currency, amount));
+      return summary;
+    },
+    {
+      paidIncome: 0,
+      projectProfit: 0,
+      paidExpenses: 0,
+      unpaidExpenses: 0,
+      outstandingLoan: 0,
+      savings: 0,
+      gold: 0,
+      netBalance: 0,
+      foreignIncome: new Map(),
+    },
+  );
+}
+
+function expenseCategoryReport(period = reportPeriod()) {
+  const categoryMap = new Map();
+  period.months.forEach((month) => {
+    financeRecords
+      .filter((record) => record.type === "expense")
+      .filter((record) => financeRecordAppliesToMonth(record, month))
+      .forEach((record) => {
+        const amount = financeRecordPaidAmount(record, month);
+        if (!amount) return;
+        const category = record.category || "Expense";
+        categoryMap.set(category, (categoryMap.get(category) || 0) + amount);
+      });
+  });
+  return [...categoryMap.entries()]
+    .map(([category, amount]) => ({ category, amount }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
+function invoicesForReport(period = reportPeriod(), documentType = "") {
+  return invoices.filter((invoice) => {
+    const type = invoice.documentType || "Invoice";
+    return (!documentType || type === documentType) && reportDateMatchesPeriod(invoice.invoiceDate, period);
+  });
+}
+
+function reportProjectRows(period = reportPeriod()) {
+  return period.months.flatMap((month) => projectExportRows(month).map((row) => ({ ...row, month })));
+}
+
+function clientReportRows(period = reportPeriod()) {
+  const clientMap = new Map();
+  const emptyForeignBuckets = () => ({
+    paidInvoices: new Map(),
+    unpaidInvoices: new Map(),
+    quotations: new Map(),
+  });
+  const ensure = (name) => {
+    const clientName = name || "Unknown client";
+    if (!clientMap.has(clientName)) {
+      clientMap.set(clientName, {
+        clientName,
+        paidInvoices: 0,
+        unpaidInvoices: 0,
+        quotations: 0,
+        projects: 0,
+        total: 0,
+        foreign: emptyForeignBuckets(),
+      });
+    }
+    return clientMap.get(clientName);
+  };
+  invoicesForReport(period).forEach((invoice) => {
+    const row = ensure(invoice.customerName);
+    const amount = invoiceReportAmount(invoice);
+    const total = amount.lkr;
+    if ((invoice.documentType || "Invoice") === "Quotation") {
+      if (amount.needsRate) addCurrencyTotal(row.foreign.quotations, amount.currency, amount.total);
+      else row.quotations += total;
+    } else if (String(invoice.status || "").toLowerCase() === "paid") {
+      if (amount.needsRate) addCurrencyTotal(row.foreign.paidInvoices, amount.currency, amount.total);
+      else row.paidInvoices += total;
+    } else {
+      if (amount.needsRate) addCurrencyTotal(row.foreign.unpaidInvoices, amount.currency, amount.total);
+      else row.unpaidInvoices += total;
+    }
+  });
+  reportProjectRows(period).forEach((project) => {
+    const row = ensure(project.client);
+    row.projects += project.valueLkr;
+  });
+  clientMap.forEach((row) => {
+    row.total = row.paidInvoices + row.unpaidInvoices + row.quotations + row.projects;
+  });
+  return [...clientMap.values()].sort((a, b) => b.total - a.total);
+}
+
+function clientPaidDetailRows(period = reportPeriod()) {
+  const paidMap = new Map();
+  financeRecords
+    .filter((record) => record.type === "income")
+    .filter((record) => String(record.sourceId || "").startsWith("invoice-paid-"))
+    .filter((record) => reportDateMatchesPeriod(record.date, period))
+    .forEach((record) => {
+      const invoice = invoiceFromPaidFinanceRecord(record);
+      const month = financeRecordMonth(record) || String(record.date || today()).slice(0, 7);
+      const clientName = invoice?.customerName || String(record.note || "").split(" - ").pop() || "Unknown client";
+      const invoiceNumber = invoice?.invoiceNumber || String(record.sourceId || "").replace(/^invoice-paid-/, "Invoice");
+      const amount = invoice ? invoiceReportAmount(invoice) : { lkr: Number(record.amount || 0), total: Number(record.amount || 0), currency: "LKR", needsRate: false };
+      const key = `${month}|${clientName}`;
+      if (!paidMap.has(key)) {
+        paidMap.set(key, {
+          month,
+          monthLabel: formatMonth(month),
+          clientName,
+          paid: 0,
+          foreign: new Map(),
+          invoiceCount: 0,
+          invoices: [],
+          paidDates: new Set(),
+        });
+      }
+      const row = paidMap.get(key);
+      if (amount.needsRate) addCurrencyTotal(row.foreign, amount.currency, amount.total);
+      else row.paid += amount.lkr;
+      row.invoiceCount += 1;
+      if (invoiceNumber && !row.invoices.includes(invoiceNumber)) row.invoices.push(invoiceNumber);
+      if (record.date) row.paidDates.add(formatDate(record.date));
+    });
+  return [...paidMap.values()]
+    .map((row) => ({ ...row, paidDates: [...row.paidDates] }))
+    .sort((a, b) => b.month.localeCompare(a.month) || b.paid - a.paid || a.clientName.localeCompare(b.clientName));
+}
+
+function projectReportSummary(period = reportPeriod()) {
+  const rows = reportProjectRows(period);
+  const statusMap = rows.reduce((map, row) => {
+    const status = row.status || "Waiting";
+    map.set(status, (map.get(status) || 0) + 1);
+    return map;
+  }, new Map());
+  return {
+    rows,
+    count: rows.length,
+    value: rows.reduce((sum, row) => sum + row.valueLkr, 0),
+    profit: rows.reduce((sum, row) => sum + row.profit, 0),
+    advance: rows.reduce((sum, row) => sum + row.advance, 0),
+    workPay: rows.reduce((sum, row) => sum + row.payForWork, 0),
+    statuses: [...statusMap.entries()].map(([status, count]) => ({ status, count })),
+  };
+}
+
+function postTrackerReportSummary(period = reportPeriod()) {
+  const monthly = period.months.map((month) => managerMonthlyReportData(month));
+  const clientMap = new Map();
+  monthly.forEach(({ clientRows }) => {
+    clientRows.forEach((client) => {
+      const row = clientMap.get(client.clientName) || {
+        clientName: client.clientName,
+        required: 0,
+        posted: 0,
+        remaining: 0,
+        projects: new Set(),
+      };
+      row.required += client.required;
+      row.posted += client.posted;
+      row.remaining += client.remaining;
+      client.projects.forEach((project) => row.projects.add(project));
+      clientMap.set(client.clientName, row);
+    });
+  });
+  const clientRows = [...clientMap.values()]
+    .map((row) => ({ ...row, projects: [...row.projects] }))
+    .sort((a, b) => b.remaining - a.remaining || a.clientName.localeCompare(b.clientName));
+  return {
+    clientRows,
+    required: clientRows.reduce((sum, row) => sum + row.required, 0),
+    posted: clientRows.reduce((sum, row) => sum + row.posted, 0),
+    remaining: clientRows.reduce((sum, row) => sum + row.remaining, 0),
+    clients: clientRows.length,
+  };
+}
+
+function documentReportSummary(period = reportPeriod()) {
+  const reportInvoices = invoicesForReport(period, "Invoice");
+  const reportQuotations = invoicesForReport(period, "Quotation");
+  const statusCounts = [...reportInvoices, ...reportQuotations].reduce((map, invoice) => {
+    const status = invoice.status || ((invoice.documentType || "Invoice") === "Quotation" ? "Draft" : "Unpaid");
+    map.set(status, (map.get(status) || 0) + 1);
+    return map;
+  }, new Map());
+  const invoiceForeign = new Map();
+  const quotationForeign = new Map();
+  const invoiceTotal = reportInvoices.reduce((sum, invoice) => {
+    const amount = invoiceReportAmount(invoice);
+    if (amount.needsRate) {
+      addCurrencyTotal(invoiceForeign, amount.currency, amount.total);
+      return sum;
+    }
+    return sum + amount.lkr;
+  }, 0);
+  const quotationTotal = reportQuotations.reduce((sum, invoice) => {
+    const amount = invoiceReportAmount(invoice);
+    if (amount.needsRate) {
+      addCurrencyTotal(quotationForeign, amount.currency, amount.total);
+      return sum;
+    }
+    return sum + amount.lkr;
+  }, 0);
+  return {
+    invoices: reportInvoices.length,
+    quotations: reportQuotations.length,
+    invoiceTotal,
+    quotationTotal,
+    invoiceForeign,
+    quotationForeign,
+    paid: reportInvoices.filter((invoice) => String(invoice.status || "").toLowerCase() === "paid").length,
+    unpaid: reportInvoices.filter((invoice) => ["unpaid", "sent", "overdue"].includes(String(invoice.status || "").toLowerCase())).length,
+    statuses: [...statusCounts.entries()].map(([status, count]) => ({ status, count })),
+  };
+}
+
+function reportMetricRow(label, value, note = "") {
+  return `
+    <div class="reports-metric-row">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value)}</strong>
+      ${note ? `<small>${escapeHtml(note)}</small>` : ""}
+    </div>
+  `;
+}
+
+function renderReportTableRows(rows, emptyText, mapper) {
+  return rows.length ? rows.map(mapper).join("") : `<tr><td colspan="6">${escapeHtml(emptyText)}</td></tr>`;
+}
+
+function renderReports() {
+  const period = reportPeriod();
+  const monthField = document.getElementById("reportsMonthField");
+  const yearField = document.getElementById("reportsYearField");
+  if (monthField) monthField.hidden = period.type !== "monthly";
+  if (yearField) yearField.hidden = period.type !== "yearly";
+  const periodLabel = document.getElementById("reportsPeriodLabel");
+  if (periodLabel) periodLabel.textContent = `${period.label} reports from live Supabase data`;
+
+  const finance = reportFinanceForPeriod(period);
+  document.getElementById("reportPaidIncome").textContent = compactMoney(finance.paidIncome, "LKR");
+  document.getElementById("reportPaidExpenses").textContent = compactMoney(finance.paidExpenses, "LKR");
+  document.getElementById("reportNetBalance").textContent = compactMoney(finance.netBalance, "LKR");
+  document.getElementById("reportOutstandingLoan").textContent = compactMoney(finance.outstandingLoan, "LKR");
+
+  document.getElementById("businessReportList").innerHTML = [
+    reportMetricRow("Paid invoice income", compactMoney(finance.paidIncome, "LKR")),
+    ...(finance.foreignIncome.size ? [reportMetricRow("Paid invoice income awaiting rate", formatCurrencyTotals(finance.foreignIncome), "Not included in LKR net balance")] : []),
+    reportMetricRow("Paid expenses", compactMoney(finance.paidExpenses, "LKR")),
+    reportMetricRow("Net balance", compactMoney(finance.netBalance, "LKR"), "Loans excluded"),
+    reportMetricRow("Project profit", compactMoney(finance.projectProfit, "LKR")),
+    reportMetricRow("Outstanding loan", compactMoney(finance.outstandingLoan, "LKR"), "Shown separately"),
+  ].join("");
+
+  const expenseRows = expenseCategoryReport(period);
+  document.getElementById("profitExpenseReportList").innerHTML = [
+    reportMetricRow("Income", compactMoney(finance.paidIncome, "LKR")),
+    ...(finance.foreignIncome.size ? [reportMetricRow("Income awaiting rate", formatCurrencyTotals(finance.foreignIncome), "Foreign currency not counted as LKR")] : []),
+    reportMetricRow("Paid expenses", compactMoney(finance.paidExpenses, "LKR")),
+    reportMetricRow("Unpaid expenses", compactMoney(finance.unpaidExpenses, "LKR")),
+    reportMetricRow("Net balance", compactMoney(finance.netBalance, "LKR")),
+  ].join("");
+  document.getElementById("expenseCategoryReportTable").innerHTML = renderReportTableRows(
+    expenseRows,
+    "No paid expense categories for this period",
+    (row) => `<tr><td>${escapeHtml(row.category)}</td><td>${compactMoney(row.amount, "LKR")}</td></tr>`,
+  );
+
+  const clientRows = clientPaidDetailRows(period).slice(0, 12);
+  document.getElementById("clientReportTable").innerHTML = renderReportTableRows(
+    clientRows,
+    "No paid invoice records for this period",
+    (row) => `
+      <tr>
+        <td>${escapeHtml(row.monthLabel)}</td>
+        <td>${escapeHtml(row.clientName)}</td>
+        <td>${formatReportMoney(row.paid, row.foreign)}</td>
+        <td>${escapeHtml(row.invoices.join(", ") || "-")}</td>
+        <td>${escapeHtml(row.paidDates.join(", ") || "-")}</td>
+        <td>${formatNumber(row.invoiceCount)} paid invoice${row.invoiceCount === 1 ? "" : "s"}</td>
+      </tr>
+    `,
+  );
+
+  const projectSummary = projectReportSummary(period);
+  document.getElementById("projectReportList").innerHTML = [
+    reportMetricRow("Projects", formatNumber(projectSummary.count)),
+    reportMetricRow("Project value", compactMoney(projectSummary.value, "LKR")),
+    reportMetricRow("Project profit", compactMoney(projectSummary.profit, "LKR")),
+    reportMetricRow("Advance received", compactMoney(projectSummary.advance, "LKR")),
+  ].join("");
+  document.getElementById("projectStatusReportTable").innerHTML = renderReportTableRows(
+    projectSummary.statuses,
+    "No project statuses for this period",
+    (row) => `<tr><td>${escapeHtml(row.status)}</td><td>${formatNumber(row.count)}</td></tr>`,
+  );
+
+  const postSummary = postTrackerReportSummary(period);
+  document.getElementById("postTrackerReportList").innerHTML = [
+    reportMetricRow("Clients", formatNumber(postSummary.clients)),
+    reportMetricRow("Required posts", formatNumber(postSummary.required)),
+    reportMetricRow("Posted posts", formatNumber(postSummary.posted)),
+    reportMetricRow("Remaining / missed", formatNumber(postSummary.remaining)),
+  ].join("");
+  document.getElementById("postClientReportTable").innerHTML = renderReportTableRows(
+    postSummary.clientRows.slice(0, 10),
+    "No post tracker data for this period",
+    (row) => `<tr><td>${escapeHtml(row.clientName)}</td><td>${formatNumber(row.required)} required</td><td>${formatNumber(row.posted)} posted</td><td>${formatNumber(row.remaining)} remaining</td></tr>`,
+  );
+
+  const documents = documentReportSummary(period);
+  document.getElementById("documentReportList").innerHTML = [
+    reportMetricRow("Invoices", formatNumber(documents.invoices), formatReportMoney(documents.invoiceTotal, documents.invoiceForeign)),
+    reportMetricRow("Quotations", formatNumber(documents.quotations), formatReportMoney(documents.quotationTotal, documents.quotationForeign)),
+    reportMetricRow("Paid invoices", formatNumber(documents.paid)),
+    reportMetricRow("Unpaid / open invoices", formatNumber(documents.unpaid)),
+    ...documents.statuses.map((row) => reportMetricRow(`${row.status} documents`, formatNumber(row.count))),
+  ].join("");
+}
+
+function reportPdfSections(kind = "full", period = reportPeriod()) {
+  const finance = reportFinanceForPeriod(period);
+  const projectSummary = projectReportSummary(period);
+  const postSummary = postTrackerReportSummary(period);
+  const documents = documentReportSummary(period);
+  const expenseRows = expenseCategoryReport(period);
+  const clientRows = clientPaidDetailRows(period);
+  const sections = {
+    business: {
+      title: "Business Summary",
+      rows: [
+        ["Paid invoice income", compactMoney(finance.paidIncome, "LKR"), "Income from invoices marked paid"],
+        ...(finance.foreignIncome.size ? [["Paid invoice income awaiting rate", formatCurrencyTotals(finance.foreignIncome), "Not included in LKR net balance"]] : []),
+        ["Paid expenses", compactMoney(finance.paidExpenses, "LKR"), "Only expenses marked paid"],
+        ["Net balance", compactMoney(finance.netBalance, "LKR"), "Income - paid expenses, loans excluded"],
+        ["Project profit", compactMoney(finance.projectProfit, "LKR"), "Existing project profit calculation"],
+        ["Outstanding loan", compactMoney(finance.outstandingLoan, "LKR"), "Shown separately"],
+      ],
+    },
+    profit: {
+      title: "Profit & Expenses",
+      rows: [
+        ["Income", compactMoney(finance.paidIncome, "LKR"), ""],
+        ...(finance.foreignIncome.size ? [["Income awaiting rate", formatCurrencyTotals(finance.foreignIncome), "Foreign currency not counted as LKR"]] : []),
+        ["Paid expenses", compactMoney(finance.paidExpenses, "LKR"), ""],
+        ["Unpaid expenses", compactMoney(finance.unpaidExpenses, "LKR"), ""],
+        ["Net balance", compactMoney(finance.netBalance, "LKR"), "Without loan"],
+        ...expenseRows.slice(0, 12).map((row) => [`Expense category: ${row.category}`, compactMoney(row.amount, "LKR"), "Paid"]),
+      ],
+    },
+    clients: {
+      title: "Client Paid Details",
+      rows: clientRows.slice(0, 16).map((row) => [
+        `${row.monthLabel} - ${row.clientName}`,
+        formatReportMoney(row.paid, row.foreign),
+        `${formatNumber(row.invoiceCount)} paid invoice${row.invoiceCount === 1 ? "" : "s"} | ${row.invoices.join(" | ") || "-"} | Paid ${row.paidDates.join(" | ") || "-"}`,
+      ]),
+    },
+    projects: {
+      title: "Project Report",
+      rows: [
+        ["Projects", formatNumber(projectSummary.count), ""],
+        ["Project value", compactMoney(projectSummary.value, "LKR"), ""],
+        ["Project profit", compactMoney(projectSummary.profit, "LKR"), ""],
+        ["Advance received", compactMoney(projectSummary.advance, "LKR"), ""],
+        ...projectSummary.statuses.map((row) => [`${row.status} projects`, formatNumber(row.count), "Status count"]),
+      ],
+    },
+    posts: {
+      title: "Post Tracker Report",
+      rows: [
+        ["Clients", formatNumber(postSummary.clients), ""],
+        ["Required posts", formatNumber(postSummary.required), ""],
+        ["Posted posts", formatNumber(postSummary.posted), ""],
+        ["Remaining / missed", formatNumber(postSummary.remaining), ""],
+        ...postSummary.clientRows.slice(0, 12).map((row) => [
+          row.clientName,
+          `${formatNumber(row.posted)} / ${formatNumber(row.required)}`,
+          `${formatNumber(row.remaining)} remaining | ${row.projects.join(" | ")}`,
+        ]),
+      ],
+    },
+    documents: {
+      title: "Invoice & Quotation Report",
+      rows: [
+        ["Invoices", formatNumber(documents.invoices), formatReportMoney(documents.invoiceTotal, documents.invoiceForeign)],
+        ["Quotations", formatNumber(documents.quotations), formatReportMoney(documents.quotationTotal, documents.quotationForeign)],
+        ["Paid invoices", formatNumber(documents.paid), ""],
+        ["Unpaid / open invoices", formatNumber(documents.unpaid), ""],
+        ...documents.statuses.map((row) => [`${row.status} documents`, formatNumber(row.count), ""]),
+      ],
+    },
+  };
+  if (kind !== "full") return [sections[kind]].filter(Boolean);
+  return ["business", "profit", "clients", "projects", "posts", "documents"].map((key) => sections[key]);
+}
+
+function buildReportsPdf(title, sections, subtitle) {
+  const normalized = sections.map((section) => ({
+    ...section,
+    rows: section.rows.length ? section.rows : [["No data", "-", "No records found for this period"]],
+  }));
+  const rowCount = normalized.reduce((sum, section) => sum + section.rows.length, 0);
+  const canvas = document.createElement("canvas");
+  canvas.width = 1240;
+  canvas.height = Math.max(1754, 260 + normalized.length * 92 + rowCount * 52);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#1d2e63";
+  ctx.fillRect(0, 0, canvas.width, 150);
+  ctx.fillStyle = "#ff6b2c";
+  ctx.fillRect(0, 150, canvas.width, 8);
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "600 38px Poppins, Arial, sans-serif";
+  drawFitText(ctx, title, 70, 84, 720);
+  ctx.font = "400 20px Poppins, Arial, sans-serif";
+  drawFitText(ctx, subtitle, 70, 116, 720);
+  drawReportBrand(ctx, canvas.width, 62);
+
+  let y = 220;
+  normalized.forEach((section) => {
+    ctx.fillStyle = "#172033";
+    ctx.font = "600 25px Poppins, Arial, sans-serif";
+    ctx.fillText(section.title, 70, y);
+    y += 34;
+    ctx.fillStyle = "#eef2f7";
+    ctx.fillRect(60, y - 26, 1120, 40);
+    ctx.fillStyle = "#172033";
+    ctx.font = "600 15px Poppins, Arial, sans-serif";
+    drawFitText(ctx, "Metric", 76, y, 360);
+    drawFitText(ctx, "Value", 500, y, 220);
+    drawFitText(ctx, "Details", 740, y, 420);
+    y += 42;
+    ctx.font = "500 15px Poppins, Arial, sans-serif";
+    section.rows.forEach((row, index) => {
+      drawReportRowBg(ctx, y, index);
+      ctx.fillStyle = "#334155";
+      drawFitText(ctx, row[0], 76, y, 390);
+      drawFitText(ctx, row[1], 500, y, 210);
+      drawFitText(ctx, row[2] || "", 740, y, 410);
+      y += 44;
+    });
+    y += 36;
+  });
+  return buildImagePdf(canvas.toDataURL("image/jpeg", 0.98), canvas.width, canvas.height);
+}
+
+function downloadReportPdf(kind = "full") {
+  const period = reportPeriod();
+  const sections = reportPdfSections(kind, period);
+  if (!sections.length) {
+    showToast("Report section not found");
+    return;
+  }
+  const title = kind === "full" ? `Infonits Full Report - ${period.label}` : `${sections[0].title} - ${period.label}`;
+  const pdf = buildReportsPdf(title, sections, `Generated ${formatDate(today())} | ${period.type === "yearly" ? "Yearly" : "Monthly"} report`);
+  saveBlob(pdf, `infonits-${kind}-report-${period.filename}.pdf`, "application/pdf");
+  showToast(`${kind === "full" ? "Full report" : sections[0].title} PDF downloaded`);
 }
 
 function projectExportRows(month) {
@@ -8240,9 +8877,9 @@ function downloadPostedRecordsPdf() {
   ctx.fillRect(0, 126, canvas.width, 7);
   ctx.fillStyle = "#ffffff";
   ctx.font = "600 34px Poppins, Arial, sans-serif";
-  ctx.fillText("Client Monthly Post Details", 60, 72);
+  drawFitText(ctx, "Client Monthly Post Details", 60, 72, 720);
   ctx.font = "400 18px Poppins, Arial, sans-serif";
-  ctx.fillText(`${fieldValue("pmPostClientFilter") || "All clients"} | ${formatMonth(month)} | Generated ${formatDate(today())}`, 60, 104);
+  drawFitText(ctx, `${fieldValue("pmPostClientFilter") || "All clients"} | ${formatMonth(month)} | Generated ${formatDate(today())}`, 60, 104, 720);
   drawReportBrand(ctx, canvas.width, 56);
 
   const columns = [
@@ -8329,9 +8966,9 @@ function downloadManagerMonthlyPdfReport() {
   ctx.fillRect(0, 150, canvas.width, 8);
   ctx.fillStyle = "#ffffff";
   ctx.font = "600 36px Poppins, Arial, sans-serif";
-  ctx.fillText("Manager Handle Monthly Report", 70, 82);
+  drawFitText(ctx, "Manager Handle Monthly Report", 70, 82, 720);
   ctx.font = "400 20px Poppins, Arial, sans-serif";
-  ctx.fillText(`${formatMonth(month)} | Generated ${formatDate(today())}`, 70, 118);
+  drawFitText(ctx, `${formatMonth(month)} | Generated ${formatDate(today())}`, 70, 118, 720);
   drawReportBrand(ctx, canvas.width, 62);
 
   let y = 220;
@@ -8427,29 +9064,38 @@ function drawReportRowBg(ctx, y, index) {
   ctx.fillRect(60, y - 26, 1120, 40);
 }
 
-function drawReportBrand(ctx, canvasWidth, y = 48) {
-  const right = canvasWidth - 60;
+function drawInfonitsDotMark(ctx, x, y, dot, gap, baseColor, accentColor) {
+  for (let row = 0; row < 3; row += 1) {
+    for (let col = 0; col < 3; col += 1) {
+      ctx.fillStyle = row === 0 && col === 1 ? accentColor : baseColor;
+      ctx.fillRect(x + col * (dot + gap), y + row * (dot + gap), dot, dot);
+    }
+  }
+}
+
+function drawReportBrand(ctx, canvasWidth, centerY = 48) {
   const dot = 11;
   const gap = 7;
-  const logoX = right - 310;
-  const logoY = y - 22;
-  const dotColors = ["#ffffff", "#ff6b2c", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#ffffff"];
-  dotColors.forEach((color, index) => {
-    const col = index % 3;
-    const row = Math.floor(index / 3);
-    ctx.fillStyle = color;
-    ctx.fillRect(logoX + col * (dot + gap), logoY + row * (dot + gap), dot, dot);
-  });
-  ctx.textAlign = "left";
-  ctx.fillStyle = "#ffffff";
-  ctx.font = "700 30px Poppins, Arial, sans-serif";
-  ctx.fillText(settings.businessName || "infonits", logoX + 70, y + 2);
-  ctx.font = "400 14px Poppins, Arial, sans-serif";
-  ctx.fillStyle = "rgba(255,255,255,0.82)";
+  const markWidth = dot * 3 + gap * 2;
+  const brandRight = canvasWidth - 72;
+  const brandWidth = 345;
+  const markX = brandRight - brandWidth;
+  const markY = centerY - markWidth / 2;
+  const textX = markX + markWidth + 24;
   const website = settings.businessWebsite || "www.infonits.io";
   const email = settings.businessEmail || "hello@infonits.com";
-  ctx.fillText(`${website} | ${email}`, logoX + 70, y + 28);
+
+  ctx.save();
+  drawInfonitsDotMark(ctx, markX, markY, dot, gap, "#ffffff", "#ff6b2c");
   ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#ffffff";
+  ctx.font = "700 30px Poppins, Arial, sans-serif";
+  ctx.fillText("infonits", textX, centerY - 10);
+  ctx.font = "400 14px Poppins, Arial, sans-serif";
+  ctx.fillStyle = "rgba(255,255,255,0.82)";
+  ctx.fillText(`${website} | ${email}`, textX, centerY + 22);
+  ctx.restore();
 }
 
 function escapeCsv(value) {
@@ -8545,9 +9191,9 @@ function downloadProjectPdf() {
   ctx.fillRect(0, 130, canvas.width, 8);
   ctx.fillStyle = "#ffffff";
   ctx.font = "600 38px Poppins, Arial, sans-serif";
-  ctx.fillText(`Monthly Project Details - ${formatMonth(month)}`, 60, 76);
+  drawFitText(ctx, `Monthly Project Details - ${formatMonth(month)}`, 60, 76, 1180);
   ctx.font = "400 20px Poppins, Arial, sans-serif";
-  ctx.fillText(`Generated ${formatDate(today())}`, 60, 108);
+  drawFitText(ctx, `Generated ${formatDate(today())}`, 60, 108, 1180);
   drawReportBrand(ctx, canvas.width, 56);
 
   const columns = [
@@ -8660,9 +9306,9 @@ function buildSimpleReportPdf(title, rows, subtitle) {
   ctx.fillRect(0, 150, canvas.width, 8);
   ctx.fillStyle = "#ffffff";
   ctx.font = "600 40px Poppins, Arial, sans-serif";
-  ctx.fillText(title, 80, 92);
+  drawFitText(ctx, title, 80, 92, 700);
   ctx.font = "400 22px Poppins, Arial, sans-serif";
-  ctx.fillText(subtitle, 80, 124);
+  drawFitText(ctx, subtitle, 80, 124, 700);
   drawReportBrand(ctx, canvas.width, 62);
   ctx.fillStyle = "#172033";
   ctx.font = "600 26px Poppins, Arial, sans-serif";
@@ -8809,8 +9455,8 @@ function renderPreview() {
   const documentTitle = documentType.toUpperCase();
   const showQuantityPricing = hasQuantityPricing(invoice);
   const logo = settings.logoDataUrl
-    ? `<img class="invoice-logo-image" src="${escapeAttribute(settings.logoDataUrl)}" alt="${escapeAttribute(settings.businessName)} logo" />`
-    : `<div class="infonits-logo"><span class="logo-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>${escapeHtml(settings.businessName || "infonits")}</strong></div>`;
+    ? `<img class="invoice-logo-image" src="${escapeAttribute(settings.logoDataUrl)}" alt="Infonits logo" />`
+    : `<div class="infonits-logo"><span class="logo-dots" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></span><strong>infonits</strong></div>`;
   preview.innerHTML = `
     <div class="invoice-header">
       ${logo}
@@ -8842,7 +9488,7 @@ function renderPreview() {
         <span>${documentType === "Quotation" ? "PREPARED FOR" : "BILLED TO"}</span>
         <strong>${escapeHtml(invoice.customerName)}</strong>
         <p>${escapeHtml(invoice.customerEmail)}</p>
-        <p>${escapeHtml([invoice.customerAddress, invoice.customerCountry].filter(Boolean).join(" | "))}</p>
+        <p>${escapeHtml(invoice.customerCountry || "")}</p>
       </div>
 
       <table class="customer-table">
@@ -8961,6 +9607,15 @@ async function getInvoiceCanvas(invoice) {
 }
 
 function saveBlob(data, filename, type) {
+  const downloadKey = `${filename}|${type}`;
+  const now = Date.now();
+  const previousDownloadAt = recentDownloadKeys.get(downloadKey) || 0;
+  if (now - previousDownloadAt < 1800) {
+    showToast("Download already started");
+    return { blob: null, url: "", skipped: true };
+  }
+  recentDownloadKeys.set(downloadKey, now);
+  window.setTimeout(() => recentDownloadKeys.delete(downloadKey), 2000);
   const blob = new Blob([data], { type });
   if (typeof window !== "undefined" && window.navigator?.msSaveOrOpenBlob) {
     window.navigator.msSaveOrOpenBlob(blob, filename);
@@ -9101,7 +9756,7 @@ function startNewServiceLetterFlow() {
   openServiceLetterEditorModal();
 }
 
-function saveServiceLetterRecord() {
+async function saveServiceLetterRecord() {
   const data = getServiceLetterData();
   if (!data.clientName) {
     showToast("Client name is required");
@@ -9112,13 +9767,22 @@ function saveServiceLetterRecord() {
     ...data,
     updatedAt: new Date().toISOString(),
   };
+  const previousRecords = [...serviceLetterRecords];
   if (editingServiceLetterId) {
     serviceLetterRecords = serviceLetterRecords.map((item) => (item.id === editingServiceLetterId ? record : item));
   } else {
     serviceLetterRecords.unshift(record);
   }
-  editingServiceLetterId = record.id;
-  saveServiceLetterRecords();
+  try {
+    await writeCollectionToSupabaseWithRetry("serviceLetterRecords");
+    editingServiceLetterId = record.id;
+  } catch (error) {
+    serviceLetterRecords = previousRecords;
+    console.error(error);
+    showToast("Service letter save failed in Supabase. Please retry.");
+    renderServiceLetterRecords();
+    return;
+  }
   renderServiceLetterRecords();
   showToast("Service letter saved");
 }
@@ -9195,8 +9859,8 @@ function renderServiceLetterPreview() {
   }).toUpperCase();
   const serviceLetterLogo = resolveServiceLetterLogoSrc();
   const logo = serviceLetterLogo
-    ? `<img class="service-letter-logo-image" src="${escapeAttribute(serviceLetterLogo)}" alt="${escapeAttribute(settings.businessName)} logo" />`
-    : `<span class="invoice-logo-text">${escapeHtml(settings.businessName || defaultSettings.businessName)}</span>`;
+    ? `<img class="service-letter-logo-image" src="${escapeAttribute(serviceLetterLogo)}" alt="Infonits logo" />`
+    : `<span class="invoice-logo-text">infonits</span>`;
   const footerIcon = (type) => {
     if (type === "phone") return `<span class="service-footer-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 4h4l2 5-2 2a13 13 0 0 0 4 4l2-2 5 2v4a2 2 0 0 1-2 2A15 15 0 0 1 3 6a2 2 0 0 1 2-2Z" /></svg></span>`;
     if (type === "web") return `<span class="service-footer-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h18M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M4.5 7.5h15M4.5 16.5h15" /></svg></span>`;
@@ -9384,13 +10048,9 @@ async function createServiceLetterCanvasDirect(data) {
     const logoY = 28;
     const logoDot = 10;
     const logoGap = 5;
-    for (let row = 0; row < 3; row += 1) {
-      for (let col = 0; col < 3; col += 1) {
-        ctx.fillStyle = row === 0 && col === 1 ? orange : navy;
-        ctx.fillRect(logoX + col * (logoDot + logoGap), logoY + row * (logoDot + logoGap), logoDot, logoDot);
-      }
-    }
-    drawText("infonits", logoX + 3 * (logoDot + logoGap) + 10, logoY + 34, 38, navy, 700);
+    const markWidth = logoDot * 3 + logoGap * 2;
+    drawInfonitsDotMark(ctx, logoX, logoY, logoDot, logoGap, navy, orange);
+    drawText("infonits", logoX + markWidth + 12, logoY + 34, 38, navy, 700);
   };
 
   const logoImage = await loadImage(resolveServiceLetterLogoSrc()).catch(() => null);
@@ -9533,12 +10193,8 @@ async function renderDisplayedServiceLetterCanvas() {
 }
 
 async function downloadServiceLetterPdf() {
-  const popup = window.open("about:blank", "_blank");
-  if (popup && !popup.closed) {
-    popup.document.write("<p style='font-family: Poppins, Arial, sans-serif; padding: 16px;'>Preparing PDF...</p>");
-  }
   const preparingButton = document.getElementById("downloadServiceLetterPdfButton");
-  const originalButtonText = preparingButton?.textContent || "Open / Download PDF";
+  const originalButtonText = preparingButton?.textContent || "Download PDF";
   try {
     showToast("Preparing PDF...");
     if (preparingButton) {
@@ -9548,21 +10204,17 @@ async function downloadServiceLetterPdf() {
     if (!serviceLetterReadyPdf) {
       const built = await buildServiceLetterPdf();
       if (!built) {
-        if (popup && !popup.closed) popup.close();
         return;
       }
     }
-    const opened = openServiceLetterReadyPdf(popup);
-    if (!opened) {
-      if (popup && !popup.closed) popup.close();
+    if (!serviceLetterReadyPdf?.blob) {
       showToast("PDF not ready. Click Build PDF first.");
       return;
     }
     saveBlob(serviceLetterReadyPdf.blob, serviceLetterReadyPdf.filename, "application/pdf");
-    showToast(`${serviceLetterReadyPdf.filename} opened`);
+    showToast(`${serviceLetterReadyPdf.filename} downloaded`);
   } catch (error) {
     console.error("Service letter PDF download failed", error);
-    if (popup && !popup.closed) popup.close();
     showToast("Service letter PDF download failed");
   } finally {
     if (preparingButton) {
@@ -9743,11 +10395,21 @@ async function renderInvoiceCanvas(invoice) {
   ctx.fillStyle = orange;
   ctx.fillRect(0, 202, width, 8);
 
+  const drawInvoiceLogoFallback = () => {
+    const logoX = 100;
+    const logoY = 62;
+    const logoDot = 16;
+    const logoGap = 8;
+    const markWidth = logoDot * 3 + logoGap * 2;
+    drawInfonitsDotMark(ctx, logoX, logoY, logoDot, logoGap, "#ffffff", orange);
+    drawText("infonits", logoX + markWidth + 22, logoY + 55, 56, "#ffffff", 700);
+  };
+
   const logoImage = await loadImage(settings.logoDataUrl || defaultSettings.logoDataUrl).catch(() => null);
   if (logoImage) {
-    ctx.drawImage(logoImage, 100, 62, 355, 76);
+    drawContainImage(ctx, logoImage, 100, 48, 360, 92);
   } else {
-    drawText(settings.businessName || "infonits", 112, 128, 56, "#ffffff", 600);
+    drawInvoiceLogoFallback();
   }
   drawText(documentTitle, 1088, 128, 46, "#ffffff", 600, "right");
 
@@ -9780,7 +10442,7 @@ async function renderInvoiceCanvas(invoice) {
   ctx.fillRect(106, 540, 16, 132);
   drawText(documentType === "Quotation" ? "PREPARED FOR" : "BILLED TO", 145, 570, 20, navy, 600);
   drawText(invoice.customerName, 145, 624, 34, dark, 600);
-  wrapText([invoice.customerEmail, invoice.customerAddress, invoice.customerCountry].filter(Boolean).join(" | "), 145, 674, 600, 31, 21, gray);
+  wrapText([invoice.customerEmail, invoice.customerCountry].filter(Boolean).join(" | "), 145, 674, 600, 31, 21, gray);
 
   ctx.strokeStyle = "#c8ced8";
   ctx.lineWidth = 2;
@@ -9985,6 +10647,7 @@ const SECTION_RENDERERS = {
   quotations: () => renderQuotationTable(),
   projects: () => renderProjects(),
   finance: () => renderFinance(),
+  reports: () => renderReports(),
 };
 
 function renderSections(sectionNames = []) {
@@ -10018,7 +10681,7 @@ function renderAll() {
   safeRun("normalize:admin-notes", () => updateAdminSystemNotifications());
   safeRun("normalize:invoice-due", () => normalizeInvoiceDueDatesToTenDays());
   safeRun("normalize:overdue", () => autoMarkOverdueInvoices());
-  renderSections(["dashboard", "calendar", "manager", "notifications", "projects", "finance", "invoices", "quotations"]);
+  renderSections(["dashboard", "calendar", "manager", "notifications", "projects", "finance", "reports", "invoices", "quotations"]);
   safeRun("render:service-letter-preview", () => renderServiceLetterPreview());
   safeRun("render:service-letter-records", () => renderServiceLetterRecords());
   safeRun("render:clients", () => renderClients());
@@ -10363,6 +11026,18 @@ document.getElementById("invoiceNextPage").addEventListener("click", () => {
   renderInvoiceTable();
 });
 document.getElementById("downloadFinanceReportButton").addEventListener("click", downloadFinanceReport);
+const reportsMonthFilter = document.getElementById("reportsMonthFilter");
+const reportsYearFilter = document.getElementById("reportsYearFilter");
+const reportsPeriodType = document.getElementById("reportsPeriodType");
+if (reportsMonthFilter && !reportsMonthFilter.value) reportsMonthFilter.value = today().slice(0, 7);
+if (reportsYearFilter && !reportsYearFilter.value) reportsYearFilter.value = today().slice(0, 4);
+reportsPeriodType?.addEventListener("change", renderReports);
+reportsMonthFilter?.addEventListener("change", renderReports);
+reportsYearFilter?.addEventListener("input", renderReports);
+document.getElementById("downloadFullReportPdfButton")?.addEventListener("click", () => downloadReportPdf("full"));
+document.querySelectorAll("[data-report-pdf]").forEach((button) => {
+  button.addEventListener("click", () => downloadReportPdf(button.dataset.reportPdf));
+});
 document.getElementById("downloadClientStatementButton").addEventListener("click", downloadClientStatement);
 document.getElementById("downloadProjectSheetButton").addEventListener("click", downloadProjectSheet);
 document.getElementById("downloadProjectPdfButton").addEventListener("click", downloadProjectPdf);
@@ -10510,8 +11185,12 @@ userMenuButton.addEventListener("click", (event) => {
   toggleUserMenu();
 });
 sidebarUserCard?.addEventListener("click", (event) => {
-  if (event.target.closest("#editProfileButton, #logoutButton")) return;
+  if (event.target.closest("#profileSettingsButton, #editProfileButton, #logoutButton")) return;
   toggleUserMenu();
+});
+document.getElementById("profileSettingsButton").addEventListener("click", () => {
+  closeUserMenu();
+  switchView("settings");
 });
 document.getElementById("editProfileButton").addEventListener("click", () => {
   closeUserMenu();
@@ -10813,7 +11492,7 @@ websiteLoginForm.addEventListener("submit", (event) => {
   closeAdminRecordModals();
 });
 
-projectForm.addEventListener("submit", (event) => {
+projectForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const project = getProjectFormData();
   if (!project.name || !project.month) {
@@ -10821,31 +11500,52 @@ projectForm.addEventListener("submit", (event) => {
     return;
   }
 
-  if (editingProjectId) {
+  const previousProjects = [...projects];
+  const wasEditingProject = Boolean(editingProjectId);
+  if (wasEditingProject) {
     projects = projects.map((item) => (item.id === editingProjectId ? project : item));
-    showToast("Project updated");
   } else {
     projects.unshift(project);
-    showToast("Project saved");
   }
 
-  saveProjects();
-  syncInvoiceValueFromProject(project.id);
+  try {
+    const projectIndex = projects.findIndex((item) => item.id === project.id);
+    await writeCollectionItemToSupabaseWithRetry("projects", project, projectIndex < 0 ? 0 : projectIndex);
+    saveProjects();
+    syncInvoiceValueFromProject(project.id);
+  } catch (error) {
+    projects = previousProjects;
+    console.error(error);
+    showToast("Project save failed in Supabase. Please retry.");
+    renderProjects();
+    return;
+  }
   resetProjectForm();
   renderProjects();
   renderManagerHandles();
   renderFinance();
+  showToast(wasEditingProject ? "Project updated" : "Project saved");
 });
 
-financeForm.addEventListener("submit", (event) => {
+financeForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const record = getFinanceFormData();
   if (!record.category || !record.amount || !record.date) {
     showToast("Add finance category, date, and amount");
     return;
   }
+  const previousFinanceRecords = [...financeRecords];
   financeRecords.unshift(record);
-  saveFinanceRecords();
+  try {
+    await writeFinanceRecordToSupabaseNow(record.id);
+    saveFinanceRecords();
+  } catch (error) {
+    financeRecords = previousFinanceRecords;
+    console.error(error);
+    showToast("Finance record save failed in Supabase. Please retry.");
+    renderFinance();
+    return;
+  }
   resetFinanceForm();
   financeMonthFilter.value = record.date.slice(0, 7);
   financePage = 1;
@@ -10879,6 +11579,10 @@ form.addEventListener("submit", async (event) => {
     await writeCollectionItemToSupabaseWithRetry("invoices", invoice, invoiceIndex < 0 ? 0 : invoiceIndex);
     markLinkedProjectCompleted(invoice);
     syncProjectValueFromInvoice(invoice);
+    const linkedProjectTargetId = resolveInvoiceStatusProjectTargetId(invoice);
+    if (linkedProjectTargetId) {
+      await writeProjectToSupabaseNow(linkedProjectTargetId);
+    }
     const invoiceMonth = String(invoice.invoiceDate || "").slice(0, 7);
     if (invoiceMonthFilter && /^\d{4}-\d{2}$/.test(invoiceMonth)) {
       invoiceMonthFilter.value = invoiceMonth;

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Infonits Invoice Manager</title>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20260602-pin-login-v10" />
+    <link rel="stylesheet" href="styles.css?v=20260602-client-paid-report-v22" />
   </head>
   <body class="app-loading" data-active-view="dashboard">
     <section class="app-preloader" id="appPreloader" aria-live="polite">
@@ -128,8 +128,8 @@
             <div class="nav-group-items">
               <button class="nav-tab" data-view="logins" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M4 6h16v12H4V6Zm3 3h10M7 12h5" /></svg></span>Renewals</button>
               <button class="nav-tab" data-view="documents" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M7 3h8l4 4v14H7V3Zm8 1v4h4M9 12h8M9 16h6" /></svg></span>Documents</button>
+              <button class="nav-tab" data-view="reports" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm3 12h2V9H8v7Zm4 0h2v-5h-2v5Zm4 0h2V7h-2v9Z" /></svg></span>Reports</button>
               <button class="nav-tab" data-view="users" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0M4 20a8 8 0 0 1 16 0M18 4v6M15 7h6" /></svg></span>Users &amp; Roles</button>
-              <button class="nav-tab" data-view="settings" type="button"><span class="nav-icon"><svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM19 12a7 7 0 0 0-.1-1.1l2-1.5-2-3.4-2.4 1a7 7 0 0 0-1.9-1.1L14.2 3h-4.4l-.4 2.9A7 7 0 0 0 7.5 7l-2.4-1-2 3.4 2 1.5A7 7 0 0 0 5 12c0 .4 0 .8.1 1.1l-2 1.5 2 3.4 2.4-1a7 7 0 0 0 1.9 1.1l.4 2.9h4.4l.4-2.9a7 7 0 0 0 1.9-1.1l2.4 1 2-3.4-2-1.5c.1-.3.1-.7.1-1.1Z" /></svg></span>Settings</button>
             </div>
           </section>
         </nav>
@@ -147,6 +147,7 @@
               <strong id="activeUserName">Admin</strong>
               <span id="activeUserRole">Admin</span>
             </div>
+            <button type="button" id="profileSettingsButton">Settings</button>
             <button type="button" id="editProfileButton">Change details</button>
             <button type="button" id="logoutButton">Logout</button>
           </div>
@@ -430,55 +431,53 @@
                 <h2>Customer</h2>
               </div>
               <div class="form-grid">
-                <label class="wide">
+                <label class="customer-select-field">
                   Select saved client
                   <select id="clientSelect">
                     <option value="">Manual customer</option>
                   </select>
                 </label>
-                <label class="wide">
-                  Client projects to include
-                  <div class="client-project-picker">
-                    <div class="client-project-picker-tools">
-                      <button class="secondary-action tiny" id="selectAllClientProjectsButton" type="button">Select all</button>
-                      <button class="secondary-action tiny" id="clearClientProjectsButton" type="button">Clear</button>
-                    </div>
-                    <div class="client-project-checklist" id="clientProjectChecklist"></div>
-                    <p class="client-project-hint" id="clientProjectHint">Select customer to load projects.</p>
-                    <select id="clientProjectsSelect" multiple size="5" hidden>
-                      <option value="">Select a client first</option>
-                    </select>
-                  </div>
-                </label>
-                <div class="wide">
-                  <button class="secondary-action" id="addClientProjectsButton" type="button">+ Add selected projects</button>
-                </div>
-                <div class="wide" id="linkedProjectsPreview"></div>
-                <p class="linked-project-month-label" id="linkedProjectMonthLabel"></p>
-                <label>
+                <label class="customer-name-field">
                   Customer name
                   <input id="customerName" name="customerName" required />
                 </label>
-                <label>
+                <label class="customer-email-field">
                   Email
                   <input id="customerEmail" name="customerEmail" type="email" />
                 </label>
-                <label>
+                <label class="customer-country-field">
                   Country
                   <select id="customerCountry" name="customerCountry"></select>
                 </label>
-                <label class="wide">
-                  Billing address
-                  <textarea id="customerAddress" name="customerAddress" rows="3"></textarea>
-                </label>
+                <input id="customerAddress" name="customerAddress" type="hidden" value="" />
+                <details class="customer-projects-drawer">
+                  <summary>Link client projects</summary>
+                  <div class="customer-project-field">
+                    <span class="field-label">Projects to include</span>
+                    <div class="client-project-picker">
+                      <div class="client-project-picker-tools">
+                        <button class="secondary-action tiny" id="selectAllClientProjectsButton" type="button">Select all</button>
+                        <button class="secondary-action tiny" id="clearClientProjectsButton" type="button">Clear</button>
+                      </div>
+                      <div class="client-project-checklist" id="clientProjectChecklist"></div>
+                      <p class="client-project-hint" id="clientProjectHint">Select customer to load projects.</p>
+                      <select id="clientProjectsSelect" multiple size="5" hidden>
+                        <option value="">Select a client first</option>
+                      </select>
+                    </div>
+                  </div>
+                  <button class="secondary-action" id="addClientProjectsButton" type="button">+ Add selected projects</button>
+                  <div id="linkedProjectsPreview"></div>
+                  <p class="linked-project-month-label" id="linkedProjectMonthLabel"></p>
+                </details>
               </div>
             </section>
             </div>
 
             <section class="panel invoice-card item-card">
               <div class="panel-heading">
-                <h2>Line items</h2>
-                <button class="secondary-action" id="addItemButton" type="button">+ Add item</button>
+                <h2>Items & amount</h2>
+                <button class="secondary-action" id="addItemButton" type="button">+ Add another</button>
               </div>
               <div class="items" id="itemsContainer"></div>
             </section>
@@ -1422,6 +1421,115 @@
           </div>
         </section>
 
+        <section class="view" id="reportsView">
+          <section class="panel reports-panel">
+            <div class="reports-hero">
+              <div>
+                <span class="reports-kicker">Business intelligence</span>
+                <h2>Reports hub</h2>
+                <p id="reportsPeriodLabel">Monthly and yearly reports from live Supabase data.</p>
+              </div>
+              <div class="reports-filter-card">
+                <label>
+                  Period
+                  <select id="reportsPeriodType">
+                    <option value="monthly">Monthly</option>
+                    <option value="yearly">Yearly</option>
+                  </select>
+                </label>
+                <label id="reportsMonthField">
+                  Month
+                  <input id="reportsMonthFilter" type="month" />
+                </label>
+                <label id="reportsYearField">
+                  Year
+                  <input id="reportsYearFilter" min="2000" max="2100" step="1" type="number" />
+                </label>
+                <button class="primary-action report-download-button" id="downloadFullReportPdfButton" type="button">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 5-5m-5 5-5-5M5 21h14" /></svg>
+                  <span>Full PDF</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="reports-summary-grid">
+              <article class="reports-summary-card positive">
+                <span>Paid invoice income</span>
+                <strong id="reportPaidIncome">Rs. 0</strong>
+                <small>Income from paid invoices</small>
+              </article>
+              <article class="reports-summary-card danger">
+                <span>Paid expenses</span>
+                <strong id="reportPaidExpenses">Rs. 0</strong>
+                <small>Only expenses marked paid</small>
+              </article>
+              <article class="reports-summary-card main">
+                <span>Net balance</span>
+                <strong id="reportNetBalance">Rs. 0</strong>
+                <small>Income - expenses, without loan</small>
+              </article>
+              <article class="reports-summary-card neutral">
+                <span>Outstanding loan</span>
+                <strong id="reportOutstandingLoan">Rs. 0</strong>
+                <small>Shown separately</small>
+              </article>
+            </div>
+
+            <div class="reports-grid">
+              <article class="reports-card" data-report-card="business">
+                <div class="reports-card-heading">
+                  <div><h3>Business Summary</h3><p>Income, expenses, project profit, loan.</p></div>
+                  <button class="secondary-action report-pdf-button" data-report-pdf="business" type="button">PDF</button>
+                </div>
+                <div class="reports-metric-list" id="businessReportList"></div>
+              </article>
+
+              <article class="reports-card" data-report-card="profit">
+                <div class="reports-card-heading">
+                  <div><h3>Profit &amp; Expenses</h3><p>Expense categories and balance.</p></div>
+                  <button class="secondary-action report-pdf-button" data-report-pdf="profit" type="button">PDF</button>
+                </div>
+                <div class="reports-metric-list" id="profitExpenseReportList"></div>
+                <div class="reports-table-wrap"><table><tbody id="expenseCategoryReportTable"></tbody></table></div>
+              </article>
+
+              <article class="reports-card reports-card-wide" data-report-card="clients">
+                <div class="reports-card-heading">
+                  <div><h3>Client Paid Details</h3><p>Month-wise paid invoice details by client.</p></div>
+                  <button class="secondary-action report-pdf-button" data-report-pdf="clients" type="button">PDF</button>
+                </div>
+                <div class="reports-table-wrap"><table><thead><tr><th>Month</th><th>Client</th><th>Paid amount</th><th>Invoices</th><th>Paid dates</th><th>Details</th></tr></thead><tbody id="clientReportTable"></tbody></table></div>
+              </article>
+
+              <article class="reports-card" data-report-card="projects">
+                <div class="reports-card-heading">
+                  <div><h3>Project Report</h3><p>Project value, profit, and status.</p></div>
+                  <button class="secondary-action report-pdf-button" data-report-pdf="projects" type="button">PDF</button>
+                </div>
+                <div class="reports-metric-list" id="projectReportList"></div>
+                <div class="reports-table-wrap"><table><tbody id="projectStatusReportTable"></tbody></table></div>
+              </article>
+
+              <article class="reports-card" data-report-card="posts">
+                <div class="reports-card-heading">
+                  <div><h3>Post Tracker Report</h3><p>Required, posted, remaining, missed.</p></div>
+                  <button class="secondary-action report-pdf-button" data-report-pdf="posts" type="button">PDF</button>
+                </div>
+                <div class="reports-metric-list" id="postTrackerReportList"></div>
+                <div class="reports-table-wrap"><table><tbody id="postClientReportTable"></tbody></table></div>
+              </article>
+
+              <article class="reports-card reports-card-wide" data-report-card="documents">
+                <div class="reports-card-heading">
+                  <div><h3>Invoice &amp; Quotation Report</h3><p>Document totals and statuses.</p></div>
+                  <button class="secondary-action report-pdf-button" data-report-pdf="documents" type="button">PDF</button>
+                </div>
+                <div class="reports-metric-list reports-doc-metrics" id="documentReportList"></div>
+              </article>
+            </div>
+          </section>
+        </section>
+
         <section class="view" id="settingsView">
           <section class="panel settings-panel">
             <div class="panel-heading">
@@ -1900,7 +2008,7 @@
                 <button class="secondary-action" id="saveServiceLetterRecordButton" type="button">Save record</button>
                 <button class="secondary-action" id="previewServiceLetterButton" type="button">View letter</button>
                 <button class="primary-action" id="buildServiceLetterPdfButton" type="button">Build PDF</button>
-                <button class="primary-action save-button" id="downloadServiceLetterPdfButton" type="button">Open / Download PDF</button>
+                <button class="primary-action save-button" id="downloadServiceLetterPdfButton" type="button">Download PDF</button>
               </div>
               <a class="secondary-action service-letter-download-link wide" id="serviceLetterReadyLink" href="#" hidden target="_blank" rel="noopener">Open ready PDF</a>
             </form>
@@ -1932,6 +2040,6 @@
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="supabase-config.js?v=20260513-doc-width-pdf-fix"></script>
-    <script src="app.js?v=20260602-pin-login-v10"></script>
+    <script src="app.js?v=20260602-client-paid-report-v22"></script>
   </body>
 </html>
