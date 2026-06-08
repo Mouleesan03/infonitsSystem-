@@ -919,6 +919,7 @@ function loadDashboardTasks() {
 
 function saveDashboardTasks() {
   localStorage.setItem(DASHBOARD_TASKS_KEY, JSON.stringify(dashboardTasks));
+  syncCollectionToSupabase("dashboardTasks");
 }
 
 function loadDashboardTaskDone() {
@@ -932,6 +933,7 @@ function loadDashboardTaskDone() {
 
 function saveDashboardTaskDone() {
   localStorage.setItem(DASHBOARD_TASK_DONE_KEY, JSON.stringify([...dashboardTaskDone]));
+  syncCollectionToSupabase("dashboardTaskDone");
 }
 
 function loadServiceLetterRecords() {
@@ -983,6 +985,11 @@ function normalizeArray(value) {
 
 function normalizeObject(value) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
+}
+
+function normalizeStringSet(value) {
+  if (value instanceof Set) return new Set([...value].filter(Boolean));
+  return new Set(normalizeArray(value).filter(Boolean));
 }
 
 function toIsoDateTime(value, fallback = "") {
@@ -1080,6 +1087,15 @@ function normalizeLoadedState() {
     designation: String(record.designation || ""),
     updatedAt: record.updatedAt || new Date().toISOString(),
   }));
+  dashboardTasks = normalizeArray(dashboardTasks).map((task) => ({
+    ...task,
+    id: task.id || `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title: String(task.title || "Task"),
+    priority: String(task.priority || "Medium"),
+    dueDate: normalizeIsoDate(task.dueDate, today()),
+    createdAt: task.createdAt || new Date().toISOString(),
+  }));
+  dashboardTaskDone = normalizeStringSet(dashboardTaskDone);
   projectTargets = normalizeObject(projectTargets);
   clientColors = normalizeObject(clientColors);
 }
@@ -1723,6 +1739,18 @@ const supabaseAppDataCollections = {
       calendarEvents = Array.isArray(value) ? value : [];
     },
   },
+  dashboardTasks: {
+    get: () => dashboardTasks,
+    set: (value) => {
+      dashboardTasks = Array.isArray(value) ? value : [];
+    },
+  },
+  dashboardTaskDone: {
+    get: () => [...dashboardTaskDone],
+    set: (value) => {
+      dashboardTaskDone = normalizeStringSet(value);
+    },
+  },
   serviceLetterRecords: {
     get: () => serviceLetterRecords,
     set: (value) => {
@@ -2094,6 +2122,8 @@ function removeOldLocalData() {
     PM_NOTIFICATIONS_KEY,
     MONTHLY_POST_REPORTS_KEY,
     CALENDAR_EVENTS_KEY,
+    DASHBOARD_TASKS_KEY,
+    DASHBOARD_TASK_DONE_KEY,
     SERVICE_LETTER_RECORDS_KEY,
     CLOUD_BACKUP_KEY,
   ].forEach((key) => localStorage.removeItem(key));
@@ -2113,6 +2143,8 @@ function oldLocalDataExists() {
     MANAGER_HANDLES_KEY,
     SOCIAL_POSTS_KEY,
     CALENDAR_EVENTS_KEY,
+    DASHBOARD_TASKS_KEY,
+    DASHBOARD_TASK_DONE_KEY,
     SERVICE_LETTER_RECORDS_KEY,
     SETTINGS_KEY,
   ].some((key) => localStorage.getItem(key) !== null);
@@ -2137,6 +2169,8 @@ async function migrateOldLocalDataToSupabase() {
     pmNotifications: readOldLocalJson(PM_NOTIFICATIONS_KEY, []),
     monthlyPostReports: readOldLocalJson(MONTHLY_POST_REPORTS_KEY, []),
     calendarEvents: readOldLocalJson(CALENDAR_EVENTS_KEY, []),
+    dashboardTasks: readOldLocalJson(DASHBOARD_TASKS_KEY, []),
+    dashboardTaskDone: readOldLocalJson(DASHBOARD_TASK_DONE_KEY, []),
     settings: readOldLocalJson(SETTINGS_KEY, {}),
   };
   let moved = false;
@@ -2156,6 +2190,8 @@ async function migrateOldLocalDataToSupabase() {
   if (!pmNotifications.length && oldData.pmNotifications.length) { pmNotifications = oldData.pmNotifications; moved = true; }
   if (!monthlyPostReports.length && oldData.monthlyPostReports.length) { monthlyPostReports = oldData.monthlyPostReports; moved = true; }
   if (!calendarEvents.length && oldData.calendarEvents.length) { calendarEvents = oldData.calendarEvents; moved = true; }
+  if (!dashboardTasks.length && oldData.dashboardTasks.length) { dashboardTasks = oldData.dashboardTasks; moved = true; }
+  if (!dashboardTaskDone.size && oldData.dashboardTaskDone.length) { dashboardTaskDone = normalizeStringSet(oldData.dashboardTaskDone); moved = true; }
   if (Object.keys(oldData.settings).length) { settings = { ...defaultSettings, ...settings, ...oldData.settings }; moved = true; }
   removeOldLocalData();
   if (!moved) return false;
