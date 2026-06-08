@@ -5,9 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Infonits Invoice Manager</title>
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="styles.css?v=20260602-client-paid-report-v22" />
+    <link rel="stylesheet" href="styles.css?v=20260608-full-system-check-v41" />
   </head>
   <body class="app-loading" data-active-view="dashboard">
+    <script>
+      document.body.dataset.theme = localStorage.getItem("infonits.theme") === "dark" ? "dark" : "light";
+    </script>
     <section class="app-preloader" id="appPreloader" aria-live="polite">
       <div class="preloader-card">
         <div class="brand-mark">IN</div>
@@ -188,6 +191,7 @@
                 <button type="button" data-quick-action="project">+ Add project</button>
               </div>
             </div>
+            <button class="secondary-action topbar-theme-button" id="themeToggleButton" type="button" aria-label="Switch to dark mode" title="Switch to dark mode">☾</button>
             <button class="secondary-action topbar-fullscreen-button" id="toggleFullscreenButton" type="button" aria-label="Toggle fullscreen">⛶ Fullscreen</button>
             <button class="notification-icon-button" id="openNotificationsButton" type="button" aria-label="Open notifications" title="Notifications">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 17h5l-1.4-1.4A2 2 0 0 1 18 14.2V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5m6 0a3 3 0 0 1-6 0" /></svg>
@@ -225,34 +229,57 @@
             <article class="metric metric-blue"><div class="metric-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M16 11a4 4 0 1 0-8 0M4 20a8 8 0 0 1 16 0M19 8a3 3 0 0 1 0 6M21 20a6 6 0 0 0-3-5" /></svg></div><div class="metric-copy"><span>Customers</span><strong id="dashboardTotalCustomers">0</strong><small>All customers</small></div></article>
           </div>
 
-          <div class="dashboard-insight-grid">
-            <section class="panel dashboard-chart-card">
-              <div class="panel-heading compact-heading">
-                <h2>Monthly revenue</h2>
-                <span class="muted-label">This year</span>
+          <div class="dashboard-work-row">
+            <section class="panel dashboard-action-center" aria-label="Action center">
+              <div class="action-center-heading">
+                <h2>Action center</h2>
+                <button class="text-action" data-view-target="notifications" type="button">View all</button>
               </div>
-              <div class="dashboard-bar-chart" id="dashboardRevenueChart"></div>
+              <div class="action-center-filters" id="dashboardActionFilters"></div>
+              <div class="action-center-list" id="dashboardActionList"></div>
             </section>
-            <section class="panel dashboard-status-card">
-              <div class="panel-heading compact-heading"><h2>Invoice status</h2></div>
-              <div class="status-overview">
-                <div class="status-ring" id="dashboardStatusRing"><span id="dashboardStatusTotal">0</span></div>
-                <div class="status-legend" id="dashboardStatusLegend"></div>
+
+            <section class="panel dashboard-task-card" aria-label="My tasks">
+              <div class="task-card-top">
+                <div class="task-card-title">
+                  <span class="task-card-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24"><path d="M9 12.5 11.4 15 16 9.5M6 4h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z" /></svg>
+                  </span>
+                  <div>
+                    <h2>My Tasks</h2>
+                    <p id="dashboardTaskDate">Today</p>
+                  </div>
+                </div>
+                <div class="task-card-actions">
+                  <div class="task-card-count">
+                    <strong id="dashboardTaskActiveCount">0</strong>
+                    <span>left to do</span>
+                  </div>
+                  <button class="task-add-toggle" type="button" aria-label="Add task" data-dashboard-task-add-toggle>+</button>
+                </div>
+              </div>
+              <div class="task-progress"><span id="dashboardTaskProgress"></span></div>
+              <form class="task-add-form is-hidden" id="dashboardTaskForm">
+                <textarea id="dashboardTaskInput" rows="2" autocomplete="off" placeholder="Type a new task..."></textarea>
+                <button type="submit">Add</button>
+              </form>
+              <div class="task-tabs" id="dashboardTaskFilters"></div>
+              <div class="task-list" id="dashboardTaskList"></div>
+              <div class="task-card-footer">
+                <span id="dashboardTaskCompletedCount">0 completed</span>
+                <button class="text-action" type="button" data-dashboard-task-clear>Clear completed</button>
               </div>
             </section>
-            <section class="panel dashboard-activity-card">
+            <section class="panel dashboard-activity-card dashboard-work-activity-card">
               <div class="panel-heading compact-heading">
                 <h2>Recent activity</h2>
                 <button class="text-action" data-view-target="invoices" type="button">View all</button>
               </div>
               <div class="activity-list" id="dashboardActivityList"></div>
             </section>
-            <section class="panel dashboard-list-card">
-              <div class="panel-heading compact-heading"><h2>Top customers</h2><span class="muted-label">This year</span></div>
-              <div class="dashboard-mini-list" id="dashboardTopCustomers"></div>
-            </section>
           </div>
 
+          <div class="dashboard-detail-row">
           <section class="panel dashboard-table-card">
             <div class="panel-heading compact-heading">
               <h2>Recent invoices</h2>
@@ -288,6 +315,27 @@
               <button class="secondary-action" id="recentInvoicesNextPage" type="button" aria-label="Next page">›</button>
             </div>
           </section>
+
+          <div class="dashboard-insight-grid">
+            <section class="panel dashboard-status-card">
+              <div class="panel-heading compact-heading"><h2>Invoice status</h2></div>
+              <div class="status-overview">
+                <div class="status-ring" id="dashboardStatusRing"><span id="dashboardStatusTotal">0</span></div>
+                <div class="status-legend" id="dashboardStatusLegend"></div>
+              </div>
+            </section>
+            <section class="panel dashboard-chart-card">
+              <div class="panel-heading compact-heading">
+                <h2>Monthly revenue</h2>
+                <span class="muted-label">This year</span>
+              </div>
+              <div class="dashboard-bar-chart" id="dashboardRevenueChart"></div>
+            </section>
+
+          </div>
+          </div>
+
+
         </section>
 
         <section class="view" id="notificationsView">
@@ -1133,7 +1181,6 @@
           <section class="panel finance-panel finance-redesign">
             <div class="panel-heading invoice-list-heading finance-topbar">
               <div class="finance-title-block">
-                <h2>Monthly Finance</h2>
                 <p id="financeMonthLabel">Workspace</p>
               </div>
               <div class="filters finance-filters">
@@ -1156,6 +1203,10 @@
                 <button class="secondary-action report-download-button" id="openFinanceRecordModalButton" type="button">
                   <span>+ Add record</span>
                 </button>
+                <div class="finance-view-switch" role="tablist" aria-label="Finance view">
+                  <button class="is-active" id="financeBoardViewButton" type="button" data-finance-view-mode="board">Board</button>
+                  <button id="financeTableViewButton" type="button" data-finance-view-mode="table">Table</button>
+                </div>
               </div>
             </div>
 
@@ -1204,7 +1255,11 @@
               </article>
             </div>
 
-            <div class="table-wrap finance-table-wrap">
+            <section class="finance-board-panel" id="financeBoardPanel" aria-label="Finance control board">
+              <div class="finance-board-grid" id="financeBoardGrid"></div>
+            </section>
+
+            <div class="table-wrap finance-table-wrap is-hidden" id="financeTablePanel">
               <table>
                 <thead>
                   <tr>
@@ -1221,7 +1276,7 @@
                 <tbody id="financeTable"></tbody>
               </table>
             </div>
-            <div class="pagination-controls">
+            <div class="pagination-controls is-hidden" id="financeTablePagination">
               <button class="secondary-action" id="financePrevPage" type="button" aria-label="Previous page">‹</button>
               <span id="financePageLabel">Page 1 of 1</span>
               <button class="secondary-action" id="financeNextPage" type="button" aria-label="Next page">›</button>
@@ -1946,19 +2001,19 @@
           <h2>Customer invoice</h2>
           <div class="preview-tools">
             <button class="secondary-action preview-mode-button preview-icon-button" id="previewFitPageButton" type="button" aria-label="Fit page" title="Fit page">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h10v18H7V3Zm2 4h6M9 11h6M9 15h4" /></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z"></path><path d="M8 7h8"></path><path d="M8 12h8"></path><path d="M8 17h5"></path></svg>
             </button>
             <button class="secondary-action preview-mode-button preview-icon-button" id="previewFitWidthButton" type="button" aria-label="Fit width" title="Fit width">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h18M3 16h18M8 12H4m0 0 2-2m-2 2 2 2m12-2h2m0 0-2-2m2 2-2 2" /></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16"></path><path d="M4 17h16"></path><path d="m8 12-4 4V8l4 4Z"></path><path d="m16 12 4-4v8l-4-4Z"></path></svg>
             </button>
             <button class="secondary-action preview-mode-button preview-icon-button" id="previewActualSizeButton" type="button" aria-label="Actual size" title="Actual size">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5h14v14H5V5Zm3 3h8v8H8V8Zm0 0 8 8" /></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2"></rect><rect x="8" y="8" width="8" height="8" rx="1"></rect><path d="M8 4v4"></path><path d="M16 16v4"></path></svg>
             </button>
             <button class="secondary-action" id="zoomOutButton" type="button">-</button>
             <span id="previewZoomLabel">80%</span>
             <button class="secondary-action" id="zoomInButton" type="button">+</button>
             <button class="secondary-action preview-icon-button" id="printInvoiceButton" type="button" aria-label="Download PDF" title="Download PDF">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v10m0 0 4-4m-4 4-4-4M5 19h14" /></svg>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12"></path><path d="m7 10 5 5 5-5"></path><path d="M5 21h14"></path></svg>
             </button>
             <button class="secondary-action" data-close-invoice-modal type="button">Close</button>
           </div>
@@ -2040,6 +2095,6 @@
     </div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
     <script src="supabase-config.js?v=20260513-doc-width-pdf-fix"></script>
-    <script src="app.js?v=20260602-client-paid-report-v22"></script>
+    <script src="app.js?v=20260608-full-system-check-v41"></script>
   </body>
 </html>

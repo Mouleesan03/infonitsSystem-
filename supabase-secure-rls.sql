@@ -34,6 +34,7 @@ drop policy if exists "Current app can sync website logins" on public.website_lo
 drop policy if exists "Current app can sync notifications" on public.notifications;
 drop policy if exists "Current app can sync app data" on public.app_data;
 drop policy if exists "Current app can sync settings" on public.app_settings;
+drop policy if exists "Current app can sync users" on public.app_users;
 
 create policy "Authenticated staff can manage clients" on public.clients
 for all to authenticated using (public.can_manage_business_data()) with check (public.can_manage_business_data());
@@ -81,4 +82,7 @@ create policy "Admin can manage app data" on public.app_data
 for all to authenticated using (public.current_user_role() = 'admin') with check (public.current_user_role() = 'admin');
 
 create policy "Admin can manage settings" on public.app_settings
+for all to authenticated using (public.current_user_role() = 'admin') with check (public.current_user_role() = 'admin');
+
+create policy "Admin can manage app users" on public.app_users
 for all to authenticated using (public.current_user_role() = 'admin') with check (public.current_user_role() = 'admin');

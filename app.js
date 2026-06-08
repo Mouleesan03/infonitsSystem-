@@ -19,9 +19,12 @@ const PM_NOTIFICATIONS_KEY = "infonits.notifications";
 const SERVICE_LETTER_RECORDS_KEY = "infonits.serviceLetterRecords";
 const MONTHLY_POST_REPORTS_KEY = "infonits.monthlyPostReports";
 const CALENDAR_EVENTS_KEY = "infonits.calendarEvents";
+const DASHBOARD_TASKS_KEY = "infonits.dashboardTasks";
+const DASHBOARD_TASK_DONE_KEY = "infonits.dashboardTaskDone";
 const CLOUD_BACKUP_KEY = "infonits.cloudBackup";
 const SIDEBAR_COLLAPSED_KEY = "infonits.sidebarCollapsed";
 const ACTIVE_VIEW_KEY = "infonits.activeView";
+const THEME_KEY = "infonits.theme";
 const MONTH_FILTER_KEYS = {
   invoice: "infonits.monthFilter.invoice",
   quotation: "infonits.monthFilter.quotation",
@@ -31,7 +34,7 @@ const MONTH_FILTER_KEYS = {
   calendar: "infonits.monthFilter.calendar",
 };
 const FINANCE_PAGE_SIZE = 7;
-const RECENT_INVOICE_PAGE_SIZE = 7;
+const RECENT_INVOICE_PAGE_SIZE = 6;
 const CLIENT_PAGE_SIZE = 10;
 const INVOICE_PAGE_SIZE = 10;
 const PM_PROJECT_PAGE_SIZE = 6;
@@ -41,7 +44,7 @@ const WEBSITE_LOGIN_PAGE_SIZE = 8;
 const PM_WEEKLY_POST_TARGET = 3;
 const PM_MONTHLY_POST_TARGET = PM_WEEKLY_POST_TARGET * 4;
 const MAX_IMAGE_UPLOAD_SIZE = 2 * 1024 * 1024;
-const SERVICE_LETTER_LOGO_PATH = "assets/infonits-logo-dark.png";
+const SERVICE_LETTER_LOGO_PATH = "assets/infonits-logo.jpg";
 const NOTIFICATION_RESTART_DATE = "2026-05-08";
 const IDLE_LOGOUT_MS = 10 * 60 * 1000;
 const PASSWORD_MIN_LENGTH = 8;
@@ -147,8 +150,14 @@ let previewFitMode = "page";
 let previewHidden = true;
 let projectFormVisible = false;
 let financePage = 1;
+let financeViewMode = "board";
 let recentInvoicesPage = 1;
 let dashboardInvoiceFilter = "All";
+let dashboardActionFilter = "All";
+let dashboardTaskFilter = "All";
+let dashboardTaskComposerOpen = false;
+let dashboardTasks = loadDashboardTasks();
+let dashboardTaskDone = loadDashboardTaskDone();
 let invoiceProjectSyncLock = false;
 let clientPage = 1;
 let invoicePage = 1;
@@ -309,6 +318,7 @@ const trustedLoginPin = document.getElementById("trustedLoginPin");
 const trustedLoginButton = document.getElementById("trustedLoginButton");
 const trustedLoginForgetButton = document.getElementById("trustedLoginForgetButton");
 const toggleFullscreenButton = document.getElementById("toggleFullscreenButton");
+const themeToggleButton = document.getElementById("themeToggleButton");
 const quickActionsButton = document.getElementById("quickActionsButton");
 const quickActionsMenu = document.getElementById("quickActionsMenu");
 const topbarContext = document.getElementById("topbarContext");
@@ -389,6 +399,25 @@ function updateFullscreenButtonState() {
   const isFullscreen = Boolean(document.fullscreenElement);
   toggleFullscreenButton.textContent = isFullscreen ? "⤢ Exit fullscreen" : "⛶ Fullscreen";
   toggleFullscreenButton.setAttribute("aria-label", isFullscreen ? "Exit fullscreen" : "Enter fullscreen");
+}
+
+function savedTheme() {
+  return localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light";
+}
+
+function applyTheme(theme = savedTheme()) {
+  const isDark = theme === "dark";
+  document.body.dataset.theme = isDark ? "dark" : "light";
+  if (!themeToggleButton) return;
+  themeToggleButton.textContent = isDark ? "☀" : "☾";
+  themeToggleButton.setAttribute("aria-label", isDark ? "Switch to light mode" : "Switch to dark mode");
+  themeToggleButton.setAttribute("title", isDark ? "Switch to light mode" : "Switch to dark mode");
+}
+
+function toggleTheme() {
+  const nextTheme = document.body.dataset.theme === "dark" ? "light" : "dark";
+  localStorage.setItem(THEME_KEY, nextTheme);
+  applyTheme(nextTheme);
 }
 
 let sidebarCollapsed = false;
@@ -879,6 +908,32 @@ function saveCalendarEvents() {
   syncCollectionToSupabase("calendarEvents");
 }
 
+function loadDashboardTasks() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DASHBOARD_TASKS_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveDashboardTasks() {
+  localStorage.setItem(DASHBOARD_TASKS_KEY, JSON.stringify(dashboardTasks));
+}
+
+function loadDashboardTaskDone() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DASHBOARD_TASK_DONE_KEY) || "[]");
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDashboardTaskDone() {
+  localStorage.setItem(DASHBOARD_TASK_DONE_KEY, JSON.stringify([...dashboardTaskDone]));
+}
+
 function loadServiceLetterRecords() {
   return [];
 }
@@ -904,6 +959,8 @@ function refreshStateFromStorage() {
   pmNotifications = loadPmNotifications();
   monthlyPostReports = loadMonthlyPostReports();
   calendarEvents = loadCalendarEvents();
+  dashboardTasks = loadDashboardTasks();
+  dashboardTaskDone = loadDashboardTaskDone();
   serviceLetterRecords = loadServiceLetterRecords();
   settings = loadSettings();
   normalizeLoadedState();
@@ -1088,6 +1145,11 @@ function supabaseTableHeaders(extra = {}) {
     "Content-Type": "application/json",
     ...extra,
   };
+}
+
+function isMissingSupabaseTableError(error) {
+  const message = String(error?.message || error || "");
+  return message.includes("PGRST205") || message.includes("Could not find the table");
 }
 
 async function latestSocialPostStamp() {
@@ -1538,7 +1600,7 @@ const supabaseDirectCollections = {
       app_id: payloadId(renewal, `renewal-${index + 1}`),
       name: renewal.name || "Renewal",
       renewal_type: renewal.type || renewal.renewalType || "Renewal",
-      renewal_date: cleanDate(renewal.date || renewal.renewalDate),
+      renewal_date: cleanDate(renewal.expiryDate || renewal.date || renewal.renewalDate),
       amount: cleanNumber(renewal.amount),
       status: renewal.status || "Active",
       note: renewal.note || "",
@@ -1551,8 +1613,9 @@ const supabaseDirectCollections = {
         name: row.name || "Renewal",
         type: row.renewal_type || "Renewal",
         renewalType: row.renewal_type || "Renewal",
-        date: row.renewal_date || today(),
-        renewalDate: row.renewal_date || today(),
+        date: row.expiry_date || row.renewal_date || today(),
+        renewalDate: row.expiry_date || row.renewal_date || today(),
+        expiryDate: row.expiry_date || row.renewal_date || today(),
         amount: cleanNumber(row.amount),
         status: row.status || "Active",
         note: row.note || "",
@@ -1825,7 +1888,15 @@ async function writeCollectionToSupabase(collection, options = {}) {
   const direct = supabaseDirectCollections[collection];
   if (direct) {
     const rows = direct.get().map(direct.toRow);
-    await insertSupabaseRows(direct.table, rows);
+    try {
+      await insertSupabaseRows(direct.table, rows);
+    } catch (error) {
+      if (collection === "users" && isMissingSupabaseTableError(error)) {
+        await writeAppDataPayload("users", direct.get());
+        return true;
+      }
+      throw error;
+    }
     if (options.replaceStale) {
       await deleteSupabaseRows(direct.table, rows.map((row) => row.app_id).filter(Boolean));
     }
@@ -1833,20 +1904,24 @@ async function writeCollectionToSupabase(collection, options = {}) {
   }
   const appData = supabaseAppDataCollections[collection];
   if (appData) {
-    const response = await fetch(supabaseTableUrl("app_data", `?collection=eq.${encodeURIComponent(collection)}`), {
-      method: "DELETE",
-      headers: supabaseTableHeaders({ Prefer: "return=minimal" }),
-    });
-    if (!response.ok) throw new Error(await response.text());
-    const insertResponse = await fetch(supabaseTableUrl("app_data"), {
-      method: "POST",
-      headers: supabaseTableHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
-      body: JSON.stringify({ collection, app_id: "main", payload: appData.get(), updated_at: new Date().toISOString() }),
-    });
-    if (!insertResponse.ok) throw new Error(await insertResponse.text());
+    await writeAppDataPayload(collection, appData.get());
     return true;
   }
   return false;
+}
+
+async function writeAppDataPayload(collection, payload) {
+  const response = await fetch(supabaseTableUrl("app_data", `?collection=eq.${encodeURIComponent(collection)}`), {
+    method: "DELETE",
+    headers: supabaseTableHeaders({ Prefer: "return=minimal" }),
+  });
+  if (!response.ok) throw new Error(await response.text());
+  const insertResponse = await fetch(supabaseTableUrl("app_data"), {
+    method: "POST",
+    headers: supabaseTableHeaders({ Prefer: "resolution=merge-duplicates,return=minimal" }),
+    body: JSON.stringify({ collection, app_id: "main", payload, updated_at: new Date().toISOString() }),
+  });
+  if (!insertResponse.ok) throw new Error(await insertResponse.text());
 }
 
 async function writeCollectionItemToSupabase(collection, item, index = 0) {
@@ -1920,11 +1995,13 @@ async function loadAllDataFromSupabase() {
   }
   let hasLoadError = false;
   let usersLoadedFromDirectTable = false;
+  let usersDirectLoadMissing = false;
   try {
     const failedTables = await checkSupabaseTables();
-    if (failedTables.length) {
-      console.error("Supabase table check failed:", failedTables);
-      showToast(`Check Supabase SQL: ${failedTables.slice(0, 3).join(", ")}`);
+    const blockingFailedTables = failedTables.filter((table) => table !== "app_users");
+    if (blockingFailedTables.length) {
+      console.error("Supabase table check failed:", blockingFailedTables);
+      showToast(`Check Supabase SQL: ${blockingFailedTables.slice(0, 3).join(", ")}`);
     }
     const directEntries = Object.entries(supabaseDirectCollections);
     const directData = await Promise.allSettled(directEntries.map(([, config]) => readTableRows(config)));
@@ -1934,7 +2011,11 @@ async function loadAllDataFromSupabase() {
         config.set(result.value);
         if (collection === "users" && result.value.length) usersLoadedFromDirectTable = true;
       } else {
-        hasLoadError = true;
+        if (collection === "users" && isMissingSupabaseTableError(result.reason)) {
+          usersDirectLoadMissing = true;
+        } else {
+          hasLoadError = true;
+        }
         console.error(`Supabase load failed: ${collection}`, result.reason);
       }
     });
@@ -1947,6 +2028,7 @@ async function loadAllDataFromSupabase() {
           saveUsers();
         }
       } catch (error) {
+        if (usersDirectLoadMissing) hasLoadError = true;
         console.warn("Legacy users fallback skipped", error);
       }
     }
@@ -2176,6 +2258,16 @@ function money(value, currency = settings.currencyLabel) {
 
 function compactMoney(value, currency = settings.currencyLabel) {
   return money(value, currency);
+}
+
+function dashboardKpiMoney(value, currency = settings.currencyLabel) {
+  const number = Number(value || 0);
+  const sign = number < 0 ? "-" : "";
+  const absolute = Math.abs(number);
+  const prefix = currencyPrefix(currency);
+  if (absolute >= 1000000) return `${sign}${prefix} ${formatNumber(absolute / 1000000, 2)}M`;
+  if (absolute >= 1000) return `${sign}${prefix} ${formatNumber(absolute / 1000, 2)}K`;
+  return `${sign}${prefix} ${formatNumber(absolute)}`.trim();
 }
 
 function shortMoney(value, currency = settings.currencyLabel) {
@@ -2413,13 +2505,14 @@ function fitInvoicePreviewToViewport() {
   const viewport = document.querySelector(".preview-viewport");
   const paper = document.getElementById("invoicePreview");
   if (!viewport || !paper) return;
-  const baseA4Width = 794;
-  const baseA4Height = 1123;
-  const paperWidth = baseA4Width;
-  const paperHeight = baseA4Height;
+  const viewportStyle = window.getComputedStyle(viewport);
+  const horizontalPadding = Number.parseFloat(viewportStyle.paddingLeft || 0) + Number.parseFloat(viewportStyle.paddingRight || 0);
+  const verticalPadding = Number.parseFloat(viewportStyle.paddingTop || 0) + Number.parseFloat(viewportStyle.paddingBottom || 0);
+  const paperWidth = paper.offsetWidth || 794;
+  const paperHeight = paper.scrollHeight || paper.offsetHeight || 1123;
   if (!paperWidth || !paperHeight) return;
-  const availableWidth = Math.max(0, viewport.clientWidth - 8);
-  const availableHeight = Math.max(0, viewport.clientHeight - 8);
+  const availableWidth = Math.max(0, viewport.clientWidth - horizontalPadding);
+  const availableHeight = Math.max(0, viewport.clientHeight - verticalPadding);
   if (!availableWidth || !availableHeight) return;
   const fitZoom = previewFitMode === "width"
     ? Math.min(availableWidth / paperWidth, 1)
@@ -4931,14 +5024,14 @@ function renderDashboard() {
 
   const totalInvoicesWithCarry = totals.count + carryForwardPendingDocs.length;
   document.getElementById("totalInvoices").textContent = formatNumber(totalInvoicesWithCarry);
-  document.getElementById("totalBilled").textContent = compactMoney(totals.billed);
-  document.getElementById("totalPaid").textContent = compactMoney(totals.paid);
-  document.getElementById("totalPending").textContent = compactMoney(totals.pending);
+  document.getElementById("totalBilled").textContent = dashboardKpiMoney(totals.billed);
+  document.getElementById("totalPaid").textContent = dashboardKpiMoney(totals.paid);
+  document.getElementById("totalPending").textContent = dashboardKpiMoney(totals.pending);
   const overdueTotalAllMonths = overdueAllMonths.reduce((sum, invoice) => sum + invoiceTotalInLkr(invoice), 0);
-  document.getElementById("dashboardOverdueTotal").textContent = compactMoney(overdueTotalAllMonths);
+  document.getElementById("dashboardOverdueTotal").textContent = dashboardKpiMoney(overdueTotalAllMonths);
   const dashboardInvoiceHelper = document.getElementById("dashboardInvoiceHelper");
   if (dashboardInvoiceHelper) {
-    dashboardInvoiceHelper.textContent = `${formatNumber(carryForwardPendingDocs.length)} carry forward`;
+    dashboardInvoiceHelper.textContent = `${formatNumber(carryForwardPendingDocs.length)} carry`;
   }
   const waitingProjectCount = projectsForMonth(currentMonth).filter((project) => String(project.paymentStatus || "Waiting") === "Waiting").length;
   document.getElementById("dashboardActiveProjects").textContent = formatNumber(waitingProjectCount);
@@ -4948,18 +5041,18 @@ function renderDashboard() {
   const pendingBase = totals.billed + carryForwardPendingTotal;
   const pendingPercent = pendingBase ? (totals.pending / pendingBase) * 100 : 0;
   const overdueCount = overdueAllMonths.length;
-  document.getElementById("dashboardPaidHelper").textContent = `${formatNumber(paidPercent, 1)}% of billed`;
-  document.getElementById("dashboardPendingHelper").textContent = `${formatNumber(pendingPercent, 1)}% pending (incl. carry-forward)`;
+  document.getElementById("dashboardPaidHelper").textContent = `${formatNumber(paidPercent, 1)}% paid`;
+  document.getElementById("dashboardPendingHelper").textContent = `${formatNumber(pendingPercent, 1)}% pending`;
   document.getElementById("dashboardOverdueHelper").textContent = `${formatNumber(overdueCount)} invoices`;
 
+  renderDashboardCommandCenter(invoiceDocs, overdueAllMonths, carryForwardPendingDocs, monthInvoiceDocs);
+  renderDashboardTasks(overdueAllMonths, currentMonth);
   renderDashboardRevenue(invoiceDocs);
   renderDashboardStatus(invoiceDocs);
   renderDashboardActivity(invoiceDocs);
-  renderDashboardTopCustomers(invoiceDocs);
 
   const table = document.getElementById("recentInvoicesTable");
   const recent = [...invoiceDocs]
-    .filter((invoice) => invoice.status === "Overdue" || isWithinLastDays(invoiceRecentDate(invoice), 20))
     .filter((invoice) => dashboardInvoiceFilter === "All" || invoice.status === dashboardInvoiceFilter)
     .sort((a, b) => String(invoiceRecentDate(b)).localeCompare(String(invoiceRecentDate(a))));
   const totalPages = Math.max(1, Math.ceil(recent.length / RECENT_INVOICE_PAGE_SIZE));
@@ -4998,6 +5091,342 @@ function renderDashboard() {
   });
 
   if (isDashboardSearchPopupOpen) renderDashboardSearch();
+}
+
+function commandItem({ tone = "blue", label, title, detail, meta, amount, actionLabel, actionAttribute, actionValue }) {
+  const action = actionLabel && actionAttribute && actionValue
+    ? `<button class="text-action" type="button" ${actionAttribute}="${escapeAttribute(actionValue)}">${escapeHtml(actionLabel)}</button>`
+    : "";
+  return `
+    <article class="command-item ${escapeAttribute(tone)}">
+      <div class="command-item-main">
+        <span class="command-badge">${escapeHtml(label || "Item")}</span>
+        <strong>${escapeHtml(title || "Untitled")}</strong>
+        <p>${escapeHtml(detail || "")}</p>
+        <small>${escapeHtml(meta || "")}</small>
+      </div>
+      <div class="command-item-side">
+        ${amount ? `<strong>${escapeHtml(amount)}</strong>` : ""}
+        ${action}
+      </div>
+    </article>
+  `;
+}
+
+function dashboardActionTypeLabel(type) {
+  const labels = {
+    overdue: "Overdue",
+    waiting: "Waiting",
+    renewal: "Renewal",
+    payment: "To pay",
+    alert: "Alert",
+  };
+  return labels[type] || "Action";
+}
+
+function orderDashboardActions(items) {
+  const buckets = {
+    overdue: items.filter((item) => item.actionType === "overdue"),
+    waiting: items.filter((item) => item.actionType === "waiting"),
+    renewal: items.filter((item) => item.actionType === "renewal"),
+    payment: items.filter((item) => item.actionType === "payment"),
+    alert: items.filter((item) => item.actionType === "alert"),
+  };
+  const order = ["overdue", "waiting", "renewal", "payment", "alert"];
+  const ordered = [];
+  while (order.some((type) => buckets[type].length)) {
+    order.forEach((type) => {
+      const nextItem = buckets[type].shift();
+      if (nextItem) ordered.push(nextItem);
+    });
+  }
+  return ordered;
+}
+
+function renderDashboardActionCenter(items) {
+  const list = document.getElementById("dashboardActionList");
+  const filters = document.getElementById("dashboardActionFilters");
+  if (!list || !filters) return;
+  const orderedItems = orderDashboardActions(items);
+  const counts = {
+    All: items.length,
+    Overdue: items.filter((item) => item.actionType === "overdue").length,
+    Waiting: items.filter((item) => item.actionType === "waiting").length,
+    Renewals: items.filter((item) => item.actionType === "renewal").length,
+  };
+  const filterOptions = ["All", "Overdue", "Waiting", "Renewals"];
+  filters.innerHTML = filterOptions
+    .map((filter) => `
+      <button class="${dashboardActionFilter === filter ? "is-active" : ""}" type="button" data-dashboard-action-filter="${escapeAttribute(filter)}">
+        ${escapeHtml(filter)} · ${formatNumber(counts[filter] || 0)}
+      </button>
+    `)
+    .join("");
+  const visibleItems = orderedItems.filter((item) => {
+    if (dashboardActionFilter === "All") return true;
+    if (dashboardActionFilter === "Overdue") return item.actionType === "overdue";
+    if (dashboardActionFilter === "Waiting") return item.actionType === "waiting";
+    if (dashboardActionFilter === "Renewals") return item.actionType === "renewal";
+    return true;
+  });
+  list.innerHTML = visibleItems.length
+    ? visibleItems.map(commandItem).join("")
+    : `<div class="command-empty">No ${escapeHtml(dashboardActionFilter.toLowerCase())} actions right now.</div>`;
+}
+
+function dashboardTaskPriorityBadge(priority = "Medium") {
+  const normalized = String(priority || "Medium").toLowerCase();
+  return `<span class="task-priority ${escapeAttribute(normalized)}">${escapeHtml(priority)}</span>`;
+}
+
+function dashboardTaskDueLabel(date = "") {
+  const cleanDate = String(date || "");
+  if (!cleanDate) return "Today";
+  if (cleanDate === today()) return "Today";
+  if (cleanDate < today()) return "Overdue · Today";
+  return formatDate(cleanDate);
+}
+
+function autoDashboardTasks(overdueAllMonths, currentMonth) {
+  const activeProjects = projectsForMonth(currentMonth)
+    .filter(isActiveProject)
+    .filter((project) => String(project.repeat || "no") !== "monthly")
+    .sort((a, b) => projectForMe(b) - projectForMe(a));
+  const portalRenewalAlerts = portalRenewalItems()
+    .map((item) => ({ ...item, days: daysUntil(item.date) }))
+    .filter((item) => item.days !== null && item.days <= 15)
+    .sort((a, b) => a.days - b.days || a.websiteName.localeCompare(b.websiteName));
+  return [
+    ...overdueAllMonths.map((invoice) => ({
+      id: `invoice-${invoice.id}`,
+      title: `Follow up on ${invoice.customerName || "customer"} overdue invoice (${invoice.invoiceNumber || "Invoice"})`,
+      detail: `Invoice · ${invoice.invoiceNumber || "Invoice"}`,
+      priority: "High",
+      dueDate: invoice.dueDate || today(),
+      actionLabel: "View",
+      actionAttribute: "data-select",
+      actionValue: invoice.id,
+      source: "auto",
+    })),
+    ...activeProjects.map((project) => ({
+      id: `project-${project.id}`,
+      title: `Review ${project.clientName || "client"} ${project.name || "project"}`,
+      detail: `Project · ${project.name || "Project"}`,
+      priority: "Medium",
+      dueDate: `${currentMonth}-09`,
+      actionLabel: "Edit",
+      actionAttribute: "data-project-edit",
+      actionValue: project.id,
+      source: "auto",
+    })),
+    ...portalRenewalAlerts.map((item) => ({
+      id: `portal-renewal-${item.id}-${item.type}`,
+      title: `Renew ${item.websiteName} ${item.type}`,
+      detail: `Renewal · ${item.days < 0 ? `${Math.abs(item.days)} days overdue` : `${item.days} days left`}`,
+      priority: item.days <= 7 ? "High" : "Medium",
+      dueDate: item.date,
+      actionLabel: "Calendar",
+      actionAttribute: "data-view-target",
+      actionValue: "calendar",
+      source: "auto",
+    })),
+  ];
+}
+
+function renderDashboardTasks(overdueAllMonths, currentMonth) {
+  const list = document.getElementById("dashboardTaskList");
+  const filters = document.getElementById("dashboardTaskFilters");
+  if (!list || !filters) return;
+  const form = document.getElementById("dashboardTaskForm");
+  const addToggle = document.querySelector("[data-dashboard-task-add-toggle]");
+  if (form) form.classList.toggle("is-hidden", !dashboardTaskComposerOpen);
+  if (addToggle) addToggle.classList.toggle("is-active", dashboardTaskComposerOpen);
+  const todayLabel = new Date().toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" });
+  const taskDate = document.getElementById("dashboardTaskDate");
+  if (taskDate) taskDate.textContent = todayLabel;
+  const manualTasks = dashboardTasks.map((task) => ({ ...task, source: "manual" }));
+  const tasks = orderDashboardActions(autoDashboardTasks(overdueAllMonths, currentMonth).map((task) => ({
+    ...task,
+    actionType: task.id.startsWith("invoice-") ? "overdue" : task.id.startsWith("project-") ? "waiting" : "renewal",
+  }))).concat(manualTasks);
+  const decoratedTasks = tasks.map((task) => ({ ...task, completed: dashboardTaskDone.has(task.id) || Boolean(task.completed) }));
+  const activeCount = decoratedTasks.filter((task) => !task.completed).length;
+  const doneCount = decoratedTasks.length - activeCount;
+  const progress = decoratedTasks.length ? (doneCount / decoratedTasks.length) * 100 : 0;
+  document.getElementById("dashboardTaskActiveCount").textContent = formatNumber(activeCount);
+  document.getElementById("dashboardTaskCompletedCount").textContent = `${formatNumber(doneCount)} of ${formatNumber(decoratedTasks.length)} completed`;
+  const progressBar = document.getElementById("dashboardTaskProgress");
+  if (progressBar) progressBar.style.width = `${progress}%`;
+  const filterOptions = [
+    ["All", decoratedTasks.length],
+    ["Active", activeCount],
+    ["Done", doneCount],
+  ];
+  filters.innerHTML = filterOptions
+    .map(([filter, count]) => `
+      <button class="${dashboardTaskFilter === filter ? "is-active" : ""}" type="button" data-dashboard-task-filter="${escapeAttribute(filter)}">
+        ${escapeHtml(filter)} <span>${formatNumber(count)}</span>
+      </button>
+    `)
+    .join("");
+  const visibleTasks = decoratedTasks.filter((task) => {
+    if (dashboardTaskFilter === "Active") return !task.completed;
+    if (dashboardTaskFilter === "Done") return task.completed;
+    return true;
+  });
+  list.innerHTML = visibleTasks.length
+    ? visibleTasks
+        .map((task) => {
+          const action = task.actionLabel && task.actionAttribute && task.actionValue
+            ? `<button class="text-action" type="button" ${task.actionAttribute}="${escapeAttribute(task.actionValue)}">${escapeHtml(task.actionLabel)}</button>`
+            : "";
+          return `
+            <article class="task-row ${task.completed ? "is-done" : ""}">
+              <button class="task-check" type="button" aria-label="Toggle task" data-dashboard-task-toggle="${escapeAttribute(task.id)}"></button>
+              <div class="task-row-main">
+                <strong>${escapeHtml(task.title || "Task")}</strong>
+                <p>${dashboardTaskPriorityBadge(task.priority)} <span>${escapeHtml(dashboardTaskDueLabel(task.dueDate))}</span></p>
+              </div>
+              ${action}
+            </article>
+          `;
+        })
+        .join("")
+    : `<div class="task-empty">No ${escapeHtml(dashboardTaskFilter.toLowerCase())} tasks right now.</div>`;
+}
+
+function renewalUrgency(renewal, todayIso) {
+  const expiry = String(renewal.expiryDate || "");
+  if (!expiry) return "";
+  if (expiry < todayIso) return "Overdue";
+  if (expiry === todayIso) return "Today";
+  return "Upcoming";
+}
+
+function dashboardUnreadNotifications() {
+  return pmNotifications
+    .filter((note) => ![NOTIFICATION_STATUS.READ, NOTIFICATION_STATUS.DONE].includes(String(note.status || NOTIFICATION_STATUS.UNREAD)))
+    .sort((a, b) => String(b.updatedAt || b.createdAt || "").localeCompare(String(a.updatedAt || a.createdAt || "")));
+}
+
+function renderDashboardCommandCenter(invoiceDocs, overdueAllMonths, carryForwardPendingDocs, monthInvoiceDocs) {
+  const todayIso = today();
+  const currentMonth = todayIso.slice(0, 7);
+  const monthRecords = financeRecords.filter((record) => financeRecordAppliesToMonth(record, currentMonth));
+  const unpaidPayments = monthRecords
+    .filter((record) => financeRecordIsExpenseLike(record) && financeRecordOutstandingAmount(record, currentMonth) > 0)
+    .sort((a, b) => String(financeRecordDisplayDate(a, currentMonth)).localeCompare(String(financeRecordDisplayDate(b, currentMonth))));
+  const activeProjects = projectsForMonth(currentMonth)
+    .filter(isActiveProject)
+    .filter((project) => String(project.repeat || "no") !== "monthly")
+    .sort((a, b) => projectForMe(b) - projectForMe(a));
+  const unreadNotes = dashboardUnreadNotifications();
+  const dueRenewals = renewals
+    .filter((renewal) => {
+      const expiry = String(renewal.expiryDate || "");
+      return expiry && String(renewal.status || "Active") !== "Cancelled";
+    })
+    .sort((a, b) => String(a.expiryDate || "").localeCompare(String(b.expiryDate || "")));
+  const upcomingEvents = calendarEvents
+    .filter((event) => {
+      const date = String(event.date || "");
+      return date && date >= todayIso && date <= addDays(todayIso, 7);
+    })
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  const portalRenewalAlerts = portalRenewalItems()
+    .map((item) => ({ ...item, days: daysUntil(item.date) }))
+    .filter((item) => item.days !== null && item.days <= 15)
+    .sort((a, b) => a.days - b.days || a.websiteName.localeCompare(b.websiteName));
+
+  const priorityItems = [
+    ...overdueAllMonths.map((invoice) => ({
+      actionType: "overdue",
+      tone: "red",
+      label: "Overdue",
+      title: invoice.customerName || "Invoice payment",
+      detail: `Invoice · ${invoice.invoiceNumber || "Invoice"}`,
+      meta: `Due ${formatDate(invoice.dueDate)}`,
+      amount: compactMoney(invoiceTotalInLkr(invoice), "LKR"),
+      actionLabel: "View",
+      actionAttribute: "data-select",
+      actionValue: invoice.id,
+    })),
+    ...unpaidPayments.map((record) => ({
+      actionType: "payment",
+      tone: "orange",
+      label: "To pay",
+      title: record.category || financeTypeLabel(record.type),
+      detail: record.description || "Payment pending",
+      meta: formatDate(financeRecordDisplayDate(record, currentMonth)),
+      amount: compactMoney(record.amount, "LKR"),
+      actionLabel: "Finance",
+      actionAttribute: "data-view-target",
+      actionValue: "finance",
+    })),
+    ...unreadNotes.map((note) => ({
+      actionType: "alert",
+      tone: "purple",
+      label: "Staff task",
+      title: note.clientName || note.title || note.type || "Team follow-up",
+      detail: notificationDetailText(note) || note.message || "Needs attention",
+      meta: notificationTimeLabel(note),
+      actionLabel: "Open",
+      actionAttribute: "data-view-target",
+      actionValue: "notifications",
+    })),
+  ];
+
+  const workItems = activeProjects.map((project) => ({
+    actionType: "waiting",
+    tone: "blue",
+    label: project.paymentStatus || "Waiting",
+    title: project.clientName || "Client project",
+    detail: `Project · ${project.name || "Project"}`,
+    meta: `${project.month || currentMonth} · Project`,
+    amount: compactMoney(projectForMe(project), "LKR"),
+    actionLabel: "Edit",
+    actionAttribute: "data-project-edit",
+    actionValue: project.id,
+  }));
+
+  const alertItems = [
+    ...portalRenewalAlerts.map((item) => ({
+      actionType: "renewal",
+      tone: item.days < 0 ? "red" : "orange",
+      label: item.days < 0 ? "Overdue" : "Renewal",
+      title: `${item.websiteName} ${item.type}`,
+      detail: `Renewal · ${item.provider || "Website login"}`,
+      meta: `${formatDate(item.date)} · ${item.days < 0 ? `${Math.abs(item.days)} days overdue` : `${item.days} days left`}`,
+      actionLabel: "Calendar",
+      actionAttribute: "data-view-target",
+      actionValue: "calendar",
+    })),
+    ...dueRenewals.map((renewal) => ({
+      actionType: "renewal",
+      tone: renewalUrgency(renewal, todayIso) === "Overdue" ? "red" : "orange",
+      label: renewalUrgency(renewal, todayIso) || "Renewal",
+      title: renewal.clientName || renewal.name || "Renewal",
+      detail: `Renewal · ${renewal.type || renewal.name || "Service"}`,
+      meta: `Expires ${formatDate(renewal.expiryDate)}`,
+      amount: renewal.amount ? compactMoney(renewal.amount, "LKR") : "",
+      actionLabel: "Edit",
+      actionAttribute: "data-renewal-edit",
+      actionValue: renewal.id,
+    })),
+    ...upcomingEvents.map((event) => ({
+      actionType: "alert",
+      tone: "teal",
+      label: "Calendar",
+      title: event.title || "Reminder",
+      detail: event.description || "Upcoming event",
+      meta: formatDate(event.date),
+      actionLabel: "Calendar",
+      actionAttribute: "data-view-target",
+      actionValue: "calendar",
+    })),
+  ];
+
+  renderDashboardActionCenter([...priorityItems, ...workItems, ...alertItems]);
 }
 
 function renderDashboardRevenue(invoiceDocs) {
@@ -5062,7 +5491,11 @@ function renderDashboardStatus(invoiceDocs) {
   total.textContent = formatNumber(invoiceDocs.length);
   legend.innerHTML = counts
     .map((item) => `
-      <div><span><i style="background:${item.color}"></i>${escapeHtml(item.status)}</span><strong>${formatNumber(item.count)}</strong></div>
+      <div class="status-legend-row">
+        <span><i style="background:${item.color}"></i>${escapeHtml(item.status)}</span>
+        <strong>${formatNumber(item.count)} <small>${invoiceDocs.length ? Math.round((item.count / invoiceDocs.length) * 100) : 0}%</small></strong>
+        <b class="status-progress" style="--status-color:${item.color}; --status-width:${invoiceDocs.length ? Math.round((item.count / invoiceDocs.length) * 100) : 0}%"></b>
+      </div>
     `)
     .join("");
 }
@@ -5093,7 +5526,7 @@ function renderDashboardActivity(invoiceDocs) {
   }));
   const activity = [...invoiceActivity, ...financeActivity, ...projectActivity]
     .sort((a, b) => String(b.sortDate).localeCompare(String(a.sortDate)))
-    .slice(0, 3);
+    .slice(0, 4);
   list.innerHTML = activity.length
     ? activity.map((item) => `
         <div class="dashboard-activity-item">
@@ -6825,30 +7258,19 @@ function daysBetweenIso(fromDate, toDate) {
 function renderCalendarReminders(month) {
   const list = document.getElementById("calendarReminderList");
   if (!list) return;
-  const [year] = String(month || "").split("-").map(Number);
-  const holidayEvents = holidayEventsForYear(year).filter((event) => String(event.date).startsWith(month));
-  const todayDate = today();
-  const holidayReminders = holidayEvents
-    .map((event) => ({ ...event, daysLeft: daysBetweenIso(todayDate, event.date) }))
-    .filter((event) => event.daysLeft >= 0 && event.daysLeft <= 4)
-    .sort((a, b) => a.daysLeft - b.daysLeft);
-  const customReminders = calendarEvents
-    .filter((event) => String(event.date || "").startsWith(month))
-    .map((event) => ({ ...event, daysLeft: daysBetweenIso(todayDate, event.date) }))
-    .filter((event) => event.daysLeft >= 0)
-    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")))
-    .slice(0, 5);
-  const reminders = [
-    ...customReminders.map((event) => ({
-      text: `<strong>${escapeHtml(event.title || "Upcoming event")}</strong> on ${escapeHtml(formatDate(event.date))} (${event.daysLeft} day${event.daysLeft === 1 ? "" : "s"} left)`,
-    })),
-    ...holidayReminders.map((event) => ({
-      text: `<strong>${escapeHtml(event.name)}</strong> on ${escapeHtml(formatDate(event.date))} (${event.daysLeft} day${event.daysLeft === 1 ? "" : "s"} left)`,
-    })),
-  ];
-  list.innerHTML = reminders.length
-    ? reminders.map((event) => `<div class="pm-calendar-reminder-item">${event.text}</div>`).join("")
-    : `<div class="pm-calendar-reminder-item">No upcoming reminders in this month.</div>`;
+  list.innerHTML = "";
+}
+
+function portalRenewalCalendarEvents(month) {
+  return portalRenewalItems()
+    .flatMap((item) => {
+      const alertDate = addDays(item.date, -15);
+      return [
+        { ...item, date: alertDate, renewalDate: item.date, kind: "alert" },
+        { ...item, date: item.date, renewalDate: item.date, kind: "renewal" },
+      ];
+    })
+    .filter((item) => String(item.date || "").startsWith(month));
 }
 
 function renderCalendarGrid(calendarId, monthValue, displayMode = "chips") {
@@ -6872,14 +7294,12 @@ function renderCalendarGrid(calendarId, monthValue, displayMode = "chips") {
     postsByDate.set(group.date, list);
   });
   const renewalsByDate = new Map();
-  const todayValue = today();
   renewals
     .filter((item) => {
       const expiryDate = String(item.expiryDate || "");
       if (!expiryDate || !expiryDate.startsWith(month)) return false;
-      if (expiryDate < todayValue) return false;
       const status = String(item.status || "").toLowerCase();
-      return status !== "renewed";
+      return !["renewed", "cancelled", "canceled"].includes(status);
     })
     .forEach((item) => {
       const list = renewalsByDate.get(item.expiryDate) || [];
@@ -6901,6 +7321,12 @@ function renderCalendarGrid(calendarId, monthValue, displayMode = "chips") {
       list.push(event);
       customEventsByDate.set(event.date, list);
     });
+  const portalRenewalsByDate = new Map();
+  portalRenewalCalendarEvents(month).forEach((event) => {
+    const list = portalRenewalsByDate.get(event.date) || [];
+    list.push(event);
+    portalRenewalsByDate.set(event.date, list);
+  });
   const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const cells = [
     ...weekdays.map((day) => `<div class="pm-calendar-weekday">${day}</div>`),
@@ -6912,6 +7338,7 @@ function renderCalendarGrid(calendarId, monthValue, displayMode = "chips") {
       const dueRenewals = renewalsByDate.get(dateKey) || [];
       const holidays = holidaysByDate.get(dateKey) || [];
       const customEvents = customEventsByDate.get(dateKey) || [];
+      const portalRenewals = portalRenewalsByDate.get(dateKey) || [];
       const postChips = posted
         .map((group) => {
           const clientName = group.clientName || "Client";
@@ -6938,6 +7365,22 @@ function renderCalendarGrid(calendarId, monthValue, displayMode = "chips") {
           return `<span class="pm-calendar-dot is-renewal" title="${escapeAttribute(label)}" data-calendar-client="${escapeAttribute(label)}"></span>`;
         })
         .join("");
+      const portalRenewalChips = portalRenewals
+        .map((event) => {
+          const label = event.kind === "alert"
+            ? `Alert: ${event.websiteName} ${event.type}`
+            : `Renew: ${event.websiteName} ${event.type}`;
+          return `<span class="pm-calendar-chip-tag ${event.kind === "alert" ? "is-renewal-alert-chip" : "is-renewal-chip"}" title="${escapeAttribute(`${label} - ${formatDate(event.renewalDate)}`)}">${escapeHtml(label)}</span>`;
+        })
+        .join("");
+      const portalRenewalDots = portalRenewals
+        .map((event) => {
+          const label = event.kind === "alert"
+            ? `Renewal alert: ${event.websiteName} ${event.type} - renews ${formatDate(event.renewalDate)}`
+            : `Renewal date: ${event.websiteName} ${event.type}`;
+          return `<span class="pm-calendar-dot ${event.kind === "alert" ? "is-renewal-alert" : "is-renewal"}" title="${escapeAttribute(label)}" data-calendar-client="${escapeAttribute(label)}"></span>`;
+        })
+        .join("");
       const holidayChips = holidays
         .map((event) => `<span class="pm-calendar-chip-tag is-holiday-chip" title="${escapeAttribute(event.name)}">${escapeHtml(event.name)}</span>`)
         .join("");
@@ -6950,10 +7393,10 @@ function renderCalendarGrid(calendarId, monthValue, displayMode = "chips") {
       const customDots = customEvents
         .map((event) => `<span class="pm-calendar-dot is-custom-event-dot" title="${escapeAttribute(event.title || "Upcoming event")}" data-calendar-client="${escapeAttribute(event.title || "Upcoming event")}"></span>`)
         .join("");
-      const totalItems = posted.length + dueRenewals.length + holidays.length + customEvents.length;
+      const totalItems = posted.length + dueRenewals.length + portalRenewals.length + holidays.length + customEvents.length;
       const content = displayMode === "dots"
-        ? `<div class="pm-calendar-dot-list">${customDots}${holidayDots}${renewalDots}${postDots}</div>`
-        : `<div class="pm-calendar-chip-list">${customChips}${holidayChips}${renewalChips}${postChips}</div>`;
+        ? `<div class="pm-calendar-dot-list">${customDots}${holidayDots}${portalRenewalDots}${renewalDots}${postDots}</div>`
+        : `<div class="pm-calendar-chip-list">${customChips}${holidayChips}${portalRenewalChips}${renewalChips}${postChips}</div>`;
       return `
         <div class="pm-calendar-day is-clickable" data-calendar-date="${escapeAttribute(dateKey)}">
           <div class="pm-calendar-date"><span>${day}</span>${totalItems ? `<small>${totalItems}</small>` : ""}</div>
@@ -6991,6 +7434,8 @@ function renderCalendarEventModal() {
     socialMediaPosts.filter((post) => String(post.uploadDate || post.scheduledDate || "") === calendarEventModalDate),
   );
   const renewalsForDay = renewals.filter((item) => String(item.expiryDate || "") === calendarEventModalDate);
+  const portalRenewalsForDay = portalRenewalCalendarEvents(calendarEventModalDate.slice(0, 7))
+    .filter((item) => String(item.date || "") === calendarEventModalDate);
   const holidayForDay = holidayEventsForYear(Number(calendarEventModalDate.slice(0, 4)))
     .filter((event) => String(event.date || "") === calendarEventModalDate);
   const dayEvents = calendarEvents.filter((event) => String(event.date || "") === calendarEventModalDate);
@@ -7009,6 +7454,14 @@ function renderCalendarEventModal() {
         <article class="calendar-event-item">
           <strong>Renewal: ${escapeHtml(item.clientName || "Client")}</strong>
           <span class="muted-label">${escapeHtml(item.name || item.type || "Renewal item")}</span>
+        </article>
+      `).join("")
+    : "";
+  const portalRenewalHtml = portalRenewalsForDay.length
+    ? portalRenewalsForDay.map((item) => `
+        <article class="calendar-event-item">
+          <strong>${item.kind === "alert" ? "Renewal alert" : "Renewal date"}: ${escapeHtml(item.websiteName)} ${escapeHtml(item.type)}</strong>
+          <span class="muted-label">${escapeHtml(item.provider || "Website login")} · renews ${escapeHtml(formatDate(item.renewalDate))}</span>
         </article>
       `).join("")
     : "";
@@ -7034,7 +7487,7 @@ function renderCalendarEventModal() {
   list.innerHTML = `
     <h3 class="muted-label">Posted updates</h3>
     ${postedHtml}
-    ${renewalHtml ? `<h3 class="muted-label">Renewals</h3>${renewalHtml}` : ""}
+    ${renewalHtml || portalRenewalHtml ? `<h3 class="muted-label">Renewals</h3>${renewalHtml}${portalRenewalHtml}` : ""}
     ${holidayHtml ? `<h3 class="muted-label">Holidays</h3>${holidayHtml}` : ""}
     <h3 class="muted-label">Custom events</h3>
     ${customEventHtml}
@@ -8017,6 +8470,165 @@ function financeStatusLabel(record, month) {
   return financeRecordPaidInMonth(record, month) ? "Paid / done" : "Unpaid / pending";
 }
 
+function financeBoardInvoiceCards(month) {
+  const monthEnd = `${month}-31`;
+  return invoices
+    .filter((invoice) => (invoice.documentType || "Invoice") === "Invoice")
+    .filter((invoice) => String(invoice.status || "") !== "Paid")
+    .filter((invoice) => {
+      const invoiceMonth = String(invoice.invoiceDate || "").slice(0, 7);
+      const dueDate = String(invoice.dueDate || "");
+      return invoiceMonth === month || (dueDate && dueDate <= monthEnd) || String(invoice.status || "") === "Overdue";
+    })
+    .map((invoice) => {
+      const amount = invoiceReportAmount(invoice);
+      return {
+        id: `invoice-${invoice.id}`,
+        lane: "collect",
+        cardClass: "to-collect",
+        title: invoice.customerName || "Client invoice",
+        subtitle: invoice.invoiceNumber || "Invoice",
+        amountLabel: amount.needsRate ? money(amount.total, amount.currency) : compactMoney(amount.lkr, "LKR"),
+        amountValue: amount.lkr,
+        meta: `${formatDate(invoice.dueDate || invoice.invoiceDate)} · ${invoice.status || "Unpaid"}`,
+        actions: `
+          <button class="text-action" type="button" data-select="${escapeAttribute(invoice.id)}">View</button>
+          <button class="text-action" type="button" data-paid="${escapeAttribute(invoice.id)}">Mark paid</button>
+        `,
+      };
+    });
+}
+
+function financeBoardProjectCards(month) {
+  return projectsForMonth(month)
+    .filter((project) => isActiveProject(project) && !hasLinkedProjectFinanceRecord(project.id, month))
+    .map((project) => {
+      const amount = Math.max(0, projectForMe(project));
+      return {
+        id: `project-${project.id}`,
+        lane: "collect",
+        cardClass: "to-collect",
+        title: project.clientName || "Project client",
+        subtitle: project.name || "Project income",
+        amountLabel: compactMoney(amount, "LKR"),
+        amountValue: amount,
+        meta: `${formatMonth(project.month || month)} · ${project.paymentStatus || "Waiting"}`,
+        actions: `
+          <button class="text-action" type="button" data-project-invoice="${escapeAttribute(project.id)}">Invoice</button>
+          <button class="text-action" type="button" data-project-edit="${escapeAttribute(project.id)}">Edit</button>
+        `,
+      };
+    })
+    .filter((card) => card.amountValue > 0);
+}
+
+function financeBoardRecordCards(monthRecords, month) {
+  return monthRecords
+    .map((record) => {
+      const amount = Number(record.amount || 0);
+      const displayDate = formatDate(financeRecordDisplayDate(record, month));
+      const base = {
+        id: `record-${record.id}`,
+        title: record.category || financeTypeLabel(record.type),
+        subtitle: [record.note, record.repeat === "monthly" ? "Monthly" : ""].filter(Boolean).join(" | ") || financeTypeLabel(record.type),
+        amountLabel: compactMoney(amount, "LKR"),
+        amountValue: amount,
+        meta: `${displayDate} · ${financeStatusLabel(record, month)}`,
+      };
+      if (record.type === "saving" || record.type === "gold") {
+        return { ...base, lane: "assets", cardClass: "assets", actions: `<button class="text-action" type="button" data-finance-view-mode="table">View table</button>` };
+      }
+      if (financeRecordIsExpenseLike(record)) {
+        const isPaid = financeRecordPaidInMonth(record, month);
+        return {
+          ...base,
+          lane: isPaid ? "done" : "pay",
+          cardClass: isPaid ? "done" : "to-pay",
+          amountValue: isPaid ? financeRecordPaidAmount(record, month) : financeRecordOutstandingAmount(record, month),
+          amountLabel: compactMoney(isPaid ? financeRecordPaidAmount(record, month) : financeRecordOutstandingAmount(record, month), "LKR"),
+          actions: `
+            <button class="text-action" type="button" data-finance-toggle-paid="${escapeAttribute(record.id)}" data-finance-paid-month="${escapeAttribute(month)}">${isPaid ? "Mark unpaid" : "Mark paid"}</button>
+            <button class="text-action" type="button" data-finance-view-mode="table">View table</button>
+          `,
+        };
+      }
+      return {
+        ...base,
+        lane: "done",
+        cardClass: "done",
+        actions: `<button class="text-action" type="button" data-finance-view-mode="table">View table</button>`,
+      };
+    })
+    .filter((card) => card.amountValue > 0 || card.lane === "done");
+}
+
+function financeBoardColumns(month, monthRecords) {
+  const cards = [
+    ...financeBoardInvoiceCards(month),
+    ...financeBoardProjectCards(month),
+    ...financeBoardRecordCards(monthRecords, month),
+  ];
+  const columns = [
+    { id: "collect", title: "To Collect", empty: "No money to collect", cards: [] },
+    { id: "pay", title: "To Pay", empty: "No money to pay", cards: [] },
+    { id: "done", title: "Done", empty: "No completed finance cards", cards: [] },
+    { id: "assets", title: "Assets", empty: "No assets recorded", cards: [] },
+  ];
+  const columnMap = new Map(columns.map((column) => [column.id, column]));
+  cards.forEach((card) => columnMap.get(card.lane)?.cards.push(card));
+  columns.forEach((column) => {
+    column.cards.sort((a, b) => String(b.meta).localeCompare(String(a.meta)));
+    column.total = column.cards.reduce((sum, card) => sum + Number(card.amountValue || 0), 0);
+  });
+  return columns;
+}
+
+function renderFinanceBoard(month, monthRecords) {
+  const board = document.getElementById("financeBoardGrid");
+  if (!board) return;
+  const columns = financeBoardColumns(month, monthRecords);
+  board.innerHTML = columns
+    .map((column) => `
+      <section class="finance-board-column">
+        <div class="finance-board-column-header">
+          <h3>${escapeHtml(column.title)}</h3>
+          <span>${compactMoney(column.total, "LKR")}</span>
+        </div>
+        <div class="finance-board-list">
+          ${
+            column.cards.length
+              ? column.cards.map((card) => `
+                  <article class="finance-board-card ${escapeAttribute(card.cardClass || "")}">
+                    <div class="finance-board-card-top">
+                      <strong>${escapeHtml(card.title)}</strong>
+                      <span>${escapeHtml(card.amountLabel)}</span>
+                    </div>
+                    <p>${escapeHtml(card.subtitle)}</p>
+                    <div class="finance-board-card-meta">
+                      <span>${escapeHtml(card.meta)}</span>
+                    </div>
+                    ${card.actions ? `<div class="finance-board-card-actions">${card.actions}</div>` : ""}
+                  </article>
+                `).join("")
+              : `<div class="finance-board-empty">${escapeHtml(column.empty)}</div>`
+          }
+        </div>
+      </section>
+    `)
+    .join("");
+}
+
+function renderFinanceViewMode() {
+  const isBoard = financeViewMode === "board";
+  document.querySelector("#financeView .finance-overview-grid")?.classList.toggle("is-hidden", isBoard);
+  document.getElementById("financeBoardPanel")?.classList.toggle("is-hidden", !isBoard);
+  document.getElementById("financeTablePanel")?.classList.toggle("is-hidden", isBoard);
+  document.getElementById("financeTablePagination")?.classList.toggle("is-hidden", isBoard);
+  document.querySelectorAll("[data-finance-view-mode]").forEach((button) => {
+    button.classList.toggle("is-active", button.dataset.financeViewMode === financeViewMode);
+  });
+}
+
 function renderFinance() {
   const month = financeMonthFilter.value || today().slice(0, 7);
   if (!financeMonthFilter.value) financeMonthFilter.value = month;
@@ -8064,7 +8676,7 @@ function renderFinance() {
     financeLoanExpenseSplit.textContent = "Unpaid expenses this month";
   }
   const monthLabel = document.getElementById("financeMonthLabel");
-  if (monthLabel) monthLabel.textContent = `Workspace · ${formatMonth(month)}`;
+  if (monthLabel) monthLabel.textContent = "Workspace";
   const financeLegendSavings = document.getElementById("financeLegendSavings");
   const financeLegendGold = document.getElementById("financeLegendGold");
   const financeLegendIncome = document.getElementById("financeLegendIncome");
@@ -8084,6 +8696,8 @@ function renderFinance() {
       #ef4444 ${savingPercent + goldPercent + incomePercent}% 100%
     )`;
   }
+  renderFinanceBoard(month, monthRecords);
+  renderFinanceViewMode();
 
   const autoRows = [
     {
@@ -9383,60 +9997,96 @@ function statusIcon(status) {
   return "!";
 }
 
-function svgIcon(path) {
-  return `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="${path}"></path></svg>`;
+const lucideIcons = {
+  dashboard: `<path d="M3 13h8V3H3v10Z"></path><path d="M13 21h8V3h-8v18Z"></path><path d="M3 21h8v-6H3v6Z"></path>`,
+  calendar: `<path d="M8 2v4"></path><path d="M16 2v4"></path><path d="M3 10h18"></path><path d="M5 4h14a2 2 0 0 1 2 2v15H3V6a2 2 0 0 1 2-2Z"></path><path d="M8 14h.01"></path><path d="M12 14h.01"></path><path d="M16 14h.01"></path>`,
+  clients: `<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M22 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path>`,
+  invoices: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h6"></path><path d="M8 9h1"></path>`,
+  quotations: `<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M15 2v5h5"></path><path d="M9 12h6"></path><path d="M9 16h3"></path><path d="M7 7h1"></path>`,
+  finance: `<rect x="2" y="5" width="20" height="14" rx="2"></rect><path d="M2 10h20"></path><path d="M7 15h.01"></path><path d="M11 15h4"></path>`,
+  projects: `<path d="M3 7a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v2H3V7Z"></path><path d="M3 11h18v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7Z"></path>`,
+  employees: `<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><path d="m17 11 2 2 4-4"></path>`,
+  manager: `<path d="M9 6h12"></path><path d="M9 12h12"></path><path d="M9 18h12"></path><path d="M3 6h.01"></path><path d="M3 12h.01"></path><path d="M3 18h.01"></path>`,
+  logins: `<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M8 11h8"></path><path d="M8 15h5"></path><path d="M16 5v4"></path>`,
+  documents: `<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M15 2v5h5"></path><path d="M8 12h8"></path><path d="M8 16h8"></path>`,
+  reports: `<path d="M3 3v18h18"></path><path d="M8 17V9"></path><path d="M13 17V5"></path><path d="M18 17v-6"></path>`,
+  users: `<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M19 8v6"></path><path d="M22 11h-6"></path>`,
+  invoice: `<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h6"></path><path d="M8 9h1"></path>`,
+  info: `<circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path>`,
+  view: `<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"></path><circle cx="12" cy="12" r="3"></circle>`,
+  external: `<path d="M15 3h6v6"></path><path d="M10 14 21 3"></path><path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"></path>`,
+  globe: `<circle cx="12" cy="12" r="10"></circle><path d="M2 12h20"></path><path d="M12 2a15.3 15.3 0 0 1 0 20"></path><path d="M12 2a15.3 15.3 0 0 0 0 20"></path>`,
+  server: `<rect x="2" y="3" width="20" height="8" rx="2"></rect><rect x="2" y="13" width="20" height="8" rx="2"></rect><path d="M6 7h.01"></path><path d="M6 17h.01"></path>`,
+  copy: `<rect x="8" y="8" width="14" height="14" rx="2"></rect><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"></path>`,
+  check: `<path d="m20 6-11 11-5-5"></path>`,
+  convert: `<path d="M17 2 21 6l-4 4"></path><path d="M3 11V9a4 4 0 0 1 4-4h14"></path><path d="m7 22-4-4 4-4"></path><path d="M21 13v2a4 4 0 0 1-4 4H3"></path>`,
+  next: `<path d="M5 12h14"></path><path d="m12 5 7 7-7 7"></path>`,
+  edit: `<path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z"></path>`,
+  trash: `<path d="M3 6h18"></path><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6"></path><path d="M14 11v6"></path>`,
+};
+
+function svgIcon(icon) {
+  return `<svg class="lucide-icon" viewBox="0 0 24 24" aria-hidden="true">${lucideIcons[icon] || icon}</svg>`;
+}
+
+function hydrateNavIcons() {
+  document.querySelectorAll(".nav-tab[data-view]").forEach((button) => {
+    const icon = lucideIcons[button.dataset.view];
+    const target = button.querySelector(".nav-icon");
+    if (icon && target) target.innerHTML = svgIcon(button.dataset.view);
+  });
 }
 
 function iconInvoice() {
-  return svgIcon("M7 3h7l4 4v14H7V3Zm7 1v4h4M9 12h6M9 16h6M9 8h3");
+  return svgIcon("invoice");
 }
 
 function iconInfo() {
-  return svgIcon("M12 17v-6M12 7h.01M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Z");
+  return svgIcon("info");
 }
 
 function iconView() {
-  return svgIcon("M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z");
+  return svgIcon("view");
 }
 
 function iconExternal() {
-  return svgIcon("M14 4h6v6M20 4 10 14M20 14v6H4V4h6");
+  return svgIcon("external");
 }
 
 function iconGlobe() {
-  return svgIcon("M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20ZM2 12h20M12 2c3 3 3 17 0 20M12 2c-3 3-3 17 0 20");
+  return svgIcon("globe");
 }
 
 function iconServer() {
-  return svgIcon("M4 4h16v6H4V4Zm0 10h16v6H4v-6Zm4-7h.01M8 17h.01");
+  return svgIcon("server");
 }
 
 function iconCopy() {
-  return svgIcon("M8 8h10v12H8V8Zm-4 8V4h10");
+  return svgIcon("copy");
 }
 
 function iconEye() {
-  return svgIcon("M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm10 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z");
+  return svgIcon("view");
 }
 
 function iconPaid() {
-  return svgIcon("M20 6 9 17l-5-5");
+  return svgIcon("check");
 }
 
 function iconConvert() {
-  return svgIcon("M7 7h9l-3-3M17 17H8l3 3M6 17a7 7 0 0 1 0-10M18 7a7 7 0 0 1 0 10");
+  return svgIcon("convert");
 }
 
 function iconNext() {
-  return svgIcon("M5 12h12M13 6l6 6-6 6");
+  return svgIcon("next");
 }
 
 function iconEdit() {
-  return svgIcon("M4 20h4L19 9l-4-4L4 16v4Zm11-15 4 4");
+  return svgIcon("edit");
 }
 
 function iconDelete() {
-  return svgIcon("M6 7h12M9 7V5h6v2M8 7l1 13h6l1-13");
+  return svgIcon("trash");
 }
 
 function renderPreview() {
@@ -10259,11 +10909,11 @@ async function renderDisplayedInvoiceCanvas() {
       <head>
         <style>
           ${styles}
-          body { margin: 0; background: #ffffff; }
+          body { margin: 0; background: ${document.body.dataset.theme === "dark" ? "#0d1728" : "#ffffff"}; }
           .invoice-paper { box-shadow: none !important; border-radius: 0 !important; width: ${width}px !important; }
         </style>
       </head>
-      <body>${clone.outerHTML}</body>
+      <body data-theme="${escapeAttribute(document.body.dataset.theme || "light")}">${clone.outerHTML}</body>
     </html>
   `;
 
@@ -10279,7 +10929,7 @@ async function renderDisplayedInvoiceCanvas() {
   canvas.width = width * scale;
   canvas.height = height * scale;
   const context = canvas.getContext("2d");
-  context.fillStyle = "#ffffff";
+  context.fillStyle = document.body.dataset.theme === "dark" ? "#0d1728" : "#ffffff";
   context.fillRect(0, 0, canvas.width, canvas.height);
   context.drawImage(image, 0, 0, canvas.width, canvas.height);
   return canvas;
@@ -10884,6 +11534,11 @@ dashboardSearchInput.addEventListener("keydown", (event) => {
   dashboardSearchInput.value = "";
   hideDashboardSearchPopup();
 });
+document.getElementById("dashboardTaskInput")?.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.shiftKey) return;
+  event.preventDefault();
+  document.getElementById("dashboardTaskForm")?.requestSubmit();
+});
 quotationSearchInput.addEventListener("input", renderQuotationTable);
 quotationStatusFilter.addEventListener("change", renderQuotationTable);
 quotationMonthFilter.addEventListener("change", () => {
@@ -10964,6 +11619,12 @@ financeMonthFilter.addEventListener("change", () => {
   saveMonthFilterPreference(MONTH_FILTER_KEYS.finance, financeMonthFilter.value);
   financePage = 1;
   renderFinance();
+});
+document.querySelectorAll("[data-finance-view-mode]").forEach((button) => {
+  button.addEventListener("click", () => {
+    financeViewMode = button.dataset.financeViewMode || "board";
+    renderFinanceViewMode();
+  });
 });
 financeTypeFilter.addEventListener("change", () => {
   financePage = 1;
@@ -11179,6 +11840,7 @@ toggleFullscreenButton?.addEventListener("click", async () => {
   }
 });
 document.addEventListener("fullscreenchange", updateFullscreenButtonState);
+themeToggleButton?.addEventListener("click", toggleTheme);
 sidebarToggleButton?.addEventListener("click", toggleSidebar);
 userMenuButton.addEventListener("click", (event) => {
   event.stopPropagation();
@@ -11602,6 +12264,29 @@ form.addEventListener("submit", async (event) => {
   switchView((invoice.documentType || "Invoice") === "Quotation" ? "quotations" : "invoices");
 });
 
+document.body.addEventListener("submit", (event) => {
+  if (event.target?.id !== "dashboardTaskForm") return;
+  event.preventDefault();
+  const input = document.getElementById("dashboardTaskInput");
+  const title = String(input?.value || "").trim();
+  if (!title) {
+    input?.focus();
+    return;
+  }
+  dashboardTasks.unshift({
+    id: `manual-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    title,
+    priority: "Medium",
+    dueDate: today(),
+    createdAt: new Date().toISOString(),
+  });
+  saveDashboardTasks();
+  if (input) input.value = "";
+  dashboardTaskComposerOpen = false;
+  dashboardTaskFilter = "All";
+  renderDashboard();
+});
+
 document.body.addEventListener("click", (event) => {
   if (!event.target.closest("#dashboardSearchInput") && !event.target.closest(".dashboard-search-panel")) {
     hideDashboardSearchPopup();
@@ -11650,8 +12335,15 @@ document.body.addEventListener("click", (event) => {
   const projectDeleteButton = event.target.closest("[data-project-delete]");
   const projectNextButton = event.target.closest("[data-project-next]");
   const projectInvoiceButton = event.target.closest("[data-project-invoice]");
+  const viewTargetButton = event.target.closest("[data-view-target]");
+  const dashboardActionFilterButton = event.target.closest("[data-dashboard-action-filter]");
+  const dashboardTaskFilterButton = event.target.closest("[data-dashboard-task-filter]");
+  const dashboardTaskToggleButton = event.target.closest("[data-dashboard-task-toggle]");
+  const dashboardTaskClearButton = event.target.closest("[data-dashboard-task-clear]");
+  const dashboardTaskAddToggleButton = event.target.closest("[data-dashboard-task-add-toggle]");
   const financeDeleteButton = event.target.closest("[data-finance-delete]");
   const financeTogglePaidButton = event.target.closest("[data-finance-toggle-paid]");
+  const financeViewModeButton = event.target.closest("[data-finance-view-mode]");
   const serviceEditButton = event.target.closest("[data-service-edit]");
   const serviceDeleteButton = event.target.closest("[data-service-delete]");
   const renewalEditButton = event.target.closest("[data-renewal-edit]");
@@ -11730,6 +12422,41 @@ document.body.addEventListener("click", (event) => {
   if (projectDeleteButton) deleteProject(projectDeleteButton.dataset.projectDelete);
   if (projectNextButton) createNextMonthProject(projectNextButton.dataset.projectNext);
   if (projectInvoiceButton) createInvoiceFromProject(projectInvoiceButton.dataset.projectInvoice);
+  if (dashboardActionFilterButton) {
+    dashboardActionFilter = dashboardActionFilterButton.dataset.dashboardActionFilter || "All";
+    renderDashboard();
+  }
+  if (dashboardTaskFilterButton) {
+    dashboardTaskFilter = dashboardTaskFilterButton.dataset.dashboardTaskFilter || "All";
+    renderDashboard();
+  }
+  if (dashboardTaskAddToggleButton) {
+    dashboardTaskComposerOpen = !dashboardTaskComposerOpen;
+    renderDashboard();
+    if (dashboardTaskComposerOpen) document.getElementById("dashboardTaskInput")?.focus();
+  }
+  if (dashboardTaskToggleButton) {
+    const taskId = dashboardTaskToggleButton.dataset.dashboardTaskToggle;
+    if (dashboardTaskDone.has(taskId)) {
+      dashboardTaskDone.delete(taskId);
+    } else {
+      dashboardTaskDone.add(taskId);
+    }
+    saveDashboardTaskDone();
+    renderDashboard();
+  }
+  if (dashboardTaskClearButton) {
+    dashboardTasks = dashboardTasks.filter((task) => !dashboardTaskDone.has(task.id));
+    dashboardTaskDone = new Set([...dashboardTaskDone].filter((id) => !id.startsWith("manual-")));
+    saveDashboardTasks();
+    saveDashboardTaskDone();
+    renderDashboard();
+  }
+  if (viewTargetButton) switchView(viewTargetButton.dataset.viewTarget);
+  if (financeViewModeButton) {
+    financeViewMode = financeViewModeButton.dataset.financeViewMode || "board";
+    renderFinanceViewMode();
+  }
   if (financeTogglePaidButton) {
     toggleFinancePaid(financeTogglePaidButton.dataset.financeTogglePaid, financeTogglePaidButton.dataset.financePaidMonth);
   }
@@ -11796,7 +12523,10 @@ document.body.addEventListener("change", (event) => {
   if (statusSelect) updateProjectStatus(statusSelect.dataset.projectStatus, statusSelect.value);
   if (invoiceStatusSelect) updateInvoiceStatus(invoiceStatusSelect.dataset.invoiceStatus, invoiceStatusSelect.value);
   if (postClientSelect) document.getElementById("postProject").innerHTML = projectOptions("", postClientSelect.value);
-  if (correctionClientSelect) document.querySelector("#correctionProject").innerHTML = projectOptions("", correctionClientSelect.value);
+  if (correctionClientSelect) {
+    const correctionProjectSelect = document.querySelector("#correctionProject");
+    if (correctionProjectSelect) correctionProjectSelect.innerHTML = projectOptions("", correctionClientSelect.value);
+  }
   if (pmTeamSelect) updateProjectTeamFromSelect(pmTeamSelect.dataset.pmTeam, pmTeamSelect.value);
   if (moneyInput) {
     const amount = parseFormattedNumber(moneyInput.value);
@@ -11889,12 +12619,14 @@ document.getElementById("logoInput").addEventListener("change", (event) => {
 
 async function startApp() {
   appIsStarting = true;
+  applyTheme();
   localStorage.removeItem(SIDEBAR_COLLAPSED_KEY);
   sidebarCollapsed = false;
   applySidebarState();
   updateSidebarDateTime();
   window.setInterval(updateSidebarDateTime, 60000);
   applyAccessControl();
+  hydrateNavIcons();
   populateCountrySelects();
   populateFinanceCategories();
   setupAdminFormModals();

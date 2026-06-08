@@ -53,6 +53,8 @@ body {
   background: #f6f8fb;
   color: var(--ink);
   font-family: var(--font-ui);
+  font-size: 0.90rem;
+  font-weight: 480;
   line-height: 1.45;
   overflow-x: hidden;
 }
@@ -447,6 +449,7 @@ button {
 }
 
 .nav-icon svg,
+.lucide-icon,
 .modal-icon-button svg,
 .preview-icon-button svg,
 .icon-button svg,
@@ -454,12 +457,15 @@ button {
 .pm-notify-button svg,
 .field-with-icon .input-icon svg,
 .service-footer-icon svg {
+  fill: none;
+  stroke: currentColor;
   stroke-width: var(--icon-stroke);
   stroke-linecap: round;
   stroke-linejoin: round;
 }
 
 .nav-icon svg,
+.lucide-icon,
 .modal-icon-button svg,
 .preview-icon-button svg,
 .icon-button svg,
@@ -1659,8 +1665,37 @@ h2 {
 
 .dashboard-insight-grid {
   display: grid;
-  grid-template-columns: minmax(390px, 1.45fr) minmax(280px, 1fr) minmax(310px, 1.05fr) minmax(260px, 0.95fr);
+  grid-template-columns: minmax(390px, 1.35fr) minmax(280px, 1fr) minmax(260px, 0.95fr);
   gap: 10px;
+}
+
+#dashboardView .dashboard-detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 65fr) minmax(320px, 35fr);
+  gap: 16px;
+  align-items: stretch;
+  margin: 0 0 14px;
+}
+
+#dashboardView .dashboard-detail-row .dashboard-insight-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  grid-template-rows: minmax(0, 1fr) minmax(0, 0.86fr);
+  gap: 14px;
+  align-items: stretch;
+  height: 100%;
+  min-height: 470px;
+}
+
+#dashboardView .dashboard-detail-row .dashboard-status-card,
+#dashboardView .dashboard-detail-row .dashboard-chart-card {
+  min-height: 0;
+  height: 100%;
+}
+
+#dashboardView .dashboard-detail-row .status-overview,
+#dashboardView .dashboard-detail-row .dashboard-bar-chart {
+  min-height: 150px;
 }
 
 .compact-heading {
@@ -1682,6 +1717,11 @@ h2 {
   padding: 12px;
   border-radius: 12px;
   box-shadow: 0 12px 26px rgba(15, 23, 42, 0.05);
+}
+
+.dashboard-status-card {
+  display: grid;
+  grid-template-rows: auto 1fr;
 }
 
 .dashboard-bar-chart {
@@ -1767,26 +1807,29 @@ h2 {
 }
 
 .status-overview {
-  min-height: 124px;
+  min-height: 168px;
   display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
-  gap: 12px;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 18px;
   align-items: center;
+  height: 100%;
+  align-self: center;
 }
 
 .status-ring {
-  width: 98px;
-  height: 98px;
+  width: 112px;
+  height: 112px;
   display: grid;
   place-items: center;
   border-radius: 50%;
   position: relative;
+  align-self: center;
 }
 
 .status-ring::after {
   content: "";
   position: absolute;
-  inset: 24px;
+  inset: 28px;
   border-radius: 50%;
   background: #ffffff;
 }
@@ -1795,27 +1838,38 @@ h2 {
   position: relative;
   z-index: 1;
   color: #172033;
-  font-size: 0.96rem;
-  font-weight: 600;
+  font-size: 1.1rem;
+  font-weight: 700;
 }
 
 .status-legend {
   display: grid;
-  gap: 7px;
+  gap: 8px;
+  align-content: center;
+  min-width: 0;
 }
 
 .status-legend div {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 8px 10px;
   align-items: center;
   color: #334155;
-  font-size: 0.76rem;
+  font-size: 0.78rem;
   font-weight: 500;
 }
 
 .status-legend strong {
   font-weight: 600;
+  color: #172033;
+  white-space: nowrap;
+}
+
+.status-legend strong small {
+  color: #64748b;
+  font-size: 0.66rem;
+  font-weight: 600;
+  margin-left: 4px;
 }
 
 .status-legend span {
@@ -1828,6 +1882,21 @@ h2 {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+}
+
+.status-legend-row {
+  padding: 3px 0;
+}
+
+.status-progress {
+  grid-column: 1 / -1;
+  display: block;
+  height: 5px;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, var(--status-color) var(--status-width), transparent 0),
+    #edf2f7;
+  overflow: hidden;
 }
 
 .dashboard-activity-card .activity-list {
@@ -2009,68 +2078,93 @@ h2 {
 }
 
 #dashboardView .dashboard-table-card {
+  width: 100%;
+  min-height: 470px;
+  height: auto !important;
+  display: block !important;
+  overflow: visible;
+  background: #ffffff;
+  margin-bottom: 0;
+  padding-bottom: 16px;
+}
+
+#dashboardView .dashboard-table-card .pagination-controls {
+  margin-top: 14px;
+  padding-bottom: 0;
+}
+
+#dashboardView .dashboard-table-card .compact-table-wrap {
   min-height: 0;
-  height: auto;
-  display: flex;
-  flex-direction: column;
+  max-height: none;
   overflow: hidden;
   background: #ffffff;
 }
 
-#dashboardView .dashboard-table-card .pagination-controls {
-  margin-top: 8px;
-  padding-bottom: 2px;
+#dashboardView .dashboard-table-card .compact-table-wrap table {
+  display: table;
+  width: 100%;
+  min-width: 0;
 }
 
-#dashboardView .dashboard-table-card .compact-table-wrap {
-  flex: 1 1 auto;
-  min-height: 0;
-  background: #ffffff;
+#dashboardView .dashboard-table-card .compact-table-wrap tr {
+  display: table-row;
+}
+
+#dashboardView .dashboard-table-card .compact-table-wrap th,
+#dashboardView .dashboard-table-card .compact-table-wrap td {
+  display: table-cell;
+  vertical-align: middle;
 }
 
 #dashboardView .dashboard-table-card .compact-table-wrap td {
-  padding-top: 6px;
-  padding-bottom: 6px;
+  padding-top: 5px;
+  padding-bottom: 5px;
   font-size: 0.76rem;
 }
 
 #dashboardView .dashboard-table-card .compact-table-wrap th {
   font-size: 0.68rem;
-  font-weight: 600;
+  font-weight: 550;
+}
+
+
+#dashboardView .dashboard-table-card th:nth-child(3),
+#dashboardView .dashboard-table-card td:nth-child(3) {
+  display: none !important;
 }
 
 #dashboardView .dashboard-table-card th:nth-child(1),
 #dashboardView .dashboard-table-card td:nth-child(1) {
-  width: 48px;
+  width: 44px;
 }
 
 #dashboardView .dashboard-table-card th:nth-child(2),
 #dashboardView .dashboard-table-card td:nth-child(2) {
-  width: 145px;
+  width: 18%;
 }
 
 #dashboardView .dashboard-table-card th:nth-child(4),
 #dashboardView .dashboard-table-card td:nth-child(4),
 #dashboardView .dashboard-table-card th:nth-child(5),
 #dashboardView .dashboard-table-card td:nth-child(5) {
-  width: 130px;
+  width: 17%;
 }
 
 #dashboardView .dashboard-table-card th:nth-child(6),
 #dashboardView .dashboard-table-card td:nth-child(6) {
-  width: 132px;
+  width: 16%;
 }
 
 #dashboardView .dashboard-table-card th:nth-child(7),
 #dashboardView .dashboard-table-card td:nth-child(7) {
-  width: 120px;
+  width: 13%;
 }
 
 #dashboardView .dashboard-table-card th:nth-child(8),
 #dashboardView .dashboard-table-card td:nth-child(8) {
-  width: 82px;
-  text-align: center;
+  width: 92px;
 }
+
 
 .dashboard-breakdown,
 .dashboard-activity {
@@ -2185,9 +2279,9 @@ h2 {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 12px;
+  margin-bottom: 8px;
 }
 
 .preview-tools {
@@ -2200,7 +2294,7 @@ h2 {
 }
 
 .preview-mode-button {
-  min-height: 30px;
+  min-height: 28px;
   padding: 0 8px;
   border-radius: 9px;
   font-size: 0.8rem;
@@ -2215,9 +2309,9 @@ h2 {
 }
 
 .preview-icon-button {
-  width: 34px;
-  min-width: 34px;
-  height: 32px;
+  width: 32px;
+  min-width: 32px;
+  height: 30px;
   padding: 0;
   display: grid;
   place-items: center;
@@ -2239,8 +2333,8 @@ h2 {
 }
 
 .preview-tools .secondary-action {
-  width: 30px;
-  min-height: 30px;
+  width: 28px;
+  min-height: 28px;
   padding: 0;
   font-size: 1.1rem;
 }
@@ -2256,15 +2350,15 @@ h2 {
 .preview-viewport {
   overflow: auto;
   flex: 1;
-  border-radius: 8px;
+  border-radius: 7px;
   background: #eef2f7;
-  padding: 4px;
+  padding: 2px;
   min-height: 0;
   display: block;
 }
 
 .preview-scale {
-  transform-origin: top left;
+  transform-origin: top center;
   width: max-content;
   margin: 0 auto;
 }
@@ -2280,7 +2374,7 @@ h2 {
   inset: 0;
   display: none;
   place-items: center;
-  padding: 10px;
+  padding: clamp(6px, 2vh, 14px);
   z-index: 1200;
 }
 
@@ -2301,9 +2395,10 @@ h2 {
 }
 
 .invoice-modal-panel.invoice-preview {
-  width: min(980px, calc(100vw - 20px));
-  max-height: calc(100vh - 20px);
-  padding: 12px;
+  width: min(60vw, calc(100vw - 12px));
+  height: min(96vh, calc(100vh - 12px));
+  max-height: calc(100vh - 12px);
+  padding: 8px;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -2315,7 +2410,7 @@ h2 {
 
 .invoice-modal-panel .preview-tools .secondary-action:last-child {
   width: auto;
-  padding: 0 12px;
+  padding: 0 10px;
   font-size: 0.88rem;
 }
 
@@ -2375,7 +2470,7 @@ h2 {
 .admin-modal-body .client-form {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 14px;
   box-shadow: none;
   border: 0;
@@ -5187,6 +5282,10 @@ body[data-active-view="manager"] .notification-icon-button {
   background: #f59e0b !important;
 }
 
+.pm-calendar-chip-tag.is-renewal-alert-chip {
+  background: #ef4444 !important;
+}
+
 .pm-calendar-chip-tag.is-holiday-chip {
   background: #7c3aed !important;
 }
@@ -5226,6 +5325,12 @@ body[data-active-view="manager"] .notification-icon-button {
   border-radius: 4px;
   background: #f59e0b;
   box-shadow: 0 0 0 2px #ffffff, 0 0 0 3px rgba(245, 158, 11, 0.35);
+}
+
+.pm-calendar-dot.is-renewal-alert {
+  border-radius: 4px;
+  background: #ef4444;
+  box-shadow: 0 0 0 2px #ffffff, 0 0 0 3px rgba(239, 68, 68, 0.32);
 }
 
 .pm-calendar-dot.is-holiday-dot {
@@ -5388,7 +5493,7 @@ body[data-active-view="manager"] .notification-icon-button {
 }
 
 #createView textarea {
-  min-height: 82px;
+  min-height: 76px;
 }
 
 #createView .compact-card .form-grid {
@@ -7893,7 +7998,11 @@ textarea {
 }
 
 #financeView .finance-redesign {
-  gap: 20px;
+  gap: 10px;
+}
+
+#financeView .is-hidden {
+  display: none !important;
 }
 
 #financeView .finance-topbar {
@@ -7901,8 +8010,9 @@ textarea {
   border: 0;
   box-shadow: none;
   padding: 0;
-  margin-bottom: 2px;
-  align-items: end;
+  margin-top: -26px;
+  margin-bottom: 0;
+  align-items: center;
 }
 
 #financeView .finance-title-block h2 {
@@ -7911,11 +8021,17 @@ textarea {
   color: #131f4a;
 }
 
+#financeView .finance-title-block {
+  min-height: 60px;
+  display: flex;
+  align-items: center;
+}
+
 #financeView .finance-title-block p {
-  margin: 4px 0 0;
+  margin: 0;
   font-size: 1rem;
   color: #6e7ca8;
-  font-weight: 550;
+  font-weight: 700;
 }
 
 #financeView .finance-filters {
@@ -7954,6 +8070,33 @@ textarea {
   background: #ff6f2c;
   color: #ffffff;
   border: 0;
+}
+
+#financeView .finance-view-switch {
+  width: max-content;
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #dbe4f2;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 10px 24px rgba(29, 46, 99, 0.08);
+  align-self: stretch;
+}
+
+#financeView .finance-view-switch button {
+  min-height: 100%;
+  border: 0;
+  border-radius: 10px;
+  padding: 0 18px;
+  background: transparent;
+  color: #60719d;
+  font-weight: 700;
+}
+
+#financeView .finance-view-switch button.is-active {
+  background: #13245d;
+  color: #ffffff;
 }
 
 #financeView .finance-overview-grid {
@@ -8121,6 +8264,159 @@ textarea {
   font-weight: 700;
 }
 
+#financeView .finance-board-panel {
+  display: grid;
+  gap: 10px;
+}
+
+#financeView .finance-board-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(230px, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+
+#financeView .finance-board-column {
+  min-height: 260px;
+  border: 1px solid #dfe6f4;
+  border-radius: 20px;
+  background: #f8fafd;
+  overflow: hidden;
+}
+
+#financeView .finance-board-column-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 12px 10px;
+  border-bottom: 1px solid #e3e9f4;
+  background: #ffffff;
+}
+
+#financeView .finance-board-column-header h3 {
+  margin: 0;
+  color: #18285f;
+  font-size: 0.86rem;
+  font-weight: 600;
+}
+
+#financeView .finance-board-column-header span {
+  color: #60719d;
+  font-size: 0.74rem;
+  font-weight: 550;
+  white-space: nowrap;
+}
+
+#financeView .finance-board-list {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+#financeView .finance-board-card {
+  border: 1px solid #e1e8f3;
+  border-left: 3px solid #2563eb;
+  border-radius: 14px;
+  background: #ffffff;
+  padding: 10px;
+  box-shadow: 0 10px 24px rgba(29, 46, 99, 0.06);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+#financeView .finance-board-card.to-pay { border-left-color: #ef4444; }
+#financeView .finance-board-card.done { border-left-color: #22c55e; }
+#financeView .finance-board-card.assets { border-left-color: #f59e0b; }
+
+#financeView .finance-board-card:hover {
+  border-color: #cbd8ee;
+  box-shadow: 0 14px 28px rgba(29, 46, 99, 0.1);
+  transform: translateY(-1px);
+}
+
+#financeView .finance-board-card-top,
+#financeView .finance-board-card-meta,
+#financeView .finance-board-card-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+#financeView .finance-board-card-top strong {
+  color: #17265b;
+  font-size: 0.84rem;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+#financeView .finance-board-card-top span {
+  color: #15245c;
+  font-size: 0.84rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+#financeView .finance-board-card p {
+  margin: 7px 0 0;
+  color: #617198;
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+#financeView .finance-board-card-meta {
+  margin-top: 10px;
+  color: #7180a2;
+  font-size: 0.72rem;
+  font-weight: 550;
+}
+
+#financeView .finance-board-card-actions {
+  margin-top: 12px;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+
+#financeView .finance-board-card-actions .text-action {
+  min-height: 28px;
+  border-radius: 10px;
+  padding: 0 10px;
+  background: #edf3ff;
+  color: #162765;
+  font-size: 0.74rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+#financeView .finance-board-card.to-pay .finance-board-card-actions .text-action:first-child,
+#financeView .finance-board-card.to-collect .finance-board-card-actions .text-action:first-child {
+  background: #edf3ff;
+  color: #162765;
+  border: 1px solid #cbdcff;
+}
+
+#financeView .finance-board-card.done .finance-board-card-actions .text-action:first-child {
+  background: #ecfdf3;
+  color: #17643a;
+  border: 1px solid #c8f0d7;
+}
+
+#financeView .finance-board-card.assets .finance-board-card-actions .text-action:first-child {
+  background: #fff7ed;
+  color: #9a4a12;
+  border: 1px solid #fde3c2;
+}
+
+#financeView .finance-board-empty {
+  min-height: 96px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #cad5e7;
+  border-radius: 14px;
+  color: #7887a8;
+  font-weight: 550;
+  text-align: center;
+}
+
 #financeView .finance-table-wrap {
   border-radius: 22px;
   border: 1px solid #dfe6f4;
@@ -8167,6 +8463,18 @@ textarea {
   #financeView .finance-assets-body {
     grid-template-columns: 1fr;
     justify-items: center;
+  }
+
+  #financeView .finance-board-grid {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 4px;
+    scroll-snap-type: x proximity;
+  }
+
+  #financeView .finance-board-column {
+    min-width: 280px;
+    scroll-snap-align: start;
   }
 }
 
@@ -9807,7 +10115,7 @@ textarea {
   }
 
   .invoice-modal {
-    padding: 10px;
+    padding: 6px;
     align-items: stretch;
   }
 
@@ -9816,6 +10124,13 @@ textarea {
     height: calc(100svh - 20px);
     max-height: none;
     padding: 10px;
+  }
+
+  .invoice-modal-panel.invoice-preview {
+    width: 100%;
+    height: calc(100svh - 12px);
+    max-height: none;
+    padding: 8px;
   }
 
   .preview-heading {
@@ -9959,60 +10274,143 @@ textarea {
 #dashboardView .dashboard-metric-grid {
   display: grid;
   grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 #dashboardView .dashboard-metric-grid .metric {
-  border-radius: 14px;
-  padding: 12px 14px 10px;
-  border: 1px solid #e5eaf2;
-  background: #ffffff;
-  min-height: 76px;
+  border-radius: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    radial-gradient(circle at 92% 14%, rgba(255, 255, 255, 0.2), transparent 26%),
+    linear-gradient(145deg, var(--metric-bg-start, #3b82f6), var(--metric-bg-mid, #2563eb) 52%, var(--metric-bg-end, #1d4ed8));
+  min-height: 82px;
   display: block;
   position: relative;
+  overflow: hidden;
+  box-shadow: 0 16px 30px var(--metric-shadow, rgba(37, 99, 235, 0.22));
 }
 
 #dashboardView .dashboard-metric-grid .metric::before {
   content: "";
   position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  border-radius: 14px 14px 0 0;
-  background: #3b82f6;
+  right: 14px;
+  bottom: 14px;
+  width: 54px;
+  height: 20px;
+  border: 0;
+  border-radius: 0;
+  background: none;
+  background-image: var(--metric-spark);
+  background-repeat: no-repeat;
+  background-size: contain;
+  opacity: 0.72;
 }
 
-#dashboardView .dashboard-metric-grid .metric-blue::before { background: #2f6bff; }
-#dashboardView .dashboard-metric-grid .metric-orange::before { background: #f59e0b; }
-#dashboardView .dashboard-metric-grid .metric-teal::before { background: #22c55e; }
-#dashboardView .dashboard-metric-grid .metric-red::before { background: #ef4444; }
-#dashboardView .dashboard-metric-grid .metric-purple::before { background: #8b5cf6; }
-#dashboardView .dashboard-metric-grid .metric-cyan::before { background: #06b6d4; }
+#dashboardView .dashboard-metric-grid .metric::after {
+  content: none;
+}
+
+#dashboardView .dashboard-metric-grid .metric-blue {
+  --metric-bg-start: #3b82f6;
+  --metric-bg-mid: #2563eb;
+  --metric-bg-end: #1d4ed8;
+  --metric-shadow: rgba(37, 99, 235, 0.28);
+}
+
+#dashboardView .dashboard-metric-grid .metric-orange {
+  --metric-bg-start: #f59e0b;
+  --metric-bg-mid: #d97706;
+  --metric-bg-end: #b45309;
+  --metric-shadow: rgba(217, 119, 6, 0.28);
+}
+
+#dashboardView .dashboard-metric-grid .metric-teal {
+  --metric-bg-start: #22c55e;
+  --metric-bg-mid: #16a34a;
+  --metric-bg-end: #15803d;
+  --metric-shadow: rgba(22, 163, 74, 0.28);
+}
+
+#dashboardView .dashboard-metric-grid .metric-red {
+  --metric-bg-start: #ef4444;
+  --metric-bg-mid: #dc2626;
+  --metric-bg-end: #b91c1c;
+  --metric-shadow: rgba(220, 38, 38, 0.28);
+}
+
+#dashboardView .dashboard-metric-grid .metric-purple {
+  --metric-bg-start: #8b5cf6;
+  --metric-bg-mid: #7c3aed;
+  --metric-bg-end: #6d28d9;
+  --metric-shadow: rgba(124, 58, 237, 0.28);
+}
+
+#dashboardView .dashboard-metric-grid .metric-cyan {
+  --metric-bg-start: #14b8a6;
+  --metric-bg-mid: #0d9488;
+  --metric-bg-end: #0f766e;
+  --metric-shadow: rgba(13, 148, 136, 0.28);
+}
+
+#dashboardView .dashboard-metric-grid .metric {
+  --metric-spark: url("data:image/svg+xml,%3Csvg width='76' height='28' viewBox='0 0 76 28' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 22 C10 17 14 20 21 15 S34 14 41 9 S54 9 62 4 S70 6 74 2' fill='none' stroke='rgba(255,255,255,.76)' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+}
+
+#dashboardView .dashboard-metric-grid .metric-purple {
+  --metric-spark: url("data:image/svg+xml,%3Csvg width='76' height='28' viewBox='0 0 76 28' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M2 5 C10 12 14 14 22 16 S36 22 46 21 S60 25 74 24' fill='none' stroke='rgba(255,255,255,.76)' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E");
+}
 
 #dashboardView .dashboard-metric-grid .metric-icon { display: none !important; }
 
 #dashboardView .dashboard-metric-grid .metric-copy span {
+  position: relative;
+  z-index: 1;
   display: block;
-  font-size: 12px;
-  color: #6d7a97;
-  margin-bottom: 2px;
-  font-weight: 500;
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.72);
+  margin-bottom: 6px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 #dashboardView .dashboard-metric-grid .metric-copy strong {
+  position: relative;
+  z-index: 1;
   display: block;
-  font-size: 20px;
-  color: #172033;
-  line-height: 1.02;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  margin-bottom: 2px;
+  font-size: 1.5vw;
+  color: #ffffff;
+  line-height: 1.04;
+  font-weight: 800;
+  letter-spacing: 0;
+  margin-bottom: 11px;
+  max-width: 100%;
+  overflow: visible;
+  text-overflow: clip;
+  white-space: nowrap;
+  text-shadow: 0 2px 12px rgba(15, 23, 42, 0.16);
 }
 
 #dashboardView .dashboard-metric-grid .metric-copy small {
-  color: #8f9ab4;
-  font-size: 11px;
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: fit-content;
+  max-width: 72%;
+  align-items: center;
+  gap: 4px;
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* Release stability: final source of truth for project + post-tracker visuals */
@@ -10066,4 +10464,1915 @@ textarea {
 .pm-calendar-panel .panel-heading h2,
 .pm-calendar-panel .panel-heading .muted-label {
   white-space: nowrap !important;
+}
+
+/* System typography consistency */
+body,
+input,
+select,
+textarea,
+button,
+table {
+  font-family: var(--font-ui) !important;
+  font-size: 0.90rem;
+  font-weight: 480;
+}
+
+:where(p, span, small, label, td, th, li, input, select, textarea) {
+  font-weight: 480;
+}
+
+:where(h1, h2, h3, h4, .panel-heading h2, .compact-heading h2, .topbar-title h1, .section-title, .modal-title) {
+  font-weight: 560 !important;
+  letter-spacing: -0.01em;
+}
+
+:where(h1, .topbar-title h1) {
+  font-size: clamp(1.22rem, 1.55vw, 1.62rem) !important;
+}
+
+:where(h2, .panel-heading h2, .compact-heading h2) {
+  font-size: 0.98rem !important;
+}
+
+:where(h3, h4, .muted-label, .field-label) {
+  font-size: 0.88rem;
+}
+
+:where(.primary-action, .secondary-action, .text-action, .icon-action, .nav-tab, .preview-mode-button, .dashboard-filter-pills button, .finance-view-toggle button) {
+  font-size: 0.86rem !important;
+  font-weight: 520 !important;
+}
+
+:where(.metric-copy span, .finance-board-column-header h3, .sidebar-brand strong, .nav-tab span, .table-wrap th, th) {
+  font-weight: 540 !important;
+}
+
+:where(.metric-copy strong, .metric strong, .finance-board-card-top strong, .finance-board-card-top span, .command-item strong, .command-item-side strong, .dashboard-mini-item strong, .activity-copy strong, .status-ring span) {
+  font-weight: 580 !important;
+}
+
+:where(.status, .command-badge, .portal-renewal-badge, .finance-board-card-meta, .dashboard-filter-pills button, .badge, .chip) {
+  font-weight: 520 !important;
+}
+
+:where(.finance-board-card p, .command-item p, .command-item small, .muted-label, .metric-copy small, .activity-copy small, .dashboard-mini-item span) {
+  font-weight: 480 !important;
+}
+
+#financeView :where(.finance-board-card-actions .text-action, .finance-actions .primary-action, .finance-actions .secondary-action) {
+  font-weight: 520 !important;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.08) !important;
+}
+
+/* Dashboard Work Row */
+#dashboardView .dashboard-work-row {
+  display: grid;
+  grid-template-columns: minmax(0, 36fr) minmax(0, 40fr) minmax(240px, 24fr);
+  gap: 12px;
+  margin: 10px 0 12px !important;
+  align-items: stretch;
+}
+
+#dashboardView .dashboard-work-row > .panel {
+  min-width: 0;
+}
+
+/* Dashboard Action Center */
+#dashboardView .dashboard-action-center {
+  margin: 0 !important;
+  padding: 16px 18px !important;
+  border: 1px solid #dfe7f4 !important;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  box-shadow: 0 14px 34px rgba(29, 46, 99, 0.06) !important;
+}
+
+#dashboardView .action-center-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 10px;
+}
+
+#dashboardView .action-center-heading h2 {
+  margin: 0;
+  color: #121a34;
+  font-size: 0.98rem !important;
+  font-weight: 540 !important;
+  letter-spacing: 0;
+}
+
+#dashboardView .action-center-heading .text-action {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: transparent;
+  color: #3670f5;
+  font-size: 0.86rem !important;
+  font-weight: 520 !important;
+}
+
+#dashboardView .action-center-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+#dashboardView .action-center-filters button {
+  min-height: 34px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #f1f4fb;
+  color: #5d6784;
+  font-size: 0.84rem;
+  font-weight: 520;
+}
+
+#dashboardView .action-center-filters button.is-active {
+  background: #111a38;
+  color: #ffffff;
+}
+
+#dashboardView .action-center-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 6px 8px 0;
+  overscroll-behavior: contain;
+}
+
+#dashboardView .action-center-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+#dashboardView .action-center-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #c7d0e3;
+}
+
+#dashboardView .action-center-list .command-item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 62px;
+  padding: 10px 13px;
+  border: 1px solid #e1e8f3;
+  border-left: 5px solid #2f6bff;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+#dashboardView .action-center-list .command-item.red { border-left-color: #ef4444; }
+#dashboardView .action-center-list .command-item.orange { border-left-color: #ff6b2c; }
+#dashboardView .action-center-list .command-item.purple { border-left-color: #8b5cf6; }
+#dashboardView .action-center-list .command-item.teal { border-left-color: #22c55e; }
+
+#dashboardView .action-center-list .command-item-main {
+  min-width: 0;
+}
+
+#dashboardView .action-center-list .command-badge {
+  display: inline-flex;
+  width: fit-content;
+  margin-bottom: 4px;
+  padding: 3px 8px;
+  border-radius: 9px;
+  background: #eef4ff;
+  color: #3670f5;
+  font-size: 0.68rem !important;
+  font-weight: 520 !important;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+#dashboardView .action-center-list .command-item.red .command-badge {
+  background: #fff1f2;
+  color: #dc2626;
+}
+
+#dashboardView .action-center-list .command-item.orange .command-badge {
+  background: #fff4e8;
+  color: #ea580c;
+}
+
+#dashboardView .action-center-list .command-item.purple .command-badge {
+  background: #f4efff;
+  color: #6d42d8;
+}
+
+#dashboardView .action-center-list .command-item.teal .command-badge {
+  background: #ecfdf5;
+  color: #16a34a;
+}
+
+#dashboardView .action-center-list .command-item strong {
+  display: block;
+  color: #121a34;
+  font-size: 0.9rem !important;
+  font-weight: 540 !important;
+  line-height: 1.16;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#dashboardView .action-center-list .command-item p {
+  margin: 3px 0 0;
+  color: #8a96b3;
+  font-size: 0.8rem !important;
+  font-weight: 480 !important;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#dashboardView .action-center-list .command-item small {
+  display: none;
+}
+
+#dashboardView .action-center-list .command-item-side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+#dashboardView .action-center-list .command-item-side strong {
+  color: #121a34;
+  font-size: 0.9rem !important;
+  font-weight: 540 !important;
+  letter-spacing: -0.01em;
+}
+
+#dashboardView .action-center-list .command-item-side .text-action {
+  min-height: 32px;
+  min-width: 60px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 12px;
+  background: #eef4ff;
+  color: #3670f5;
+  box-shadow: none !important;
+  font-size: 0.82rem !important;
+  font-weight: 520 !important;
+}
+
+#dashboardView .action-center-list .command-item.orange .command-item-side .text-action {
+  background: #fff4e8;
+  color: #ea580c;
+}
+
+#dashboardView .action-center-list .command-empty {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #d7e1ef;
+  border-radius: 16px;
+  color: #7a86a3;
+  font-size: 0.9rem;
+  font-weight: 520;
+  text-align: center;
+}
+
+#dashboardView .dashboard-task-card {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+  padding: 16px 18px 0 !important;
+  border: 1px solid #dfe7f4 !important;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  box-shadow: 0 14px 34px rgba(29, 46, 99, 0.06) !important;
+  overflow: hidden;
+}
+
+#dashboardView .dashboard-work-activity-card {
+  display: flex;
+  flex-direction: column;
+  margin: 0 !important;
+  padding: 16px 18px !important;
+  border: 1px solid #dfe7f4 !important;
+  border-radius: 18px !important;
+  background: #ffffff !important;
+  box-shadow: 0 14px 34px rgba(29, 46, 99, 0.06) !important;
+  overflow: hidden;
+}
+
+#dashboardView .dashboard-work-activity-card .compact-heading {
+  min-height: 30px;
+  margin-bottom: 10px;
+}
+
+#dashboardView .dashboard-work-activity-card .compact-heading h2 {
+  color: #121a34;
+  font-size: 0.98rem !important;
+  font-weight: 540 !important;
+}
+
+#dashboardView .dashboard-work-activity-card .compact-heading .text-action {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: transparent;
+  color: #3670f5;
+  box-shadow: none !important;
+  font-size: 0.86rem !important;
+  font-weight: 520 !important;
+}
+
+#dashboardView .dashboard-work-activity-card .activity-list {
+  display: grid;
+  gap: 7px;
+  max-height: 292px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 6px 8px 0;
+  overscroll-behavior: contain;
+}
+
+#dashboardView .dashboard-work-activity-card .activity-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+#dashboardView .dashboard-work-activity-card .activity-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #c7d0e3;
+}
+
+#dashboardView .dashboard-work-activity-card .dashboard-activity-item {
+  min-height: 60px;
+  padding: 8px 0;
+}
+
+#dashboardView .dashboard-work-activity-card .dashboard-activity-item strong {
+  color: #121a34;
+  font-size: 0.86rem !important;
+  font-weight: 540 !important;
+}
+
+#dashboardView .dashboard-work-activity-card .dashboard-activity-item span,
+#dashboardView .dashboard-work-activity-card .dashboard-activity-item small {
+  color: #8a96b3;
+  font-size: 0.76rem !important;
+  font-weight: 480 !important;
+}
+
+#dashboardView .task-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 9px;
+}
+
+#dashboardView .task-card-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 12px;
+}
+
+#dashboardView .task-card-icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  border-radius: 13px;
+  color: #ffffff;
+  background: linear-gradient(135deg, #ff9a3d, #ff6b2c);
+}
+
+#dashboardView .task-card-icon svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+#dashboardView .task-card-title h2 {
+  margin: 0;
+  color: #121a34;
+  font-size: 1rem !important;
+  font-weight: 540 !important;
+  letter-spacing: 0;
+}
+
+#dashboardView .task-card-title p,
+#dashboardView .task-card-count span {
+  margin: 2px 0 0;
+  color: #8a96b3;
+  font-size: 0.8rem !important;
+  font-weight: 480 !important;
+}
+
+#dashboardView .task-card-count {
+  text-align: right;
+}
+
+#dashboardView .task-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 0 0 auto;
+}
+
+#dashboardView .task-card-count strong {
+  display: block;
+  color: #121a34;
+  font-size: 1.05rem !important;
+  font-weight: 540 !important;
+  line-height: 1;
+}
+
+#dashboardView .task-add-toggle {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 14px;
+  background: #111a38;
+  color: #ffffff;
+  box-shadow: 0 10px 22px rgba(17, 26, 56, 0.14);
+  font-size: 1.22rem;
+  font-weight: 520;
+  line-height: 1;
+}
+
+#dashboardView .task-add-toggle.is-active {
+  background: #eef4ff;
+  color: #3670f5;
+  box-shadow: none;
+}
+
+#dashboardView .task-progress {
+  height: 4px;
+  margin-bottom: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #edf1fa;
+}
+
+#dashboardView .task-progress span {
+  display: block;
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #34d399, #10b981);
+  transition: width 0.2s ease;
+}
+
+#dashboardView .task-add-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+#dashboardView .task-add-form.is-hidden {
+  display: none;
+}
+
+#dashboardView .task-add-form textarea {
+  width: 100%;
+  min-height: 54px;
+  max-height: 96px;
+  padding: 10px 12px;
+  border: 1px solid #dde6f4;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #121a34;
+  font-size: 0.84rem;
+  font-weight: 480;
+  line-height: 1.35;
+  outline: none;
+  resize: vertical;
+}
+
+#dashboardView .task-add-form textarea::placeholder {
+  color: #9aa6bf;
+}
+
+#dashboardView .task-add-form button {
+  align-self: stretch;
+  min-width: 54px;
+  border: 0;
+  border-radius: 12px;
+  background: #111a38;
+  color: #ffffff;
+  font-size: 0.82rem;
+  font-weight: 520;
+  line-height: 1;
+}
+
+#dashboardView .task-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  margin-bottom: 10px;
+  padding: 4px;
+  border-radius: 13px;
+  background: #f1f4fb;
+}
+
+#dashboardView .task-tabs button {
+  min-height: 32px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #5d6784;
+  font-size: 0.82rem;
+  font-weight: 520;
+}
+
+#dashboardView .task-tabs button span {
+  color: #3670f5;
+}
+
+#dashboardView .task-tabs button.is-active {
+  background: #ffffff;
+  color: #121a34;
+  box-shadow: 0 8px 18px rgba(29, 46, 99, 0.08);
+}
+
+#dashboardView .task-list {
+  display: grid;
+  gap: 6px;
+  max-height: 165px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 0 6px 10px 0;
+  overscroll-behavior: contain;
+}
+
+#dashboardView .task-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+#dashboardView .task-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #c7d0e3;
+}
+
+#dashboardView .task-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  min-height: 52px;
+  padding: 8px 10px;
+  border: 1px solid #e1e8f3;
+  border-radius: 15px;
+  background: #ffffff;
+}
+
+#dashboardView .task-check {
+  width: 19px;
+  height: 19px;
+  border: 2px solid #cbd5e8;
+  border-radius: 9px;
+  background: #ffffff;
+}
+
+#dashboardView .task-row.is-done .task-check {
+  border-color: #22c55e;
+  background: #22c55e;
+  box-shadow: inset 0 0 0 4px #ffffff;
+}
+
+#dashboardView .task-row-main {
+  min-width: 0;
+}
+
+#dashboardView .task-row-main strong {
+  display: block;
+  color: #121a34;
+  font-size: 0.86rem !important;
+  font-weight: 540 !important;
+  line-height: 1.18;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#dashboardView .task-row.is-done .task-row-main strong {
+  color: #8a96b3;
+  text-decoration: line-through;
+}
+
+#dashboardView .task-row-main p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 0;
+  color: #8a96b3;
+  font-size: 0.76rem !important;
+  font-weight: 480 !important;
+}
+
+#dashboardView .task-priority {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 8px;
+  background: #fff7ed;
+  color: #d97706;
+  font-size: 0.68rem !important;
+  font-weight: 520 !important;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+#dashboardView .task-priority.high {
+  background: #fff1f2;
+  color: #dc2626;
+}
+
+#dashboardView .task-priority.low {
+  background: #eef4ff;
+  color: #3670f5;
+}
+
+#dashboardView .task-row .text-action {
+  min-height: 30px;
+  min-width: 58px;
+  padding: 0 10px;
+  border-radius: 10px;
+  background: #eef4ff;
+  color: #3670f5;
+  box-shadow: none !important;
+  font-size: 0.8rem !important;
+  font-weight: 520 !important;
+}
+
+#dashboardView .task-empty {
+  min-height: 120px;
+  display: grid;
+  place-items: center;
+  border: 1px dashed #d7e1ef;
+  border-radius: 16px;
+  color: #7a86a3;
+  font-size: 0.88rem;
+  font-weight: 480;
+  text-align: center;
+}
+
+#dashboardView .task-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: auto -18px 0;
+  padding: 8px 18px;
+  border-top: 1px solid #e6edf6;
+  color: #8a96b3;
+  font-size: 0.8rem;
+  font-weight: 480;
+}
+
+#dashboardView .task-card-footer .text-action {
+  color: #3670f5;
+  background: transparent;
+  box-shadow: none !important;
+  font-size: 0.86rem !important;
+  font-weight: 540 !important;
+}
+
+@media (max-width: 1180px) {
+  #dashboardView .dashboard-work-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  #dashboardView .dashboard-work-activity-card {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 760px) {
+  #dashboardView .dashboard-work-row {
+    grid-template-columns: 1fr;
+  }
+
+  #dashboardView .dashboard-work-activity-card {
+    grid-column: auto;
+    padding: 14px !important;
+  }
+
+  #dashboardView .dashboard-action-center {
+    padding: 16px !important;
+  }
+
+  #dashboardView .dashboard-task-card {
+    padding: 14px 14px 0 !important;
+  }
+
+  #dashboardView .action-center-heading,
+  #dashboardView .action-center-list .command-item,
+  #dashboardView .action-center-list .command-item-side {
+    align-items: flex-start;
+  }
+
+  #dashboardView .action-center-list .command-item {
+    grid-template-columns: 1fr;
+  }
+
+  #dashboardView .action-center-list .command-item-side {
+    justify-content: space-between;
+  }
+
+  #dashboardView .task-card-footer {
+    margin-inline: -14px;
+    padding-inline: 14px;
+  }
+
+  #dashboardView .task-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+  }
+
+  #dashboardView .task-row .text-action {
+    grid-column: 2;
+    justify-self: flex-start;
+  }
+}
+
+@media (max-width: 1180px) {
+  #dashboardView .dashboard-table-card {
+    width: 100%;
+  }
+
+  #dashboardView .dashboard-detail-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Dark mode */
+body[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #edf4ff;
+  --muted: #9fb0cc;
+  --line: #263654;
+  --paper: #111b2e;
+  --soft: #18243a;
+  --brand: #4f83ff;
+  --brand-dark: #17213a;
+  --purple-soft: rgba(139, 92, 246, 0.16);
+  background:
+    radial-gradient(circle at 18% 0%, rgba(37, 99, 235, 0.18), transparent 26%),
+    radial-gradient(circle at 100% 16%, rgba(20, 184, 166, 0.14), transparent 24%),
+    linear-gradient(135deg, #08111f 0%, #0b1424 48%, #101827 100%);
+  color: var(--ink);
+}
+
+body[data-theme="dark"] .workspace {
+  background: transparent;
+}
+
+body[data-theme="dark"] .app-shell {
+  background:
+    linear-gradient(90deg, rgba(5, 12, 24, 0.98) 0 230px, transparent 230px),
+    radial-gradient(circle at 88% 0%, rgba(37, 99, 235, 0.12), transparent 28%),
+    #07101d;
+}
+
+body[data-theme="dark"] .sidebar {
+  background: #060d18;
+  border-right-color: rgba(76, 96, 130, 0.36);
+  box-shadow: 14px 0 34px rgba(0, 0, 0, 0.26);
+}
+
+body[data-theme="dark"] .brand-mark {
+  background: linear-gradient(180deg, #ff7a1a 0%, #ea3f0b 100%);
+  box-shadow: 0 12px 28px rgba(255, 97, 32, 0.3);
+}
+
+body[data-theme="dark"] .sidebar-toggle,
+body[data-theme="dark"] .sidebar-user {
+  background: rgba(12, 22, 37, 0.9);
+  border-color: rgba(91, 111, 145, 0.42);
+}
+
+body[data-theme="dark"] .nav-tab:not(.active):hover {
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: none;
+}
+
+body[data-theme="dark"] .topbar {
+  border-bottom-color: rgba(148, 163, 184, 0.18);
+}
+
+.topbar-theme-button {
+  width: 38px;
+  min-width: 38px;
+  padding: 0 !important;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+body[data-theme="dark"] .topbar-title h1,
+body[data-theme="dark"] .panel-heading h2,
+body[data-theme="dark"] .compact-heading h2,
+body[data-theme="dark"] .section-title,
+body[data-theme="dark"] .card-title,
+body[data-theme="dark"] h2,
+body[data-theme="dark"] h3,
+body[data-theme="dark"] th,
+body[data-theme="dark"] td,
+body[data-theme="dark"] label {
+  color: var(--ink);
+}
+
+body[data-theme="dark"] .topbar-title p,
+body[data-theme="dark"] .muted-label,
+body[data-theme="dark"] small,
+body[data-theme="dark"] .empty,
+body[data-theme="dark"] .table-wrap th {
+  color: var(--muted);
+}
+
+body[data-theme="dark"] .panel,
+body[data-theme="dark"] .dashboard-table-card,
+body[data-theme="dark"] .dashboard-chart-card,
+body[data-theme="dark"] .dashboard-status-card,
+body[data-theme="dark"] .dashboard-action-center,
+body[data-theme="dark"] .dashboard-task-card,
+body[data-theme="dark"] .dashboard-activity-card,
+body[data-theme="dark"] .table-card,
+body[data-theme="dark"] .settings-card,
+body[data-theme="dark"] .reports-card,
+body[data-theme="dark"] .reports-summary-card,
+body[data-theme="dark"] .project-summary-card,
+body[data-theme="dark"] .finance-hero-card,
+body[data-theme="dark"] .finance-assets-card,
+body[data-theme="dark"] .cloud-backup-card,
+body[data-theme="dark"] .invoice-card {
+  background:
+    linear-gradient(180deg, rgba(17, 27, 46, 0.84), rgba(9, 17, 30, 0.92)),
+    rgba(17, 27, 46, 0.9);
+  border-color: rgba(99, 116, 148, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    0 18px 38px rgba(0, 0, 0, 0.26);
+}
+
+body[data-theme="dark"] .dashboard-metric-grid .metric {
+  color: #ffffff;
+}
+
+body[data-theme="dark"] .dashboard-metric-grid .metric-copy strong,
+body[data-theme="dark"] .dashboard-metric-grid .metric-copy span,
+body[data-theme="dark"] .dashboard-metric-grid .metric-copy small {
+  color: #ffffff;
+}
+
+body[data-theme="dark"] input,
+body[data-theme="dark"] select,
+body[data-theme="dark"] textarea,
+body[data-theme="dark"] .topbar-search {
+  background: rgba(8, 15, 27, 0.9);
+  border-color: rgba(89, 109, 143, 0.42);
+  color: var(--ink);
+  box-shadow: none;
+}
+
+body[data-theme="dark"] input::placeholder,
+body[data-theme="dark"] textarea::placeholder {
+  color: #7485a3;
+}
+
+body[data-theme="dark"] .secondary-action,
+body[data-theme="dark"] .topbar-actions > .secondary-action,
+body[data-theme="dark"] .pagination-controls button,
+body[data-theme="dark"] .icon-action,
+body[data-theme="dark"] .preview-icon-button {
+  background: rgba(16, 28, 47, 0.92);
+  border-color: rgba(89, 109, 143, 0.4);
+  color: var(--ink);
+}
+
+body[data-theme="dark"] .primary-action,
+body[data-theme="dark"] .topbar-actions > .primary-action,
+body[data-theme="dark"] .save-button {
+  background: #356dff;
+  border-color: #356dff;
+  color: #ffffff;
+}
+
+body[data-theme="dark"] .topbar-quick-actions-menu,
+body[data-theme="dark"] .user-menu,
+body[data-theme="dark"] .invoice-modal-panel,
+body[data-theme="dark"] .admin-record-modal .panel,
+body[data-theme="dark"] .employee-modal .panel,
+body[data-theme="dark"] .finance-record-modal .panel {
+  background: #0b1424;
+  border-color: rgba(89, 109, 143, 0.42);
+  box-shadow: 0 22px 52px rgba(0, 0, 0, 0.4);
+}
+
+body[data-theme="dark"] .topbar-quick-actions-menu button,
+body[data-theme="dark"] .user-menu button,
+body[data-theme="dark"] .dashboard-filter-pills button,
+body[data-theme="dark"] .action-center-filters button,
+body[data-theme="dark"] .task-tabs button {
+  background: rgba(19, 31, 51, 0.94);
+  color: #dbe7ff;
+}
+
+body[data-theme="dark"] .dashboard-filter-pills button.is-active,
+body[data-theme="dark"] .action-center-filters button.is-active,
+body[data-theme="dark"] .task-tabs button.is-active {
+  background: #356dff;
+  color: #ffffff;
+}
+
+body[data-theme="dark"] .table-wrap,
+body[data-theme="dark"] .compact-table-wrap,
+body[data-theme="dark"] .reports-table-wrap,
+body[data-theme="dark"] .admin-table-wrap {
+  background: transparent;
+}
+
+body[data-theme="dark"] table,
+body[data-theme="dark"] thead,
+body[data-theme="dark"] tbody,
+body[data-theme="dark"] tr {
+  background: transparent;
+}
+
+body[data-theme="dark"] th {
+  background: rgba(16, 27, 45, 0.92);
+  border-color: #2a3b5e;
+}
+
+body[data-theme="dark"] td {
+  border-color: rgba(99, 116, 148, 0.25);
+}
+
+body[data-theme="dark"] tbody tr:hover,
+body[data-theme="dark"] .admin-table tbody tr:hover,
+body[data-theme="dark"] .project-table tbody tr:hover,
+body[data-theme="dark"] #invoicesView table tbody tr:hover td {
+  background: rgba(53, 109, 255, 0.08) !important;
+}
+
+body[data-theme="dark"] .action-center-item,
+body[data-theme="dark"] .task-item,
+body[data-theme="dark"] .activity-item,
+body[data-theme="dark"] .dashboard-activity-item,
+body[data-theme="dark"] .finance-board-card,
+body[data-theme="dark"] .project-card,
+body[data-theme="dark"] .client-card,
+body[data-theme="dark"] .service-letter-record,
+body[data-theme="dark"] .dashboard-mini-item {
+  background: rgba(9, 17, 30, 0.78);
+  border-color: rgba(89, 109, 143, 0.34);
+  color: var(--ink);
+}
+
+body[data-theme="dark"] #dashboardView .action-center-list .command-item,
+body[data-theme="dark"] #dashboardView .task-row,
+body[data-theme="dark"] #dashboardView .dashboard-work-activity-card .dashboard-activity-item {
+  background: rgba(9, 17, 30, 0.78);
+  border-color: rgba(89, 109, 143, 0.34);
+}
+
+body[data-theme="dark"] #dashboardView .task-card-footer {
+  background: rgba(7, 14, 26, 0.72);
+  border-top-color: rgba(89, 109, 143, 0.28);
+}
+
+body[data-theme="dark"] .status-overview,
+body[data-theme="dark"] .dashboard-bar-chart,
+body[data-theme="dark"] .dashboard-chart-plot {
+  color: var(--ink);
+}
+
+body[data-theme="dark"] .status-ring::after {
+  background: #111b2e;
+}
+
+body[data-theme="dark"] .status-progress {
+  background:
+    linear-gradient(90deg, var(--status-color) var(--status-width), transparent 0),
+    #243452;
+}
+
+body[data-theme="dark"] .dashboard-chart-gridlines i {
+  border-top-color: rgba(148, 163, 184, 0.22);
+}
+
+body[data-theme="dark"] .invoice-modal-backdrop,
+body[data-theme="dark"].user-menu-modal-open::after,
+body[data-theme="dark"] .search-popup-backdrop {
+  background: rgba(1, 7, 19, 0.72);
+}
+
+body[data-theme="dark"] .toast,
+body[data-theme="dark"] .sync-status,
+body[data-theme="dark"] .search-popup {
+  background: #17243b;
+  color: var(--ink);
+  border-color: #2a3b5e;
+}
+
+body[data-theme="dark"] .invoice-paper,
+body[data-theme="dark"] .service-letter-paper {
+  background: #ffffff;
+  color: #172033;
+}
+
+body[data-theme="dark"] #projectsView .project-table tbody tr.project-row-paid,
+body[data-theme="dark"] #projectsView .project-table tbody tr.project-row-paid:hover {
+  background: rgba(34, 197, 94, 0.12) !important;
+}
+
+/* Dark mode dashboard hardening */
+body[data-theme="dark"] #dashboardView .dashboard-action-center,
+body[data-theme="dark"] #dashboardView .dashboard-task-card,
+body[data-theme="dark"] #dashboardView .dashboard-work-activity-card,
+body[data-theme="dark"] #dashboardView .dashboard-table-card,
+body[data-theme="dark"] #dashboardView .dashboard-status-card,
+body[data-theme="dark"] #dashboardView .dashboard-chart-card {
+  background:
+    linear-gradient(180deg, rgba(15, 24, 39, 0.96), rgba(8, 15, 27, 0.98)) !important;
+  border-color: rgba(91, 111, 145, 0.44) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 18px 40px rgba(0, 0, 0, 0.34) !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-table-card .compact-table-wrap,
+body[data-theme="dark"] #dashboardView .dashboard-table-card .compact-table-wrap table,
+body[data-theme="dark"] #dashboardView .dashboard-table-card .compact-table-wrap thead,
+body[data-theme="dark"] #dashboardView .dashboard-table-card .compact-table-wrap tbody,
+body[data-theme="dark"] #dashboardView .dashboard-table-card .compact-table-wrap tr {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-table-card .compact-table-wrap th {
+  background: rgba(28, 40, 61, 0.92) !important;
+  color: #aebbd2 !important;
+  border-color: rgba(91, 111, 145, 0.34) !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-table-card .compact-table-wrap td {
+  background: transparent !important;
+  color: #edf4ff !important;
+  border-color: rgba(91, 111, 145, 0.28) !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-table-card .compact-table-wrap td a,
+body[data-theme="dark"] #dashboardView .dashboard-table-card .compact-table-wrap td strong {
+  color: #4f83ff !important;
+}
+
+body[data-theme="dark"] #dashboardView .action-center-heading h2,
+body[data-theme="dark"] #dashboardView .dashboard-work-activity-card .compact-heading h2,
+body[data-theme="dark"] #dashboardView .task-card-title h2,
+body[data-theme="dark"] #dashboardView .dashboard-table-card .panel-heading h2,
+body[data-theme="dark"] #dashboardView .dashboard-status-card h2,
+body[data-theme="dark"] #dashboardView .dashboard-chart-card h2 {
+  color: #f3f7ff !important;
+}
+
+body[data-theme="dark"] #dashboardView .action-center-list .command-item,
+body[data-theme="dark"] #dashboardView .task-row,
+body[data-theme="dark"] #dashboardView .dashboard-work-activity-card .dashboard-activity-item {
+  background: rgba(17, 27, 43, 0.92) !important;
+  border-color: rgba(91, 111, 145, 0.36) !important;
+}
+
+body[data-theme="dark"] #dashboardView .action-center-list .command-item strong,
+body[data-theme="dark"] #dashboardView .action-center-list .command-item-side strong,
+body[data-theme="dark"] #dashboardView .task-row strong,
+body[data-theme="dark"] #dashboardView .task-card-count strong,
+body[data-theme="dark"] #dashboardView .dashboard-work-activity-card .dashboard-activity-item strong {
+  color: #f3f7ff !important;
+}
+
+body[data-theme="dark"] #dashboardView .action-center-list .command-item p,
+body[data-theme="dark"] #dashboardView .task-row span,
+body[data-theme="dark"] #dashboardView .task-card-title p,
+body[data-theme="dark"] #dashboardView .task-card-count span,
+body[data-theme="dark"] #dashboardView .dashboard-work-activity-card .dashboard-activity-item span,
+body[data-theme="dark"] #dashboardView .dashboard-work-activity-card .dashboard-activity-item small {
+  color: #9fb0cc !important;
+}
+
+body[data-theme="dark"] #dashboardView .action-center-filters button,
+body[data-theme="dark"] #dashboardView .task-tabs button,
+body[data-theme="dark"] #dashboardView .dashboard-filter-pills button {
+  background: rgba(24, 36, 58, 0.94) !important;
+  color: #cbd8ee !important;
+}
+
+body[data-theme="dark"] #dashboardView .action-center-filters button.is-active,
+body[data-theme="dark"] #dashboardView .task-tabs button.is-active,
+body[data-theme="dark"] #dashboardView .dashboard-filter-pills button.is-active {
+  background: #356dff !important;
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] #dashboardView .task-card-footer {
+  background: rgba(7, 14, 26, 0.86) !important;
+  border-top-color: rgba(91, 111, 145, 0.34) !important;
+  color: #9fb0cc !important;
+}
+
+body[data-theme="dark"] .status-ring span,
+body[data-theme="dark"] .status-legend div,
+body[data-theme="dark"] .status-legend strong,
+body[data-theme="dark"] .status-legend span {
+  color: #edf4ff !important;
+}
+
+body[data-theme="dark"] .status-legend strong small,
+body[data-theme="dark"] .dashboard-chart-axis span,
+body[data-theme="dark"] .dashboard-bar-item small {
+  color: #9fb0cc !important;
+}
+
+body[data-theme="dark"] .notification-icon-button {
+  background: rgba(16, 28, 47, 0.92);
+  border-color: rgba(89, 109, 143, 0.4);
+  color: #edf4ff;
+}
+
+body[data-theme="dark"] .notification-icon-button #topbarAlertCount {
+  background: #ef4444;
+  color: #ffffff;
+}
+
+/* Dark mode final safety net */
+body[data-theme="dark"] :where(
+  .panel,
+  .modal-card,
+  .drawer-card,
+  .form-card,
+  .settings-card,
+  .content-card,
+  .table-card,
+  .list-card,
+  .summary-panel,
+  .quick-actions-menu,
+  .user-menu,
+  .notification-panel,
+  .dropdown-menu
+):not(.invoice-paper):not(.service-letter-paper):not(.dashboard-metric-card) {
+  background:
+    linear-gradient(180deg, rgba(15, 24, 39, 0.96), rgba(8, 15, 27, 0.98)) !important;
+  border-color: rgba(91, 111, 145, 0.44) !important;
+  color: #edf4ff !important;
+}
+
+body[data-theme="dark"] :where(
+  .panel,
+  .modal-card,
+  .drawer-card,
+  .form-card,
+  .settings-card,
+  .content-card,
+  .table-card,
+  .list-card,
+  .summary-panel,
+  .quick-actions-menu,
+  .user-menu,
+  .notification-panel,
+  .dropdown-menu
+) :where(h1, h2, h3, h4, strong, label, legend, td, p) {
+  color: #edf4ff !important;
+}
+
+body[data-theme="dark"] :where(
+  .panel,
+  .modal-card,
+  .drawer-card,
+  .form-card,
+  .settings-card,
+  .content-card,
+  .table-card,
+  .list-card,
+  .summary-panel,
+  .quick-actions-menu,
+  .user-menu,
+  .notification-panel,
+  .dropdown-menu
+) :where(span, small, th, .muted, .muted-label, .subtle, .helper-text) {
+  color: #9fb0cc !important;
+}
+
+body[data-theme="dark"] :where(
+  .command-item,
+  .task-row,
+  .dashboard-activity-item,
+  .activity-item,
+  .notification-item,
+  .project-card,
+  .client-card,
+  .finance-board-card,
+  .report-card,
+  .settings-row,
+  .document-card,
+  .renewal-card
+) {
+  background: rgba(17, 27, 43, 0.92) !important;
+  border-color: rgba(91, 111, 145, 0.36) !important;
+  color: #edf4ff !important;
+}
+
+body[data-theme="dark"] :where(input, textarea, select, .search-input, .filter-input) {
+  background: rgba(7, 14, 26, 0.86) !important;
+  border-color: rgba(91, 111, 145, 0.46) !important;
+  color: #edf4ff !important;
+}
+
+body[data-theme="dark"] :where(input, textarea, .search-input)::placeholder {
+  color: #7f90ad !important;
+}
+
+body[data-theme="dark"] :where(.compact-table-wrap, .table-wrap, .reports-table-wrap, .admin-table-wrap) {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] :where(table, thead, tbody, tr, td) {
+  background-color: transparent !important;
+}
+
+body[data-theme="dark"] :where(th) {
+  background: rgba(28, 40, 61, 0.92) !important;
+  color: #aebbd2 !important;
+  border-color: rgba(91, 111, 145, 0.34) !important;
+}
+
+body[data-theme="dark"] :where(td) {
+  color: #edf4ff !important;
+  border-color: rgba(91, 111, 145, 0.28) !important;
+}
+
+body[data-theme="dark"] :where(.secondary-action, .icon-button, .action-button, .pagination-button, .text-action) {
+  background: rgba(22, 34, 54, 0.96) !important;
+  border-color: rgba(91, 111, 145, 0.44) !important;
+  color: #edf4ff !important;
+}
+
+body[data-theme="dark"] :where(.secondary-action:hover, .icon-button:hover, .action-button:hover, .pagination-button:hover, .text-action:hover) {
+  background: rgba(43, 68, 106, 0.98) !important;
+}
+
+body[data-theme="dark"] :where(.invoice-paper, .service-letter-paper),
+body[data-theme="dark"] :where(.invoice-paper, .service-letter-paper) :where(h1, h2, h3, h4, strong, label, legend, td, p, span, small, th) {
+  color: #172033 !important;
+}
+
+/* Dark mode page-specific fixes for ID-based light rules */
+body[data-theme="dark"] :is(
+  #notificationsView,
+  #calendarView,
+  #documentsView,
+  #createView,
+  #invoicesView,
+  #quotationsView,
+  #projectsView,
+  #renewalsView,
+  #managerView,
+  #loginsView,
+  #usersView,
+  #financeView,
+  #clientsView,
+  #employeesView,
+  #servicesView,
+  #reportsView,
+  #settingsView
+) :is(
+  .panel,
+  .panel-heading,
+  .invoice-list-heading,
+  .invoice-view-panel,
+  .table-wrap,
+  .project-table-wrap,
+  .pm-table-wrap,
+  .pm-wide-panel,
+  .pm-alert-panel,
+  .pm-post-records-panel,
+  .pm-calendar-panel,
+  .pm-kpi,
+  .pm-action-item,
+  .pm-notification,
+  .reports-card,
+  .reports-summary-card,
+  .settings-card,
+  .finance-card,
+  .finance-monitor,
+  .finance-form,
+  .finance-assets-card,
+  .finance-board-column,
+  .finance-board-column-header,
+  .finance-board-card,
+  .client-project-picker,
+  .client-project-checklist,
+  .employee-section,
+  .employee-photo-field,
+  .calendar-event-item,
+  .summary-box,
+  .item-row,
+  .item-extra-fields,
+  .cloud-backup-card,
+  .portal-renewal-alert,
+  .portal-renewal-empty,
+  .dashboard-search-panel
+) {
+  background:
+    linear-gradient(180deg, rgba(15, 24, 39, 0.96), rgba(8, 15, 27, 0.98)) !important;
+  border-color: rgba(91, 111, 145, 0.44) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 16px 34px rgba(0, 0, 0, 0.24) !important;
+  color: #edf4ff !important;
+}
+
+body[data-theme="dark"] :is(
+  #notificationsView,
+  #calendarView,
+  #documentsView,
+  #createView,
+  #invoicesView,
+  #quotationsView,
+  #projectsView,
+  #renewalsView,
+  #managerView,
+  #loginsView,
+  #usersView,
+  #financeView,
+  #clientsView,
+  #employeesView,
+  #servicesView,
+  #reportsView,
+  #settingsView
+) :is(h1, h2, h3, h4, strong, label, legend, td, .project-name-text, .project-value-cell strong, .pm-notification-copy strong) {
+  color: #f3f7ff !important;
+}
+
+body[data-theme="dark"] :is(
+  #notificationsView,
+  #calendarView,
+  #documentsView,
+  #createView,
+  #invoicesView,
+  #quotationsView,
+  #projectsView,
+  #renewalsView,
+  #managerView,
+  #loginsView,
+  #usersView,
+  #financeView,
+  #clientsView,
+  #employeesView,
+  #servicesView,
+  #reportsView,
+  #settingsView
+) :is(p, span, small, th, .muted-label, .project-meta-line, .project-value-cell span, .payment-track span, .payment-track small) {
+  color: #9fb0cc !important;
+}
+
+body[data-theme="dark"] :is(
+  #notificationsView,
+  #calendarView,
+  #documentsView,
+  #createView,
+  #invoicesView,
+  #quotationsView,
+  #projectsView,
+  #renewalsView,
+  #managerView,
+  #loginsView,
+  #usersView,
+  #financeView,
+  #clientsView,
+  #employeesView,
+  #servicesView,
+  #reportsView,
+  #settingsView
+) :is(input, textarea, select, .pm-inline-select, .table-money-field input) {
+  background: rgba(7, 14, 26, 0.9) !important;
+  border-color: rgba(91, 111, 145, 0.5) !important;
+  color: #edf4ff !important;
+  box-shadow: none !important;
+}
+
+body[data-theme="dark"] :is(
+  #notificationsView,
+  #calendarView,
+  #documentsView,
+  #createView,
+  #invoicesView,
+  #quotationsView,
+  #projectsView,
+  #renewalsView,
+  #managerView,
+  #loginsView,
+  #usersView,
+  #financeView,
+  #clientsView,
+  #employeesView,
+  #servicesView,
+  #reportsView,
+  #settingsView
+) :is(table, thead, tbody, tr, td) {
+  background: transparent !important;
+}
+
+body[data-theme="dark"] :is(
+  #notificationsView,
+  #calendarView,
+  #documentsView,
+  #createView,
+  #invoicesView,
+  #quotationsView,
+  #projectsView,
+  #renewalsView,
+  #managerView,
+  #loginsView,
+  #usersView,
+  #financeView,
+  #clientsView,
+  #employeesView,
+  #servicesView,
+  #reportsView,
+  #settingsView
+) th {
+  background: rgba(28, 40, 61, 0.92) !important;
+  border-color: rgba(91, 111, 145, 0.34) !important;
+  color: #aebbd2 !important;
+}
+
+body[data-theme="dark"] :is(
+  #notificationsView,
+  #calendarView,
+  #documentsView,
+  #createView,
+  #invoicesView,
+  #quotationsView,
+  #projectsView,
+  #renewalsView,
+  #managerView,
+  #loginsView,
+  #usersView,
+  #financeView,
+  #clientsView,
+  #employeesView,
+  #servicesView,
+  #reportsView,
+  #settingsView
+) td {
+  border-color: rgba(91, 111, 145, 0.28) !important;
+}
+
+body[data-theme="dark"] #managerView :is(.pm-calendar-day, .pm-calendar-weekday, .pm-calendar-day.is-empty, .pm-calendar-day.is-clickable:hover, .pm-calendar-reminder-item) {
+  background: rgba(17, 27, 43, 0.92) !important;
+  border-color: rgba(91, 111, 145, 0.34) !important;
+  color: #edf4ff !important;
+}
+
+body[data-theme="dark"] #projectsView :is(.project-row-featured, .project-row-paid, .project-table tbody tr:hover) {
+  background: rgba(34, 197, 94, 0.1) !important;
+}
+
+body[data-theme="dark"] #financeView :is(.finance-ring > div, .finance-view-switch, .finance-board-column-header) {
+  background: rgba(17, 27, 43, 0.96) !important;
+  border-color: rgba(91, 111, 145, 0.4) !important;
+}
+
+body[data-theme="dark"] #financeView :is(.finance-board-column, .finance-panel > .table-wrap) {
+  background: rgba(8, 15, 27, 0.94) !important;
+}
+
+body[data-theme="dark"] .invoice-list-heading .filters,
+body[data-theme="dark"] #invoicesView .invoice-list-heading .filters,
+body[data-theme="dark"] #financeView .invoice-list-heading .filters {
+  background: rgba(17, 27, 43, 0.86) !important;
+  border-color: rgba(91, 111, 145, 0.36) !important;
+}
+
+body[data-theme="dark"] .summary-box div:not(.grand-total),
+body[data-theme="dark"] .item-extra-fields summary,
+body[data-theme="dark"] .linked-project-pill,
+body[data-theme="dark"] .pm-platform-link,
+body[data-theme="dark"] .designer-tag {
+  background: rgba(24, 36, 58, 0.94) !important;
+  border-color: rgba(91, 111, 145, 0.36) !important;
+  color: #dbe7ff !important;
+}
+
+body[data-theme="dark"] .service-letter-paper,
+body[data-theme="dark"] .service-letter-paper *,
+body[data-theme="dark"] .invoice-paper,
+body[data-theme="dark"] .invoice-paper * {
+  background-color: revert;
+  color: revert;
+}
+
+body[data-theme="dark"] .service-letter-paper,
+body[data-theme="dark"] .invoice-paper {
+  background: #ffffff !important;
+  color: #172033 !important;
+}
+
+/* Dashboard dark mode polish: reference-style middle cards */
+body[data-theme="dark"] #dashboardView .dashboard-work-row :is(.dashboard-action-center, .dashboard-task-card, .dashboard-work-activity-card) {
+  background:
+    radial-gradient(circle at 0% 0%, rgba(43, 92, 167, 0.12), transparent 34%),
+    linear-gradient(180deg, rgba(16, 27, 45, 0.94), rgba(8, 16, 29, 0.98)) !important;
+  border-color: rgba(67, 88, 123, 0.72) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.045),
+    0 18px 42px rgba(0, 0, 0, 0.22) !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row :is(.action-center-heading .text-action, .dashboard-work-activity-card .compact-heading .text-action) {
+  background: rgba(25, 38, 60, 0.9) !important;
+  border: 1px solid rgba(70, 91, 126, 0.36) !important;
+  color: #dce8ff !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row :is(.action-center-filters button, .task-tabs button) {
+  background: rgba(25, 39, 63, 0.88) !important;
+  border: 1px solid rgba(70, 91, 126, 0.34) !important;
+  color: #c2cee4 !important;
+  box-shadow: none !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row :is(.action-center-filters button.is-active, .task-tabs button.is-active) {
+  background: linear-gradient(135deg, #3975ff, #2f63e9) !important;
+  border-color: rgba(92, 138, 255, 0.82) !important;
+  color: #ffffff !important;
+  box-shadow: 0 8px 18px rgba(47, 99, 233, 0.24) !important;
+}
+
+body[data-theme="dark"] #dashboardView .task-tabs {
+  padding: 4px !important;
+  background: rgba(10, 19, 33, 0.72) !important;
+  border: 1px solid rgba(70, 91, 126, 0.38) !important;
+  border-radius: 14px !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+body[data-theme="dark"] #dashboardView .task-progress {
+  height: 3px !important;
+  background: rgba(74, 94, 127, 0.62) !important;
+}
+
+body[data-theme="dark"] #dashboardView .task-progress span {
+  background: linear-gradient(90deg, #4ade80, #22c55e) !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row :is(.action-center-list .command-item, .task-row, .dashboard-work-activity-card .dashboard-activity-item) {
+  background: rgba(17, 30, 49, 0.78) !important;
+  border-color: rgba(77, 99, 135, 0.48) !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03) !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row .dashboard-work-activity-card .dashboard-activity-item {
+  border-radius: 0 !important;
+  border-width: 0 0 1px !important;
+  background: transparent !important;
+  padding: 10px 0 !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row .dashboard-work-activity-card .dashboard-activity-item:hover {
+  background: rgba(37, 99, 235, 0.06) !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row :is(.action-center-list .command-item strong, .task-row-main strong, .dashboard-work-activity-card .dashboard-activity-item strong) {
+  color: #f5f8ff !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row :is(.action-center-list .command-item p, .task-row-main p, .dashboard-work-activity-card .dashboard-activity-item span, .dashboard-work-activity-card .dashboard-activity-item small) {
+  color: #a9b8d0 !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row :is(.command-badge, .task-priority) {
+  background: rgba(237, 244, 255, 0.92) !important;
+  color: #6c7b98 !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row :is(.command-item.red .command-badge, .task-priority.high) {
+  color: #ef4444 !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row :is(.command-item.orange .command-badge, .task-priority.medium) {
+  color: #d97706 !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row .task-check {
+  background: #f8fbff !important;
+  border-color: #cbd7ea !important;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18) !important;
+}
+
+body[data-theme="dark"] #dashboardView .dashboard-work-row :is(.task-row .text-action, .command-item-side .text-action) {
+  background: rgba(24, 39, 64, 0.92) !important;
+  border: 1px solid rgba(70, 91, 126, 0.34) !important;
+  color: #4f83ff !important;
+}
+
+body[data-theme="dark"] #dashboardView .task-card-footer {
+  background: rgba(7, 14, 26, 0.72) !important;
+  border-top-color: rgba(67, 88, 123, 0.42) !important;
+}
+
+body[data-theme="dark"] #dashboardView :is(.action-center-list, .task-list, .dashboard-work-activity-card .activity-list)::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.44) !important;
+}
+
+body[data-theme="dark"] #dashboardView :is(.action-center-list, .task-list, .dashboard-work-activity-card .activity-list)::-webkit-scrollbar-track {
+  background: transparent !important;
+}
+
+/* Full dark-mode QA pass: readable labels, buttons, calendar, and preview */
+body[data-theme="dark"] :is(label, .field-label, legend, .muted-label, .system-note, .settings-help, .linked-project-month-label) {
+  color: #b8c7df !important;
+}
+
+body[data-theme="dark"] :is(label, .field-label, legend) :is(span, small) {
+  color: #9fb0cc !important;
+}
+
+body[data-theme="dark"] :is(input, textarea, select) {
+  background: #0b1526 !important;
+  border-color: #344766 !important;
+  color: #f4f8ff !important;
+  caret-color: #6ea2ff;
+}
+
+body[data-theme="dark"] :is(input, textarea)::placeholder {
+  color: #8394af !important;
+}
+
+body[data-theme="dark"] :is(input, textarea, select):focus {
+  border-color: #5d8dff !important;
+  box-shadow: 0 0 0 4px rgba(78, 131, 255, 0.18) !important;
+}
+
+body[data-theme="dark"] :is(.primary-action, .save-button, .report-download-button, button.primary-action) {
+  background: linear-gradient(135deg, #3d78ff, #265ee8) !important;
+  border-color: rgba(103, 148, 255, 0.78) !important;
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] :is(.secondary-action, .text-action, .icon-action, .icon-button, .modal-icon-button, .preview-icon-button, .preview-mode-button, .pagination-controls button, button.secondary-action) {
+  background: #142238 !important;
+  border: 1px solid #334762 !important;
+  color: #e7efff !important;
+  box-shadow: none !important;
+}
+
+body[data-theme="dark"] :is(.secondary-action, .text-action, .icon-action, .icon-button, .modal-icon-button, .preview-icon-button, .preview-mode-button, .pagination-controls button, button.secondary-action):hover {
+  background: #1c2f4d !important;
+  border-color: #4c668b !important;
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] :is(.preview-mode-button.is-active, .table-status-select, .project-status-select, .finance-status, .status) {
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] :is(.panel-heading, .compact-heading, .reports-card-heading, .notifications-header, .user-menu-details) {
+  border-color: rgba(87, 109, 143, 0.34) !important;
+}
+
+body[data-theme="dark"] #calendarView .pm-calendar-panel,
+body[data-theme="dark"] #managerView .pm-calendar-panel {
+  background:
+    radial-gradient(circle at 16% 0%, rgba(59, 130, 246, 0.13), transparent 30%),
+    linear-gradient(180deg, rgba(15, 25, 42, 0.98), rgba(8, 15, 27, 0.99)) !important;
+}
+
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-grid {
+  background: #07101d !important;
+  border-color: #2c3d59 !important;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.035) !important;
+}
+
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-weekday {
+  background: #132137 !important;
+  border-color: #2c3d59 !important;
+  color: #8fa2c2 !important;
+}
+
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-day {
+  background: #0d1a2c !important;
+  border-color: #253752 !important;
+}
+
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-day.is-empty {
+  background: #091423 !important;
+}
+
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-day.is-clickable:hover {
+  background: #14243b !important;
+}
+
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-date span {
+  color: #f2f6ff !important;
+}
+
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-date small {
+  min-width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 999px;
+  background: rgba(61, 120, 255, 0.18) !important;
+  color: #9ec0ff !important;
+  font-weight: 700;
+}
+
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-chip-list {
+  gap: 4px !important;
+}
+
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-chip-tag,
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-chip {
+  color: #ffffff !important;
+  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.18) !important;
+}
+
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-reminder-item,
+body[data-theme="dark"] .calendar-event-item {
+  background: #101f34 !important;
+  border-color: #31435f !important;
+  color: #dce8ff !important;
+}
+
+body[data-theme="dark"] :is(#calendarView, #managerView) .pm-calendar-reminder-item strong,
+body[data-theme="dark"] .calendar-event-item strong {
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] .calendar-event-modal-panel {
+  background: linear-gradient(180deg, #101b2e, #08111f) !important;
+  border-color: #334762 !important;
+}
+
+body[data-theme="dark"] .preview-viewport {
+  background:
+    linear-gradient(45deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%),
+    linear-gradient(-45deg, rgba(148, 163, 184, 0.08) 25%, transparent 25%),
+    #06101d !important;
+  background-size: 18px 18px !important;
+  border: 1px solid #243752 !important;
+}
+
+body[data-theme="dark"] .invoice-preview .invoice-paper,
+body[data-theme="dark"] #invoicePreview.invoice-paper,
+body[data-theme="dark"] #invoicePreview {
+  background: #0d1728 !important;
+  color: #eaf1ff !important;
+  border-color: #334762 !important;
+  box-shadow: 0 24px 54px rgba(0, 0, 0, 0.42) !important;
+}
+
+body[data-theme="dark"] .invoice-paper .invoice-header,
+body[data-theme="dark"] .invoice-paper .invoice-footer {
+  background: linear-gradient(135deg, #10245d, #081b44) !important;
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] .invoice-paper .invoice-body {
+  background: #0d1728 !important;
+  color: #dce8ff !important;
+}
+
+body[data-theme="dark"] .invoice-paper :is(.company-block h3, .details-card h3, .payment-card h3, .invoice-notes h3, .bill-to-block span, .bill-to-block strong, .item-title-preview, .customer-total strong, .customer-total span) {
+  color: #f4f8ff !important;
+}
+
+body[data-theme="dark"] .invoice-paper :is(.company-block p, .bill-to-block p, .invoice-notes p, .payment-card p, .details-card dt, .item-description-preview) {
+  color: #b8c7df !important;
+}
+
+body[data-theme="dark"] .invoice-paper :is(.details-card, .payment-card) {
+  background: #142238 !important;
+  border: 1px solid #31435f !important;
+  color: #eaf1ff !important;
+}
+
+body[data-theme="dark"] .invoice-paper .details-card dd {
+  color: #9ec0ff !important;
+}
+
+body[data-theme="dark"] .invoice-paper .bill-to-block {
+  border-left-color: #5d8dff !important;
+}
+
+body[data-theme="dark"] .invoice-paper .customer-table {
+  border-color: #31435f !important;
+  color: #dce8ff !important;
+}
+
+body[data-theme="dark"] .invoice-paper .customer-table th {
+  background: #132a63 !important;
+  color: #ffffff !important;
+}
+
+body[data-theme="dark"] .invoice-paper .customer-table td {
+  background: #0f1d31 !important;
+  border-color: #2b3e5b !important;
+  color: #dce8ff !important;
+}
+
+body[data-theme="dark"] .invoice-paper .customer-table tbody tr:nth-child(even) td,
+body[data-theme="dark"] .invoice-paper .customer-table tbody tr:first-child td {
+  background: #142238 !important;
+  color: #eaf1ff !important;
+}
+
+body[data-theme="dark"] .invoice-paper .grand-pill {
+  background: linear-gradient(135deg, #315dff, #173a9a) !important;
+  color: #ffffff !important;
+}
+
+/* Full dark-mode QA pass: login, preload, menus, and utility surfaces */
+body[data-theme="dark"] .app-preloader,
+body[data-theme="dark"] .login-screen {
+  background:
+    radial-gradient(circle at 0 0, rgba(37, 99, 235, 0.2), transparent 28%),
+    radial-gradient(circle at 100% 100%, rgba(255, 107, 44, 0.13), transparent 30%),
+    linear-gradient(135deg, #06101d 0%, #0a1424 52%, #101827 100%) !important;
+}
+
+body[data-theme="dark"] .preloader-card,
+body[data-theme="dark"] .login-card,
+body[data-theme="dark"] .trusted-login-panel {
+  background: rgba(12, 22, 37, 0.92) !important;
+  border-color: rgba(91, 111, 145, 0.44) !important;
+  color: #edf4ff !important;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.36) !important;
+}
+
+body[data-theme="dark"] .login-card :is(h1, h2, h3, strong, label, span),
+body[data-theme="dark"] .trusted-login-panel :is(h1, h2, h3, strong, label, span),
+body[data-theme="dark"] .preloader-card strong {
+  color: #f4f8ff !important;
+}
+
+body[data-theme="dark"] .login-card :is(p, small),
+body[data-theme="dark"] .trusted-login-panel :is(p, small),
+body[data-theme="dark"] .preloader-card span {
+  color: #a9b8d0 !important;
+}
+
+body[data-theme="dark"] .login-input-wrap,
+body[data-theme="dark"] .login-field input,
+body[data-theme="dark"] .trusted-login-panel input {
+  background: #0b1526 !important;
+  border-color: #344766 !important;
+  color: #f4f8ff !important;
+}
+
+body[data-theme="dark"] .login-input-wrap svg,
+body[data-theme="dark"] .login-password-toggle {
+  color: #9fb0cc !important;
+}
+
+body[data-theme="dark"] .preloader-bar {
+  background: #182942 !important;
+}
+
+body[data-theme="dark"] :is(.search-popup, .topbar-quick-actions-menu, .user-menu, .invoice-modal-panel, .admin-modal-panel, .employee-modal-panel, .finance-modal-panel, .pm-post-modal-panel, .documents-editor-modal-panel, .documents-preview-panel) {
+  background: linear-gradient(180deg, #101b2e, #08111f) !important;
+  border-color: #334762 !important;
+  color: #edf4ff !important;
+}
+
+body[data-theme="dark"] :is(.search-popup, .topbar-quick-actions-menu, .user-menu, .invoice-modal-panel, .admin-modal-panel, .employee-modal-panel, .finance-modal-panel, .pm-post-modal-panel, .documents-editor-modal-panel, .documents-preview-panel) :is(h1, h2, h3, h4, strong, label) {
+  color: #f4f8ff !important;
+}
+
+body[data-theme="dark"] :is(.search-popup, .topbar-quick-actions-menu, .user-menu, .invoice-modal-panel, .admin-modal-panel, .employee-modal-panel, .finance-modal-panel, .pm-post-modal-panel, .documents-editor-modal-panel, .documents-preview-panel) :is(p, span, small) {
+  color: #a9b8d0 !important;
+}
+
+body[data-theme="dark"] :is(.empty, .task-empty, .command-empty, .empty-activity) {
+  background: rgba(17, 30, 49, 0.72) !important;
+  border-color: rgba(91, 111, 145, 0.34) !important;
+  color: #9fb0cc !important;
+}
+
+body[data-theme="dark"] :is(.client-count-badge, .badge, .chip, .portal-renewal-badge, .finance-board-card-meta) {
+  background: rgba(61, 120, 255, 0.16) !important;
+  border-color: rgba(93, 141, 255, 0.34) !important;
+  color: #bcd2ff !important;
 }

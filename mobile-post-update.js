@@ -160,13 +160,13 @@
   }
 
   async function loadRenewals() {
-    const res = await fetch(api("renewals?select=expiry_date,payload,status"), { headers: headers() });
+    const res = await fetch(api("renewals?select=payload,status"), { headers: headers() });
     if (!res.ok) return;
     const rows = await res.json();
     const todayValue = today();
     rows.forEach((row) => {
       const payload = row && row.payload && typeof row.payload === "object" ? row.payload : {};
-      const date = normalizeDate(payload.expiryDate || row.expiry_date);
+      const date = normalizeDate(payload.expiryDate || payload.date || payload.renewalDate);
       if (!date) return;
       if (date < todayValue) return;
       const status = String(payload.status || row.status || "").toLowerCase();
