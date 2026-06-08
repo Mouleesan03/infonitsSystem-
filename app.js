@@ -5103,7 +5103,7 @@ function renderDashboard() {
             <tr>
               <td class="row-number-cell">${start + index + 1}</td>
               <td><button class="text-action" type="button" data-select="${invoice.id}">${invoice.invoiceNumber}</button></td>
-              <td>${escapeHtml(invoice.customerName)}</td>
+              <td>${escapeHtml(invoice.customerName || "Customer")}</td>
               <td>${formatDate(invoice.invoiceDate)}</td>
               <td>${formatDate(invoice.dueDate)}</td>
               <td>${invoiceStatusSelect(invoice)}</td>

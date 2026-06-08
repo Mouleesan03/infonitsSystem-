@@ -2128,8 +2128,8 @@ h2 {
 }
 
 
-#dashboardView .dashboard-table-card th:nth-child(3),
-#dashboardView .dashboard-table-card td:nth-child(3) {
+#dashboardView .dashboard-table-card th:nth-child(5),
+#dashboardView .dashboard-table-card td:nth-child(5) {
   display: none !important;
 }
 
@@ -2143,11 +2143,14 @@ h2 {
   width: 18%;
 }
 
+#dashboardView .dashboard-table-card th:nth-child(3),
+#dashboardView .dashboard-table-card td:nth-child(3) {
+  width: 20%;
+}
+
 #dashboardView .dashboard-table-card th:nth-child(4),
-#dashboardView .dashboard-table-card td:nth-child(4),
-#dashboardView .dashboard-table-card th:nth-child(5),
-#dashboardView .dashboard-table-card td:nth-child(5) {
-  width: 17%;
+#dashboardView .dashboard-table-card td:nth-child(4) {
+  width: 14%;
 }
 
 #dashboardView .dashboard-table-card th:nth-child(6),
