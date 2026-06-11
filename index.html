@@ -676,6 +676,9 @@
               <div class="project-month-settings">
                 <div class="project-filter-strip">
                   <input id="projectSearchInput" placeholder="Search projects" />
+                  <select id="projectClientFilter">
+                    <option value="All">All clients</option>
+                  </select>
                   <input id="projectMonthFilter" type="month" />
                   <select id="projectStatusFilter">
                     <option value="All">All statuses</option>
@@ -1199,8 +1202,8 @@
                   <span>+ Add record</span>
                 </button>
                 <div class="finance-view-switch" role="tablist" aria-label="Finance view">
-                  <button class="is-active" id="financeBoardViewButton" type="button" data-finance-view-mode="board">Board</button>
-                  <button id="financeTableViewButton" type="button" data-finance-view-mode="table">Table</button>
+                  <button id="financeBoardViewButton" type="button" data-finance-view-mode="board">Board</button>
+                  <button class="is-active" id="financeTableViewButton" type="button" data-finance-view-mode="table">Table</button>
                 </div>
               </div>
             </div>
@@ -1250,11 +1253,11 @@
               </article>
             </div>
 
-            <section class="finance-board-panel" id="financeBoardPanel" aria-label="Finance control board">
+            <section class="finance-board-panel is-hidden" id="financeBoardPanel" aria-label="Finance control board">
               <div class="finance-board-grid" id="financeBoardGrid"></div>
             </section>
 
-            <div class="table-wrap finance-table-wrap is-hidden" id="financeTablePanel">
+            <div class="table-wrap finance-table-wrap" id="financeTablePanel">
               <table>
                 <thead>
                   <tr>
@@ -1271,7 +1274,7 @@
                 <tbody id="financeTable"></tbody>
               </table>
             </div>
-            <div class="pagination-controls is-hidden" id="financeTablePagination">
+            <div class="pagination-controls" id="financeTablePagination">
               <button class="secondary-action" id="financePrevPage" type="button" aria-label="Previous page">‹</button>
               <span id="financePageLabel">Page 1 of 1</span>
               <button class="secondary-action" id="financeNextPage" type="button" aria-label="Next page">›</button>

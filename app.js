@@ -21,6 +21,7 @@ const MONTHLY_POST_REPORTS_KEY = "infonits.monthlyPostReports";
 const CALENDAR_EVENTS_KEY = "infonits.calendarEvents";
 const DASHBOARD_TASKS_KEY = "infonits.dashboardTasks";
 const DASHBOARD_TASK_DONE_KEY = "infonits.dashboardTaskDone";
+const DASHBOARD_TASK_CLEARED_KEY = "infonits.dashboardTaskCleared";
 const CLOUD_BACKUP_KEY = "infonits.cloudBackup";
 const SIDEBAR_COLLAPSED_KEY = "infonits.sidebarCollapsed";
 const ACTIVE_VIEW_KEY = "infonits.activeView";
@@ -35,6 +36,7 @@ const MONTH_FILTER_KEYS = {
 };
 const FINANCE_PAGE_SIZE = 7;
 const RECENT_INVOICE_PAGE_SIZE = 6;
+const RECENT_PAID_INVOICE_DAYS = 25;
 const CLIENT_PAGE_SIZE = 10;
 const INVOICE_PAGE_SIZE = 10;
 const PM_PROJECT_PAGE_SIZE = 6;
@@ -150,7 +152,7 @@ let previewFitMode = "page";
 let previewHidden = true;
 let projectFormVisible = false;
 let financePage = 1;
-let financeViewMode = "board";
+let financeViewMode = "table";
 let recentInvoicesPage = 1;
 let dashboardInvoiceFilter = "All";
 let dashboardActionFilter = "All";
@@ -158,6 +160,7 @@ let dashboardTaskFilter = "All";
 let dashboardTaskComposerOpen = false;
 let dashboardTasks = loadDashboardTasks();
 let dashboardTaskDone = loadDashboardTaskDone();
+let dashboardTaskCleared = loadDashboardTaskCleared();
 let invoiceProjectSyncLock = false;
 let clientPage = 1;
 let invoicePage = 1;
@@ -292,6 +295,7 @@ const quotationStatusFilter = document.getElementById("quotationStatusFilter");
 const invoiceMonthFilter = document.getElementById("invoiceMonthFilter");
 const quotationMonthFilter = document.getElementById("quotationMonthFilter");
 const projectSearchInput = document.getElementById("projectSearchInput");
+const projectClientFilter = document.getElementById("projectClientFilter");
 const projectMonthFilter = document.getElementById("projectMonthFilter");
 const projectStatusFilter = document.getElementById("projectStatusFilter");
 const projectUsdRate = document.getElementById("projectUsdRate");
@@ -936,6 +940,20 @@ function saveDashboardTaskDone() {
   syncCollectionToSupabase("dashboardTaskDone");
 }
 
+function loadDashboardTaskCleared() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DASHBOARD_TASK_CLEARED_KEY) || "[]");
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveDashboardTaskCleared() {
+  localStorage.setItem(DASHBOARD_TASK_CLEARED_KEY, JSON.stringify([...dashboardTaskCleared]));
+  syncCollectionToSupabase("dashboardTaskCleared");
+}
+
 function loadServiceLetterRecords() {
   return [];
 }
@@ -963,6 +981,7 @@ function refreshStateFromStorage() {
   calendarEvents = loadCalendarEvents();
   dashboardTasks = loadDashboardTasks();
   dashboardTaskDone = loadDashboardTaskDone();
+  dashboardTaskCleared = loadDashboardTaskCleared();
   serviceLetterRecords = loadServiceLetterRecords();
   settings = loadSettings();
   normalizeLoadedState();
@@ -1096,6 +1115,7 @@ function normalizeLoadedState() {
     createdAt: task.createdAt || new Date().toISOString(),
   }));
   dashboardTaskDone = normalizeStringSet(dashboardTaskDone);
+  dashboardTaskCleared = normalizeStringSet(dashboardTaskCleared);
   projectTargets = normalizeObject(projectTargets);
   clientColors = normalizeObject(clientColors);
 }
@@ -1751,6 +1771,12 @@ const supabaseAppDataCollections = {
       dashboardTaskDone = normalizeStringSet(value);
     },
   },
+  dashboardTaskCleared: {
+    get: () => [...dashboardTaskCleared],
+    set: (value) => {
+      dashboardTaskCleared = normalizeStringSet(value);
+    },
+  },
   serviceLetterRecords: {
     get: () => serviceLetterRecords,
     set: (value) => {
@@ -2124,6 +2150,7 @@ function removeOldLocalData() {
     CALENDAR_EVENTS_KEY,
     DASHBOARD_TASKS_KEY,
     DASHBOARD_TASK_DONE_KEY,
+    DASHBOARD_TASK_CLEARED_KEY,
     SERVICE_LETTER_RECORDS_KEY,
     CLOUD_BACKUP_KEY,
   ].forEach((key) => localStorage.removeItem(key));
@@ -2145,6 +2172,7 @@ function oldLocalDataExists() {
     CALENDAR_EVENTS_KEY,
     DASHBOARD_TASKS_KEY,
     DASHBOARD_TASK_DONE_KEY,
+    DASHBOARD_TASK_CLEARED_KEY,
     SERVICE_LETTER_RECORDS_KEY,
     SETTINGS_KEY,
   ].some((key) => localStorage.getItem(key) !== null);
@@ -2171,6 +2199,7 @@ async function migrateOldLocalDataToSupabase() {
     calendarEvents: readOldLocalJson(CALENDAR_EVENTS_KEY, []),
     dashboardTasks: readOldLocalJson(DASHBOARD_TASKS_KEY, []),
     dashboardTaskDone: readOldLocalJson(DASHBOARD_TASK_DONE_KEY, []),
+    dashboardTaskCleared: readOldLocalJson(DASHBOARD_TASK_CLEARED_KEY, []),
     settings: readOldLocalJson(SETTINGS_KEY, {}),
   };
   let moved = false;
@@ -2192,6 +2221,7 @@ async function migrateOldLocalDataToSupabase() {
   if (!calendarEvents.length && oldData.calendarEvents.length) { calendarEvents = oldData.calendarEvents; moved = true; }
   if (!dashboardTasks.length && oldData.dashboardTasks.length) { dashboardTasks = oldData.dashboardTasks; moved = true; }
   if (!dashboardTaskDone.size && oldData.dashboardTaskDone.length) { dashboardTaskDone = normalizeStringSet(oldData.dashboardTaskDone); moved = true; }
+  if (!dashboardTaskCleared.size && oldData.dashboardTaskCleared.length) { dashboardTaskCleared = normalizeStringSet(oldData.dashboardTaskCleared); moved = true; }
   if (Object.keys(oldData.settings).length) { settings = { ...defaultSettings, ...settings, ...oldData.settings }; moved = true; }
   removeOldLocalData();
   if (!moved) return false;
@@ -3279,6 +3309,19 @@ function isWithinLastDays(dateString, days) {
 
 function invoiceRecentDate(invoice) {
   return invoice?.invoiceDate || "";
+}
+
+function dashboardInvoiceStatusRank(invoice) {
+  const status = String(invoice?.status || "Unpaid");
+  if (status === "Overdue") return 0;
+  if (status === "Sent") return 1;
+  if (status === "Paid") return 2;
+  return 3;
+}
+
+function shouldShowRecentDashboardInvoice(invoice) {
+  if (String(invoice?.status || "") !== "Paid") return true;
+  return isWithinLastDays(invoiceRecentDate(invoice), RECENT_PAID_INVOICE_DAYS);
 }
 
 function switchView(viewName) {
@@ -4789,6 +4832,9 @@ function createBackupPackage() {
       pmNotifications,
       monthlyPostReports,
       calendarEvents,
+      dashboardTasks,
+      dashboardTaskDone: [...dashboardTaskDone],
+      dashboardTaskCleared: [...dashboardTaskCleared],
       serviceLetterRecords,
       clientColors,
       settings,
@@ -4817,6 +4863,9 @@ async function applyBackupData(backup) {
   pmNotifications = data.pmNotifications || [];
   monthlyPostReports = data.monthlyPostReports || [];
   calendarEvents = data.calendarEvents || [];
+  dashboardTasks = data.dashboardTasks || [];
+  dashboardTaskDone = normalizeStringSet(data.dashboardTaskDone);
+  dashboardTaskCleared = normalizeStringSet(data.dashboardTaskCleared);
   serviceLetterRecords = data.serviceLetterRecords || [];
   clientColors = data.clientColors && typeof data.clientColors === "object" && !Array.isArray(data.clientColors) ? data.clientColors : {};
   settings = { ...defaultSettings, ...(data.settings || {}) };
@@ -5089,8 +5138,9 @@ function renderDashboard() {
 
   const table = document.getElementById("recentInvoicesTable");
   const recent = [...invoiceDocs]
+    .filter(shouldShowRecentDashboardInvoice)
     .filter((invoice) => dashboardInvoiceFilter === "All" || invoice.status === dashboardInvoiceFilter)
-    .sort((a, b) => String(invoiceRecentDate(b)).localeCompare(String(invoiceRecentDate(a))));
+    .sort((a, b) => dashboardInvoiceStatusRank(a) - dashboardInvoiceStatusRank(b) || String(invoiceRecentDate(b)).localeCompare(String(invoiceRecentDate(a))));
   const totalPages = Math.max(1, Math.ceil(recent.length / RECENT_INVOICE_PAGE_SIZE));
   recentInvoicesPage = Math.min(recentInvoicesPage, totalPages);
   const start = (recentInvoicesPage - 1) * RECENT_INVOICE_PAGE_SIZE;
@@ -5118,7 +5168,7 @@ function renderDashboard() {
           `;
         })
         .join("")
-    : emptyRow("No invoices in last 20 days or overdue", 8);
+    : emptyRow("No recent invoices", 8);
   document.getElementById("recentInvoicesPrevPage").disabled = recentInvoicesPage <= 1;
   document.getElementById("recentInvoicesNextPage").disabled = recentInvoicesPage >= totalPages;
   document.getElementById("recentInvoicesPageLabel").textContent = `Page ${recentInvoicesPage} of ${totalPages}`;
@@ -5284,7 +5334,7 @@ function renderDashboardTasks(overdueAllMonths, currentMonth) {
   const tasks = orderDashboardActions(autoDashboardTasks(overdueAllMonths, currentMonth).map((task) => ({
     ...task,
     actionType: task.id.startsWith("invoice-") ? "overdue" : task.id.startsWith("project-") ? "waiting" : "renewal",
-  }))).concat(manualTasks);
+  }))).filter((task) => !dashboardTaskCleared.has(task.id)).concat(manualTasks);
   const decoratedTasks = tasks.map((task) => ({ ...task, completed: dashboardTaskDone.has(task.id) || Boolean(task.completed) }));
   const activeCount = decoratedTasks.filter((task) => !task.completed).length;
   const doneCount = decoratedTasks.length - activeCount;
@@ -8154,18 +8204,22 @@ function renderWebsiteLogins() {
 function renderProjects() {
   const query = projectSearchInput.value.trim().toLowerCase();
   const month = projectMonthFilter.value;
+  const clientFilter = projectClientFilter?.value || "All";
   const status = projectStatusFilter.value;
   updateProjectMonthFields();
   const monthProjects = projectsForMonth(month);
+  populateProjectClientFilter(monthProjects, clientFilter);
   const filtered = monthProjects.filter((project) => {
     const haystack = `${project.name} ${project.clientName || ""} ${project.note} ${project.worker}`.toLowerCase();
+    const projectClient = project.clientName || project.name || "";
     const isRecurring = String(project.repeat || "no") === "monthly";
     const matchesStatus =
       status === "All" ||
       project.paymentStatus === status ||
       (status === "Recurring" && isRecurring) ||
       (status === "Non-recurring" && !isRecurring);
-    return matchesStatus && haystack.includes(query);
+    const matchesClient = clientFilter === "All" || projectClient === clientFilter;
+    return matchesClient && matchesStatus && haystack.includes(query);
   });
   const sortedFiltered = [...filtered].sort((a, b) => {
     const aPaid = isProjectFullyPaid(a) ? 1 : 0;
@@ -8264,6 +8318,17 @@ function renderProjects() {
     projectFooterMeta.textContent = `${formatNumber(filtered.length)} projects · ${monthLabel} · ${formatNumber(pendingCount)} pending`;
   }
   renderProjectSummary(monthProjectValue, monthProjectProfit, monthOutstanding, pendingCount);
+}
+
+function populateProjectClientFilter(sourceProjects = [], selected = "All") {
+  if (!projectClientFilter) return;
+  const clientNames = [...new Set(sourceProjects.map((project) => project.clientName || project.name).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
+  const nextSelected = selected !== "All" && clientNames.includes(selected) ? selected : "All";
+  projectClientFilter.innerHTML = [`<option value="All">All clients</option>`]
+    .concat(clientNames.map((name) => `<option value="${escapeAttribute(name)}">${escapeHtml(name)}</option>`))
+    .join("");
+  projectClientFilter.value = nextSelected;
 }
 
 function projectClientInitials(project) {
@@ -11582,6 +11647,7 @@ quotationMonthFilter.addEventListener("change", () => {
   renderQuotationTable();
 });
 projectSearchInput.addEventListener("input", renderProjects);
+projectClientFilter?.addEventListener("change", renderProjects);
 projectMonthFilter.addEventListener("change", () => {
   saveMonthFilterPreference(MONTH_FILTER_KEYS.project, projectMonthFilter.value);
   updateProjectMonthFields();
@@ -11658,7 +11724,7 @@ financeMonthFilter.addEventListener("change", () => {
 });
 document.querySelectorAll("[data-finance-view-mode]").forEach((button) => {
   button.addEventListener("click", () => {
-    financeViewMode = button.dataset.financeViewMode || "board";
+    financeViewMode = button.dataset.financeViewMode || "table";
     renderFinanceViewMode();
   });
 });
@@ -12475,22 +12541,27 @@ document.body.addEventListener("click", (event) => {
     const taskId = dashboardTaskToggleButton.dataset.dashboardTaskToggle;
     if (dashboardTaskDone.has(taskId)) {
       dashboardTaskDone.delete(taskId);
+      dashboardTaskCleared.delete(taskId);
     } else {
       dashboardTaskDone.add(taskId);
     }
     saveDashboardTaskDone();
+    saveDashboardTaskCleared();
     renderDashboard();
   }
   if (dashboardTaskClearButton) {
-    dashboardTasks = dashboardTasks.filter((task) => !dashboardTaskDone.has(task.id));
-    dashboardTaskDone = new Set([...dashboardTaskDone].filter((id) => !id.startsWith("manual-")));
+    dashboardTasks = dashboardTasks.filter((task) => !dashboardTaskDone.has(task.id) && !task.completed);
+    dashboardTaskCleared = new Set([...dashboardTaskCleared, ...dashboardTaskDone].filter((id) => !id.startsWith("manual-")));
+    dashboardTaskDone = new Set([...dashboardTaskDone].filter((id) => !id.startsWith("manual-") && !dashboardTaskCleared.has(id)));
+    dashboardTaskFilter = "All";
     saveDashboardTasks();
     saveDashboardTaskDone();
+    saveDashboardTaskCleared();
     renderDashboard();
   }
   if (viewTargetButton) switchView(viewTargetButton.dataset.viewTarget);
   if (financeViewModeButton) {
-    financeViewMode = financeViewModeButton.dataset.financeViewMode || "board";
+    financeViewMode = financeViewModeButton.dataset.financeViewMode || "table";
     renderFinanceViewMode();
   }
   if (financeTogglePaidButton) {

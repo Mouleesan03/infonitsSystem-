@@ -6223,10 +6223,11 @@ textarea {
 
 .project-month-bar {
   display: grid;
-  grid-template-columns: minmax(520px, 1fr) minmax(560px, 0.82fr);
+  grid-template-columns: minmax(420px, 0.88fr) minmax(0, 1.12fr);
   gap: 10px;
   align-items: stretch;
   margin-bottom: 0;
+  min-width: 0;
 }
 
 #projectsView .invoice-list-heading {
@@ -6255,20 +6256,23 @@ textarea {
   background: #ffffff;
   padding: 8px;
   box-shadow: 0 14px 30px rgba(15, 23, 42, 0.06);
+  min-width: 0;
 }
 
 .project-summary-cards {
   display: grid;
-  grid-template-columns: repeat(3, minmax(170px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+  min-width: 0;
 }
 
 .project-summary-card {
   border: 1px solid #e5e7eb;
   border-radius: 12px;
   background: #ffffff;
-  min-height: 86px;
-  padding: 12px 14px;
+  min-width: 0;
+  min-height: 82px;
+  padding: 11px 12px;
   box-shadow: none;
   border-top: 3px solid #3b82f6;
 }
@@ -6294,8 +6298,11 @@ textarea {
   display: block;
   margin-top: 4px;
   color: #172033;
-  font-size: clamp(1rem, 1.3vw, 1.3rem);
+  font-size: clamp(0.95rem, 1.15vw, 1.18rem);
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-summary-card small {
@@ -6324,6 +6331,7 @@ textarea {
 .project-action-strip {
   display: grid;
   gap: 8px;
+  min-width: 0;
 }
 
 .project-filter-strip {
@@ -6385,11 +6393,11 @@ textarea {
 }
 
 #projectsView .project-filter-strip {
-  grid-template-columns: minmax(190px, 1.1fr) minmax(150px, 0.55fr) minmax(150px, 0.58fr);
+  grid-template-columns: minmax(0, 1fr) minmax(118px, 0.72fr) minmax(126px, 0.55fr) minmax(128px, 0.58fr);
 }
 
 #projectsView .project-action-strip {
-  grid-template-columns: minmax(90px, 0.3fr) minmax(108px, 0.34fr) minmax(96px, 0.28fr) minmax(92px, 0.27fr) minmax(130px, 0.42fr);
+  grid-template-columns: minmax(78px, 0.3fr) minmax(96px, 0.34fr) minmax(84px, 0.28fr) minmax(82px, 0.27fr) minmax(112px, 0.42fr);
 }
 
 #projectsView .project-filter-strip input,
@@ -6409,6 +6417,7 @@ textarea {
   border: 1px solid #c8d3e5;
   background: #ffffff;
   color: #1e293b;
+  min-width: 0;
 }
 
 #projectsView #projectSearchInput::placeholder,
@@ -9408,7 +9417,9 @@ textarea {
   }
 
   .project-filter-strip,
-  .project-action-strip {
+  .project-action-strip,
+  #projectsView .project-filter-strip,
+  #projectsView .project-action-strip {
     grid-template-columns: 1fr;
   }
 
@@ -10000,6 +10011,8 @@ textarea {
   .filters,
   .project-filter-strip,
   .project-action-strip,
+  #projectsView .project-filter-strip,
+  #projectsView .project-action-strip,
   .backup-actions {
     width: 100%;
     display: grid;
