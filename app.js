@@ -10614,10 +10614,10 @@ function resetServiceLetterForm() {
   renderServiceLetterPreview();
 }
 
-function renderServiceLetterPreview() {
+function renderServiceLetterPreview(dataOverride = null) {
   const container = document.getElementById("serviceLetterPreview");
   if (!container) return;
-  const data = getServiceLetterData();
+  const data = dataOverride || getServiceLetterData();
   const formattedDate = new Date(`${data.date || today()}T00:00:00`).toLocaleDateString("en-US", {
     day: "2-digit",
     month: "short",
@@ -10716,7 +10716,7 @@ function drawContainImage(ctx, image, x, y, boxWidth, boxHeight) {
 }
 
 async function createServiceLetterCanvas(data) {
-  renderServiceLetterPreview();
+  renderServiceLetterPreview(data);
   const letterElement = document.querySelector("#serviceLetterPreview .service-letter-paper");
   if (!letterElement) throw new Error("Letter preview not found");
   const targetWidth = 1240;
@@ -10918,8 +10918,8 @@ async function createServiceLetterCanvasDirect(data) {
   return canvas;
 }
 
-async function renderDisplayedServiceLetterCanvas() {
-  renderServiceLetterPreview();
+async function renderDisplayedServiceLetterCanvas(data = null) {
+  renderServiceLetterPreview(data);
   const letterElement = document.querySelector("#serviceLetterPreview .service-letter-paper");
   if (!letterElement) throw new Error("Service letter preview not found");
   const rect = letterElement.getBoundingClientRect();
@@ -10997,8 +10997,8 @@ async function getServiceLetterCanvas(data) {
   try {
     return await renderDisplayedServiceLetterCanvas(data);
   } catch (error) {
-    console.warn("Preview service letter canvas failed, trying direct renderer", error);
-    return createServiceLetterCanvasDirect(data);
+    console.warn("Displayed service letter canvas failed, trying fixed preview renderer", error);
+    return createServiceLetterCanvas(data);
   }
 }
 
