@@ -3939,11 +3939,33 @@ h2 {
 }
 
 .service-letter-preview {
+  display: grid;
+  justify-items: center;
+  align-items: start;
   background: #eef2f7;
   border: 1px solid #dde5ef;
   border-radius: 12px;
   padding: 10px;
+  max-height: min(72vh, 720px);
   overflow: auto;
+}
+
+.service-letter-canvas-preview {
+  display: block;
+  width: min(100%, 430px);
+  max-width: 430px;
+  height: auto;
+  margin: 0 auto;
+  background: #ffffff;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.14);
+}
+
+.service-letter-preview-loading {
+  min-height: 180px;
+  display: grid;
+  place-items: center;
+  color: #64748b;
+  font-weight: 700;
 }
 
 .service-letter-download-link {
@@ -3981,6 +4003,39 @@ h2 {
 
 .service-letter-logo-wrap {
   min-width: 210px;
+}
+
+.service-letter-brand-logo {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  color: #0f3b73;
+}
+
+.service-letter-logo-dots {
+  display: grid;
+  grid-template-columns: repeat(3, 16px);
+  gap: 8px;
+}
+
+.service-letter-logo-dots i {
+  display: block;
+  width: 16px;
+  height: 16px;
+  border-radius: 6px;
+  background: #0f3b73;
+}
+
+.service-letter-logo-dots i:nth-child(2) {
+  background: #ff6b2c;
+}
+
+.service-letter-brand-logo strong {
+  color: #0f3b73;
+  font-size: 3.9rem;
+  line-height: 0.9;
+  font-weight: 800;
+  letter-spacing: 0;
 }
 
 .service-letter-logo-image {

@@ -10631,6 +10631,8 @@ async function renderServiceLetterPreview(dataOverride = null) {
     const canvas = await createServiceLetterCanvasDirect(normalizeServiceLetterData(data));
     if (renderId !== serviceLetterPreviewRenderId) return;
     canvas.className = "service-letter-canvas-preview";
+    canvas.style.width = "min(100%, 430px)";
+    canvas.style.height = "auto";
     container.replaceChildren(canvas);
   } catch (error) {
     console.error("Service letter preview failed", error);
