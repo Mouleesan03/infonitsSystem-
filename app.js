@@ -46,7 +46,7 @@ const WEBSITE_LOGIN_PAGE_SIZE = 8;
 const PM_WEEKLY_POST_TARGET = 3;
 const PM_MONTHLY_POST_TARGET = PM_WEEKLY_POST_TARGET * 4;
 const MAX_IMAGE_UPLOAD_SIZE = 2 * 1024 * 1024;
-const SERVICE_LETTER_LOGO_PATH = "assets/infonits-logo.jpg";
+const SERVICE_LETTER_LOGO_PATH = "assets/infonits-logo-dark.png";
 const NOTIFICATION_RESTART_DATE = "2026-05-08";
 const IDLE_LOGOUT_MS = 10 * 60 * 1000;
 const PASSWORD_MIN_LENGTH = 8;
@@ -10441,11 +10441,9 @@ async function buildServiceLetterPdf() {
       preparingButton.disabled = true;
       preparingButton.textContent = "Building PDF...";
     }
-    const canvas = await getServiceLetterCanvas(data);
-    const pdf = buildImagePdf(canvas.toDataURL("image/jpeg", 0.98), canvas.width, canvas.height);
-    const filename = `service-letter-${safeFilename(data.clientName || "client").toLowerCase()}-${data.date || today()}.pdf`;
+    const { pdf, filename } = await createServiceLetterPdfFile(data);
     setServiceLetterReadyPdf(pdf, filename);
-    showToast("PDF ready. Click Open ready PDF.");
+    showToast("PDF ready");
     return true;
   } catch (error) {
     console.error("Service letter PDF build failed", error);
@@ -10457,6 +10455,22 @@ async function buildServiceLetterPdf() {
       preparingButton.textContent = originalButtonText;
     }
   }
+}
+
+async function createServiceLetterPdfFile(data) {
+  const safeData = {
+    ...data,
+    date: data.date || today(),
+    clientName: data.clientName || "Client",
+    subject: data.subject || "Service Letter",
+    body: data.body || defaultServiceLetterBody(data.clientName || "Client"),
+    preparedBy: data.preparedBy || activeUserName?.textContent || "Admin",
+    designation: data.designation || "Project Manager",
+  };
+  const canvas = await getServiceLetterCanvas(safeData);
+  const pdf = buildImagePdf(canvas.toDataURL("image/jpeg", 0.98), canvas.width, canvas.height);
+  const filename = `service-letter-${safeFilename(safeData.clientName || "client").toLowerCase()}-${safeData.date || today()}.pdf`;
+  return { pdf, filename };
 }
 
 function defaultServiceLetterBody(clientName = "") {
@@ -10577,6 +10591,7 @@ function renderServiceLetterRecords() {
         <td>
           <div class="action-row icon-actions">
             <button class="icon-action edit" type="button" title="Edit" data-service-letter-edit="${record.id}">${iconEdit()}</button>
+            <button class="icon-action invoice" type="button" title="Download PDF" data-service-letter-download="${record.id}">${iconInvoice()}</button>
             <button class="icon-action delete" type="button" title="Delete" data-service-letter-delete="${record.id}">${iconDelete()}</button>
           </div>
         </td>
@@ -10661,6 +10676,15 @@ function resolveServiceLetterLogoSrc() {
   if (SERVICE_LETTER_LOGO_PATH) return new URL(SERVICE_LETTER_LOGO_PATH, window.location.href).href;
   if (settings.logoDataUrl) return settings.logoDataUrl;
   return defaultSettings.logoDataUrl || "";
+}
+
+function safeServiceLetterCanvasLogoSrc() {
+  const logo = settings.logoDataUrl || "";
+  if (logo.startsWith("data:")) return logo;
+  if (SERVICE_LETTER_LOGO_PATH && window.location.protocol !== "file:") {
+    return new URL(SERVICE_LETTER_LOGO_PATH, window.location.href).href;
+  }
+  return "";
 }
 
 function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
@@ -10804,7 +10828,8 @@ async function createServiceLetterCanvasDirect(data) {
     drawText("infonits", logoX + markWidth + 12, logoY + 34, 38, navy, 700);
   };
 
-  const logoImage = await loadImage(resolveServiceLetterLogoSrc()).catch(() => null);
+  const safeLogoSrc = safeServiceLetterCanvasLogoSrc();
+  const logoImage = safeLogoSrc ? await loadImage(safeLogoSrc).catch(() => null) : null;
   if (logoImage) {
     drawContainImage(ctx, logoImage, 44, 24, 210, 54);
   } else {
@@ -10952,18 +10977,11 @@ async function downloadServiceLetterPdf() {
       preparingButton.disabled = true;
       preparingButton.textContent = "Preparing PDF...";
     }
-    if (!serviceLetterReadyPdf) {
-      const built = await buildServiceLetterPdf();
-      if (!built) {
-        return;
-      }
-    }
-    if (!serviceLetterReadyPdf?.blob) {
-      showToast("PDF not ready. Click Build PDF first.");
-      return;
-    }
-    saveBlob(serviceLetterReadyPdf.blob, serviceLetterReadyPdf.filename, "application/pdf");
-    showToast(`${serviceLetterReadyPdf.filename} downloaded`);
+    const rawData = getServiceLetterData();
+    const { pdf, filename } = await createServiceLetterPdfFile(rawData);
+    setServiceLetterReadyPdf(pdf, filename);
+    saveBlob(pdf, filename, "application/pdf");
+    showToast(`${filename} downloaded`);
   } catch (error) {
     console.error("Service letter PDF download failed", error);
     showToast("Service letter PDF download failed");
@@ -10976,7 +10994,26 @@ async function downloadServiceLetterPdf() {
 }
 
 async function getServiceLetterCanvas(data) {
-  return renderDisplayedServiceLetterCanvas(data);
+  try {
+    return await renderDisplayedServiceLetterCanvas(data);
+  } catch (error) {
+    console.warn("Preview service letter canvas failed, trying direct renderer", error);
+    return createServiceLetterCanvasDirect(data);
+  }
+}
+
+async function downloadSavedServiceLetterPdf(id) {
+  const record = serviceLetterRecords.find((item) => item.id === id);
+  if (!record) return;
+  try {
+    showToast("Preparing PDF...");
+    const { pdf, filename } = await createServiceLetterPdfFile(record);
+    saveBlob(pdf, filename, "application/pdf");
+    showToast(`${filename} downloaded`);
+  } catch (error) {
+    console.error("Saved service letter PDF download failed", error);
+    showToast("Service letter PDF download failed");
+  }
 }
 
 function safeFilename(value) {
@@ -12469,6 +12506,7 @@ document.body.addEventListener("click", (event) => {
   const newServiceLetterButton = event.target.closest("#newServiceLetterButton");
   const clientColorButton = event.target.closest("[data-client-color]");
   const serviceLetterEditButton = event.target.closest("[data-service-letter-edit]");
+  const serviceLetterDownloadButton = event.target.closest("[data-service-letter-download]");
   const serviceLetterDeleteButton = event.target.closest("[data-service-letter-delete]");
   const pmActionButton = event.target.closest("[data-pm-action]");
 
@@ -12589,6 +12627,7 @@ document.body.addEventListener("click", (event) => {
     }
   }
   if (serviceLetterEditButton) editServiceLetterRecord(serviceLetterEditButton.dataset.serviceLetterEdit);
+  if (serviceLetterDownloadButton) downloadSavedServiceLetterPdf(serviceLetterDownloadButton.dataset.serviceLetterDownload);
   if (serviceLetterDeleteButton) deleteServiceLetterRecord(serviceLetterDeleteButton.dataset.serviceLetterDelete);
   if (removeCalendarEventButton) removeCalendarEvent(removeCalendarEventButton.dataset.calendarEventRemove || "");
   if (pmActionButton) {
