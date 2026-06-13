@@ -150,6 +150,7 @@ let selectedInvoiceId = invoices[0]?.id || null;
 let previewZoom = 0.95;
 let previewFitMode = "page";
 let previewHidden = true;
+let serviceLetterPdfDownloadInProgress = false;
 let projectFormVisible = false;
 let financePage = 1;
 let financeViewMode = "table";
@@ -10969,6 +10970,8 @@ async function renderDisplayedServiceLetterCanvas(data = null) {
 }
 
 async function downloadServiceLetterPdf() {
+  if (serviceLetterPdfDownloadInProgress) return;
+  serviceLetterPdfDownloadInProgress = true;
   const preparingButton = document.getElementById("downloadServiceLetterPdfButton");
   const originalButtonText = preparingButton?.textContent || "Download PDF";
   try {
@@ -10990,6 +10993,9 @@ async function downloadServiceLetterPdf() {
       preparingButton.disabled = false;
       preparingButton.textContent = originalButtonText;
     }
+    window.setTimeout(() => {
+      serviceLetterPdfDownloadInProgress = false;
+    }, 800);
   }
 }
 
@@ -10998,13 +11004,23 @@ async function getServiceLetterCanvas(data) {
     return await renderDisplayedServiceLetterCanvas(data);
   } catch (error) {
     console.warn("Displayed service letter canvas failed, trying fixed preview renderer", error);
-    return createServiceLetterCanvas(data);
+  }
+  try {
+    return await createServiceLetterCanvas(data);
+  } catch (error) {
+    console.warn("Fixed service letter preview renderer failed, trying direct canvas renderer", error);
+    return createServiceLetterCanvasDirect(data);
   }
 }
 
 async function downloadSavedServiceLetterPdf(id) {
+  if (serviceLetterPdfDownloadInProgress) return;
+  serviceLetterPdfDownloadInProgress = true;
   const record = serviceLetterRecords.find((item) => item.id === id);
-  if (!record) return;
+  if (!record) {
+    serviceLetterPdfDownloadInProgress = false;
+    return;
+  }
   try {
     showToast("Preparing PDF...");
     const { pdf, filename } = await createServiceLetterPdfFile(record);
@@ -11013,6 +11029,10 @@ async function downloadSavedServiceLetterPdf(id) {
   } catch (error) {
     console.error("Saved service letter PDF download failed", error);
     showToast("Service letter PDF download failed");
+  } finally {
+    window.setTimeout(() => {
+      serviceLetterPdfDownloadInProgress = false;
+    }, 800);
   }
 }
 
