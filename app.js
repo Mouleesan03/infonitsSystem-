@@ -4193,15 +4193,25 @@ function projectsForClientName(clientName) {
   });
 }
 
+function projectHasClosedStatus(project) {
+  const closedStatuses = new Set(["paid"]);
+  return [project?.paymentStatus, project?.status, project?.projectStatus]
+    .some((status) => closedStatuses.has(String(status || "").trim().toLowerCase()));
+}
+
+function invoiceLinkableProjectsForClientName(clientName) {
+  return projectsForClientName(clientName).filter((project) => !projectHasClosedStatus(project) && !isProjectFullyPaid(project));
+}
+
 function syncClientProjectOptions(selectedIds = []) {
   if (!clientProjectsSelect) return;
   const customerName = document.getElementById("customerName")?.value || "";
-  const options = projectsForClientName(customerName);
+  const options = invoiceLinkableProjectsForClientName(customerName);
   const selected = new Set((selectedIds || []).filter(Boolean));
   if (!options.length) {
-    clientProjectsSelect.innerHTML = `<option value="">No projects found for this customer</option>`;
+    clientProjectsSelect.innerHTML = `<option value="">No unpaid projects found for this customer</option>`;
     if (clientProjectChecklist) clientProjectChecklist.innerHTML = "";
-    if (clientProjectHint) clientProjectHint.textContent = customerName ? "No projects found for this customer." : "Select customer to load projects.";
+    if (clientProjectHint) clientProjectHint.textContent = customerName ? "No unpaid projects found for this customer." : "Select customer to load projects.";
     renderLinkedProjectsPreview();
     return;
   }
@@ -4284,9 +4294,9 @@ function addSelectedProjectsToInvoice() {
   const existingLinked = new Set(linkedProjectIds);
   const selectedProjects = selectedIds
     .map((id) => projects.find((project) => project.id === id))
-    .filter(Boolean);
+    .filter((project) => project && !projectHasClosedStatus(project) && !isProjectFullyPaid(project));
   if (!selectedProjects.length) {
-    showToast("No matching projects found");
+    showToast("No unpaid projects found");
     return;
   }
   const firstRow = itemsContainer.querySelector(".item-row");
@@ -8402,8 +8412,7 @@ function isProjectFullyPaid(project) {
   const paid = Number(project.paidForWork || 0);
   const received = Number(project.advance || 0) + paid;
   const progressBase = Math.max(total, payForWork, 1);
-  const status = String(project.paymentStatus || "");
-  return status === "Paid" || paid >= progressBase || received >= progressBase;
+  return projectHasClosedStatus(project) || paid >= progressBase || received >= progressBase;
 }
 
 function projectStatusBadge(status) {
@@ -8507,6 +8516,18 @@ function financeRecordDisplayDate(record, month) {
 function financeRecordPaidAmount(record, month) {
   if (!financeRecordIsExpenseLike(record)) return 0;
   return financeRecordPaidInMonth(record, month) ? Number(record.amount || 0) : 0;
+}
+
+function financeSavingAmountForMonth(month) {
+  return financeRecords
+    .filter((record) => record.type === "saving")
+    .filter((record) => {
+      const recordMonth = financeRecordMonth(record);
+      if (!recordMonth) return false;
+      if (record.repeat === "monthly") return recordMonth <= month;
+      return recordMonth === month;
+    })
+    .reduce((sum, record) => sum + Number(record.amount || 0), 0);
 }
 
 function addCurrencyTotal(map, currency, amount) {
@@ -8760,9 +8781,10 @@ function renderFinance() {
     .reduce((sum, record) => sum + financeRecordPaidAmount(record, month), 0);
   const paidExpenses = monthRecords.reduce((sum, record) => sum + financeRecordPaidAmount(record, month), 0);
   const paidInvoiceIncome = paidInvoiceIncomeForMonth(month);
+  const savedThisMonth = financeSavingAmountForMonth(month);
   const totalIncome = projectSummary.income + paidInvoiceIncome;
   const totalExpenses = unpaidManualExpenses;
-  const balance = paidInvoiceIncome - paidManualExpenses;
+  const balance = paidInvoiceIncome - paidManualExpenses - savedThisMonth;
   const totalFlow = totalIncome + totalExpenses + unpaidLoans + savings + goldAssets;
   const incomePercent = totalFlow ? Math.round((totalIncome / totalFlow) * 100) : 0;
   const expensePercent = totalFlow ? Math.round(((totalExpenses + unpaidLoans) / totalFlow) * 100) : 0;
@@ -8935,6 +8957,7 @@ function financeSummaryForMonth(month) {
     .reduce((sum, record) => sum + financeRecordPaidAmount(record, month), 0);
   const paidExpenses = monthRecords.reduce((sum, record) => sum + financeRecordPaidAmount(record, month), 0);
   const savings = sumType("saving");
+  const savingsThisMonth = financeSavingAmountForMonth(month);
   const gold = sumType("gold");
   return {
     projectProfit: projectSummary.income,
@@ -8945,8 +8968,9 @@ function financeSummaryForMonth(month) {
     loans: unpaidLoans,
     paidExpenses,
     savings,
+    savingsThisMonth,
     gold,
-    balance: invoiceIncome - paidManualExpenses,
+    balance: invoiceIncome - paidManualExpenses - savingsThisMonth,
   };
 }
 
@@ -8993,7 +9017,7 @@ function reportFinanceForPeriod(period = reportPeriod()) {
       summary.outstandingLoan += monthSummary.loans;
       summary.savings += monthSummary.savings;
       summary.gold += monthSummary.gold;
-      summary.netBalance += monthSummary.income - paidExpenses;
+      summary.netBalance += monthSummary.income - paidExpenses - monthSummary.savingsThisMonth;
       monthSummary.foreignIncome.forEach((amount, currency) => addCurrencyTotal(summary.foreignIncome, currency, amount));
       return summary;
     },
@@ -9330,7 +9354,7 @@ function reportPdfSections(kind = "full", period = reportPeriod()) {
         ["Paid invoice income", compactMoney(finance.paidIncome, "LKR"), "Income from invoices marked paid"],
         ...(finance.foreignIncome.size ? [["Paid invoice income awaiting rate", formatCurrencyTotals(finance.foreignIncome), "Not included in LKR net balance"]] : []),
         ["Paid expenses", compactMoney(finance.paidExpenses, "LKR"), "Only expenses marked paid"],
-        ["Net balance", compactMoney(finance.netBalance, "LKR"), "Income - paid expenses, loans excluded"],
+        ["Net balance", compactMoney(finance.netBalance, "LKR"), "Income - paid expenses - savings, loans excluded"],
         ["Project profit", compactMoney(finance.projectProfit, "LKR"), "Existing project profit calculation"],
         ["Outstanding loan", compactMoney(finance.outstandingLoan, "LKR"), "Shown separately"],
       ],
@@ -9342,7 +9366,7 @@ function reportPdfSections(kind = "full", period = reportPeriod()) {
         ...(finance.foreignIncome.size ? [["Income awaiting rate", formatCurrencyTotals(finance.foreignIncome), "Foreign currency not counted as LKR"]] : []),
         ["Paid expenses", compactMoney(finance.paidExpenses, "LKR"), ""],
         ["Unpaid expenses", compactMoney(finance.unpaidExpenses, "LKR"), ""],
-        ["Net balance", compactMoney(finance.netBalance, "LKR"), "Without loan"],
+        ["Net balance", compactMoney(finance.netBalance, "LKR"), "Without loan, after savings"],
         ...expenseRows.slice(0, 12).map((row) => [`Expense category: ${row.category}`, compactMoney(row.amount, "LKR"), "Paid"]),
       ],
     },
@@ -9978,7 +10002,8 @@ function downloadFinanceReport() {
     ["Outstanding expenses", summary.expenses],
     ["Outstanding loans", summary.loans],
     ["Paid / done expenses", summary.paidExpenses],
-    ["Net balance (income - expenses)", summary.balance],
+    ["Savings this month", summary.savingsThisMonth],
+    ["Net balance (income - expenses - savings)", summary.balance],
     ["Savings", summary.savings],
     ["Gold assets", summary.gold],
   ];
